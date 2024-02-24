@@ -27,7 +27,7 @@ def set_target_build_version():
                     error("ERROR: Build target version is already set.")
                     exit(2)
     with open(file_path, "a+") as file:
-        file.write(f"version = {version}")
+        file.write(f"version = {version}\n")
         info(f"INFO: Build target version is set to {version}")
 
 
@@ -41,5 +41,5 @@ def set_target_os():
     proj_path = os.path.abspath(os.path.dirname(__file__))
     file_path = os.path.join(proj_path, "buildtarget.py")
     with open(file_path, "a+") as file:
-        file.write(f"target = [{targets}]")
+        file.write(f"target = [{targets}]\n")
         info(f"INFO: Build target version is set to [{targets}]")
