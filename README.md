@@ -46,9 +46,9 @@ Whatever version you use, it has nothing related to the version of python that b
 Please create the project management environment at the project root directory.
 Pip packages that your python application uses will not be installed in this .venv folder.
 
-      cd project/src
-      python3 -m venv .build
-      . .build/bin/activate
+      cd project
+      python3 -m venv build
+      . build/bin/activate
 
 Install this toolchain using the following command. (You can change the python version at the end of the git url)
 
