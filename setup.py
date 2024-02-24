@@ -9,6 +9,7 @@ setup(
     author_email="",
     url="https://github.com/thisisthepy/toolchain",
     packages=find_packages(where="toolchain"),
+    package_dir={'': 'toolchain'},
     install_requires=[
         "setuptools",
         "requests"
