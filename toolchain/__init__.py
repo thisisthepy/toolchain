@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from common.environ import Environment, EnvType, envs
-from android.environ import Android
-from darwin.environ import Darwin
-from linux.environ import Linux
-from mingw.environ import MinGW
+from toolchain.common.environ import Environment, EnvType, envs
+from toolchain.android.environ import Android
+from toolchain.darwin.environ import Darwin
+from toolchain.linux.environ import Linux
+from toolchain.mingw.environ import MinGW
 
 from logging import info, error
 import argparse

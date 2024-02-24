@@ -2,7 +2,7 @@ from kivy_ios.recipes.hostpython3 import Hostpython3Recipe
 import kivy_ios.toolchain as tc
 from logging import error
 from os.path import join
-from ..settings import Settings
+from toolchain.settings import Settings
 
 
 Hostpython3Recipe.version = Settings.target_version

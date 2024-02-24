@@ -1,5 +1,5 @@
 try:
-    from buildtarget import version, target
+    from toolchain.buildtarget import version, target
 except ImportError:
     raise FileNotFoundError("ERROR: Could not find python build target version setting file."
                             + " Please run 'toolchain_targetver' and 'toolchain_targetos' first.")

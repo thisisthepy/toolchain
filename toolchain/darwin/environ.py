@@ -1,6 +1,6 @@
-from ..common.environ import Environment, EnvType
-from toolchain import ToolchainCL
-from ..settings import Settings
+from toolchain.common.environ import Environment, EnvType
+from toolchain.darwin.toolchaincl import ToolchainCL
+from toolchain.settings import Settings
 
 
 toolchainCL = ToolchainCL()

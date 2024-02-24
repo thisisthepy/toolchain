@@ -1,5 +1,5 @@
-from ..common.environ import Environment, EnvType
-from ..settings import Settings
+from toolchain.common.environ import Environment, EnvType
+from toolchain.settings import Settings
 from os import remove, makedirs
 from os.path import exists
 import requests
