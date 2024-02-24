@@ -34,12 +34,12 @@ def set_target_build_version():
 def set_target_os():
     supported_os = ("host", "android", "ios")
     args = sys.argv[1:]
-    targets = set([tg for tg in args if tg.lower() in supported_os])
+    targets = list(set([tg for tg in args if tg.lower() in supported_os]))
     if len(targets) != len(args):
         error(f"ERROR: Unknown target os detected. This tool only support for package build for os type {supported_os}")
         exit(1)
     proj_path = os.path.abspath(os.path.dirname(__file__))
     file_path = os.path.join(proj_path, "buildtarget.py")
     with open(file_path, "a+") as file:
-        file.write(f"target = [{targets}]\n")
-        info(f"INFO: Build target version is set to [{targets}]")
+        file.write(f"target = {targets}\n")
+        info(f"INFO: Build target version is set to {targets}")
