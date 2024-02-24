@@ -9,7 +9,7 @@ setup(
     author="thisisthepy",
     author_email="",
     url="https://github.com/thisisthepy/toolchain",
-    packages=[path.removesuffix(".py") for path in glob('toolchain/**/*.py', recursive=True)],
+    packages=list(set(['/'.join(path.removesuffix(".py").split('/')[:-1]) for path in glob("toolchain/**/*.py", recursive=True)])),
     install_requires=[
         "setuptools",
         "requests"
