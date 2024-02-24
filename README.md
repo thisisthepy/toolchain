@@ -50,14 +50,14 @@ Pip packages that your python application uses will not be installed in this .ve
       python3 -m venv .build
       . .build/bin/activate
 
+Install this toolchain using the following command. (You can change the python version at the end of the git url)
+
+      pip3 install git+https://github.com/thisisthepy/toolchain.git@python3.11
+
 And set python build target version and target os system.
 
       toolchain_targetver 3.11.8
       toolchain_targetos android ios host
-
-Install this toolchain using the following command. (You can change the python version at the end of the git url)
-
-      pip3 install git+https://github.com/thisisthepy/toolchain.git@python3.11
 
 Additionally, you would need a few system dependencies and configuration when you are on macOS.
 
