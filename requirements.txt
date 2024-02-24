@@ -1,0 +1,3 @@
+git+https://github.com/thisisthepy/toolchain-ios.git@python3.11
+setuptools
+requests
