@@ -1,4 +1,5 @@
 from setuptools import setup, find_packages
+from glob import glob
 
 
 setup(
@@ -8,8 +9,7 @@ setup(
     author="thisisthepy",
     author_email="",
     url="https://github.com/thisisthepy/toolchain",
-    packages=find_packages(where="toolchain"),
-    package_dir={'': 'toolchain'},
+    packages=[path for path in glob('toolchain/**/*.py', recursive=True)],
     install_requires=[
         "setuptools",
         "requests"
