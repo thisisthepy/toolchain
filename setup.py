@@ -17,7 +17,7 @@ setup(
     entry_points={
         'console_scripts': [
             "toolchain=toolchain:main",
-            "toolchain_targetver=toolchain:set_target_build_version"
+            "toolchain_targetver=toolchain:set_target_build_version",
             "toolchain_targetos=toolchain:set_target_os"
         ]
     },
