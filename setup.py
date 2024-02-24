@@ -18,9 +18,9 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            "toolchain=toolchain:main",
-            "toolchain_targetver=toolchain:set_target_build_version",
-            "toolchain_targetos=toolchain:set_target_os"
+            "toolchain=toolchain:main:run_toolchain",
+            "toolchain_targetver=toolchain:main:set_target_build_version",
+            "toolchain_targetos=toolchain:main:set_target_os"
         ]
     },
     #package_data={'exampleproject': ['data/schema.json']}
