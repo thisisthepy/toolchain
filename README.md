@@ -81,6 +81,13 @@ Recipe builds can be removed via:
 
     $ toolchain clean kivy
 
+or specify a target platform with:
+
+    $ toolchain android build kivy numpy
+    $ toolchain ios build kivy numpy
+    $ toolchain android clean kivy
+    $ toolchain ios clean kivy
+
 You can install/uninstall packages that don't require compilation with pip:
 
     $ toolchain pip install plyer
