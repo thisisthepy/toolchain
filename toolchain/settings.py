@@ -1,11 +1,11 @@
-try:
-    from toolchain.buildtarget import version, target
-except ImportError:
-    raise FileNotFoundError("ERROR: Could not find python build target version setting file."
-                            + " Please run 'toolchain_targetver' and 'toolchain_targetos' first.")
-
 from os.path import join
 from os import getcwd
+
+from toolchain.buildtarget import version, target
+
+if not version or not target:
+    raise RuntimeError("ERROR: Could not find python build target version setting file."
+                       " Please run 'toolchain_targetver' and 'toolchain_targetos' first.")
 
 
 class Settings:
