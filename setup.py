@@ -11,11 +11,9 @@ setup(
     url="https://github.com/thisisthepy/toolchain",
     packages=list(set(['/'.join(path.removesuffix(".py").split('/')[:-1]) for path in glob("toolchain/**/*.py", recursive=True)])),
     install_requires=[
+        "kivy-ios @ git+https://github.com/thisisthepy/toolchain-ios.git@python3.11",
         "setuptools",
         "requests"
-    ],
-    dependency_links=[
-        "git+https://github.com/thisisthepy/toolchain-ios.git@python3.11#egg=toolchain-ios"
     ],
     entry_points={
         'console_scripts': [
