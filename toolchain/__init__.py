@@ -34,14 +34,14 @@ def set_build_target(tag: str, content=""):
 def set_target_build_version():
     v = sys.argv[1].lower().removeprefix("python")
     if v.count('.') != 2:
-        error(" Version string should be like '3.11.8'")
+        error("Version string should be like '3.11.8'")
         exit(1)
     from toolchain.buildtarget import version
     if version is not None:
-        error(" Build target version is already set.")
+        error("Build target version is already set.")
         exit(2)
     set_build_target("version", f"\"{v}\"")
-    info(f" Build target version is set to {version}")
+    info(f"Build target version is set to {version}")
 
 
 def set_target_os():
@@ -49,7 +49,7 @@ def set_target_os():
     args = sys.argv[1:]
     targets = list(set([tg for tg in args if tg.lower() in supported_os]))
     if len(targets) != len(args):
-        error(f" Unknown target os detected. This tool only support for package build for os type {supported_os}")
+        error(f"Unknown target os detected. This tool only support for package build for os type {supported_os}")
         exit(1)
     set_build_target("target", str(targets))
-    info(f" Build target version is set to {targets}")
+    info(f"Build target version is set to {targets}")

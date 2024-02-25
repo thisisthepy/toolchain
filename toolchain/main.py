@@ -6,7 +6,7 @@ from toolchain.darwin.environ import Darwin
 from toolchain.linux.environ import Linux
 from toolchain.mingw.environ import MinGW
 
-from toolchain.logger import error
+from toolchain.logger import info, error
 import argparse
 import sys
 
@@ -41,11 +41,11 @@ class Toolchain:
     def __init__(self):
         for platform in self.platforms:
             platform.register_env()
-        print("INFO: a list of platforms [" + ", ".join([env.value for env in envs if env is not None]) + "] are found.\n")
+        info("a list of platforms [" + ", ".join([env.value for env in envs if env is not None]) + "] are found.\n")
         self.Host = envs[EnvType.HOST]
         self.Android = envs[EnvType.ANDROID]
         self.IOS = envs[EnvType.IOS]
-        from settings import Settings
+        from toolchain.settings import Settings
         self.platforms = []
         for os_name in Settings.target_os:
             if os_name == "host":
@@ -72,21 +72,21 @@ class Toolchain:
             target_os = self
         argv = parser.parse_args(sys.argv[1:2])
         if not hasattr(target_os, argv.command):
-            error(" Unrecognized command. Exiting...")
+            error("Unrecognized command. Exiting...")
             parser.print_help()
             exit(1)
         getattr(target_os, argv.command)()
 
     def ios(self):
         if not self.IOS:
-            error(" iOS target is not initialized yet. Exiting...")
+            error("iOS target is not initialized yet. Exiting...")
             exit(1)
         self.override_args()
         self.run(target_os=self.IOS)
 
     def android(self):
         if not self.Android:
-            error(" Android target is not initialized yet. Exiting...")
+            error("Android target is not initialized yet. Exiting...")
             exit(1)
         self.override_args()
         self.run(target_os=self.Android)
