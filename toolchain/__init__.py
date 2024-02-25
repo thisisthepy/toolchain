@@ -23,7 +23,7 @@ def set_build_target(tag: str, content=""):
     new_lines = []
     for line in lines:
         if tag + " = " in line:
-            new_lines.append(f"{tag} = {content}")
+            new_lines.append(f"{tag} = {content}\n")
         else:
             new_lines.append(line)
 
