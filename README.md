@@ -17,7 +17,7 @@ In addition to that, I would like to thank the people who produced the libraries
 - Linux (x86_64) originated by [25077667](https://github.com/thisisthepy/toolchain-linux)
 - Windows (mingw_x64) originated by [MSYS2](https://github.com/thisisthepy/toolchain-mingw)
 
-** Because Xcode only runs on macOS, you need macOS build macOS and iOS side packages.
+** Because Xcode only runs on macOS, you need macOS to build macOS and iOS side packages.
 
 ___
 
