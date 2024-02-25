@@ -6,7 +6,7 @@ from toolchain.darwin.environ import Darwin
 from toolchain.linux.environ import Linux
 from toolchain.mingw.environ import MinGW
 
-from logging import error
+from toolchain.logger import error
 import argparse
 import sys
 
@@ -72,21 +72,21 @@ class Toolchain:
             target_os = self
         argv = parser.parse_args(sys.argv[1:2])
         if not hasattr(target_os, argv.command):
-            error("ERROR: Unrecognized command. Exiting...")
+            error(" Unrecognized command. Exiting...")
             parser.print_help()
             exit(1)
         getattr(target_os, argv.command)()
 
     def ios(self):
         if not self.IOS:
-            error("ERROR: iOS target is not initialized yet. Exiting...")
+            error(" iOS target is not initialized yet. Exiting...")
             exit(1)
         self.override_args()
         self.run(target_os=self.IOS)
 
     def android(self):
         if not self.Android:
-            error("ERROR: Android target is not initialized yet. Exiting...")
+            error(" Android target is not initialized yet. Exiting...")
             exit(1)
         self.override_args()
         self.run(target_os=self.Android)

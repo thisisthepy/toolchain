@@ -6,7 +6,7 @@ import platform
 from subprocess import run
 from os.path import join, exists
 from enum import Enum
-from logging import info
+from toolchain.logger import info
 
 _SYSTEM = platform.system().lower()
 
