@@ -13,7 +13,7 @@ setup(
     install_requires=[
         "kivy-ios @ git+https://github.com/thisisthepy/toolchain-ios.git@python3.11",
         "setuptools",
-        "requests"
+        "requests",
         "zstandard"
     ],
     entry_points={
