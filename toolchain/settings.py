@@ -13,7 +13,10 @@ class Settings:
     target_version_short = '.'.join(version.split('.')[0:2])
     target_os = target
 
-    work_dir = join(join(getcwd(), "dist"), "toolchain")
+    root_dir = getcwd()
+    cache_dir = join(root_dir, ".cache")
+    build_dir = join(join(root_dir, "build"), "toolchain")
+    work_dir = join(join(root_dir, "dist"), "toolchain")
 
     source_url = f"https://www.python.org/ftp/python/{version}/Python-{version}.tgz"
 

@@ -14,11 +14,11 @@ class Context(tc.Context):
         super(Context, self).__init__()
         initial_working_directory = Settings.work_dir
         # root of the toolchain
-        self.build_dir = "{}/build".format(initial_working_directory)
-        self.cache_dir = "{}/.cache".format(initial_working_directory)
-        self.dist_dir = "{}".format(initial_working_directory)
-        self.install_dir = "{}/ios".format(initial_working_directory)
-        self.include_dir = "{}/ios/include".format(initial_working_directory)
+        self.build_dir = f"{Settings.build_dir}/darwin"
+        self.cache_dir = Settings.cache_dir
+        self.dist_dir = f"{initial_working_directory}/darwin"
+        self.install_dir = f"{initial_working_directory}/darwin/root"
+        self.include_dir = f"{initial_working_directory}/darwin/include"
 
 
 tc.Context = Context
