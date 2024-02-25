@@ -41,7 +41,7 @@ def set_target_build_version():
         error("Build target version is already set.")
         exit(2)
     set_build_target("version", f"\"{v}\"")
-    info(f"Build target version is set to {version}")
+    info(f"Build target version is set to {v}")
 
 
 def set_target_os():

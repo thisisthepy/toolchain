@@ -57,7 +57,7 @@ Install this toolchain using the following command. (You can change the python v
 And set python build target version and target os system.
 
       toolchain_targetver 3.11.8
-      toolchain_targetos android ios host
+      toolchain_targetos host android ios
 
 Additionally, you would need a few system dependencies and configuration when you are on macOS.
 
