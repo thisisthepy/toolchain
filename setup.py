@@ -14,6 +14,7 @@ setup(
         "kivy-ios @ git+https://github.com/thisisthepy/toolchain-ios.git@python3.11",
         "setuptools",
         "requests"
+        "zstandard"
     ],
     entry_points={
         'console_scripts': [

@@ -41,10 +41,10 @@ class Toolchain:
     def __init__(self):
         for platform in self.platforms:
             platform.register_env()
-        info("a list of platforms [" + ", ".join([env.value for env in envs if env is not None]) + "] are found.\n")
+        info("a list of platforms [" + ", ".join(set([env.value for env in envs if env is not None])) + "] are found.\n")
         self.Host = envs[EnvType.HOST]
-        self.Android = envs[EnvType.ANDROID]
-        self.IOS = envs[EnvType.IOS]
+        self.Android = envs[EnvType.ANDROID.value]
+        self.IOS = envs[EnvType.IOS.value]
         from toolchain.settings import Settings
         self.platforms = []
         for os_name in Settings.target_os:

@@ -1,5 +1,5 @@
 from toolchain.common.environ import Environment, EnvType
-from toolchain.darwin.toolchaincl import ToolchainCL
+from toolchain.darwin.toolchaincl import ToolchainCL, ctx
 from toolchain.settings import Settings
 
 
@@ -10,8 +10,8 @@ class Darwin(Environment):
     """Macos Build Environment"""
     env_type = EnvType.DARWIN
 
-    build_dir = toolchainCL.ctx.build_dir
-    dist_dir = toolchainCL.ctx.dist_dir
+    build_dir = ctx.build_dir
+    dist_dir = ctx.dist_dir
 
     pip_path = f"{dist_dir}/hostpython3/bin/pip3"
     site_dir = f"{dist_dir}/hostpython3/lib/python{Settings.target_version_short}/site-packages"
@@ -25,7 +25,7 @@ class IOS(Darwin):
     """IOS Build Environment"""
     env_type = EnvType.IOS
 
-    dist_dir = toolchainCL.ctx.install_dir
+    dist_dir = ctx.install_dir
     site_dir = f"{dist_dir}/python3/lib/python{Settings.target_version_short}/site-packages"
 
     recipes = toolchainCL.recipes

@@ -3,7 +3,9 @@ from toolchain.settings import Settings
 from os import remove, makedirs
 from os.path import exists
 import requests
+
 import tarfile
+from toolchain.mingw.extract_zst import extract_zst
 
 
 class MinGW(Environment):
@@ -41,8 +43,7 @@ class MinGW(Environment):
             with open(file_path, "wb+") as file:
                 file.write(result.content)
 
-            with tarfile.open(file_path, "r") as tar:
-                tar.extractall()
+            extract_zst(file_path, cls.dist_dir)
             remove(file_path)
 
         super().init(task)

@@ -22,11 +22,10 @@ class Context(tc.Context):
 
 
 tc.Context = Context
+ctx = Context()
 
 
 class ToolchainCL(tc.ToolchainCL):
-    ctx = Context()
-
     @staticmethod
     def find_xcodeproj(filename):
         if not filename.endswith(".xcodeproj"):
@@ -38,3 +37,6 @@ class ToolchainCL(tc.ToolchainCL):
                 exit(1)
             filename = xcodeproj[0]
         return filename
+
+    def __init__(self):
+        pass

@@ -12,7 +12,6 @@ _SYSTEM = platform.system().lower()
 
 
 class EnvType(Enum):
-    HOST = 'host'
     IOS = 'ios'
     DARWIN = 'darwin'
     LINUX = 'linux'
@@ -22,11 +21,9 @@ class EnvType(Enum):
 
     @staticmethod
     def get_platform():
-        if EnvType.HOST.value == _SYSTEM:
-            return EnvType.HOST
         for sys in (EnvType.DARWIN, EnvType.LINUX, EnvType.MINGW):
             if sys.value == _SYSTEM:
-                EnvType.HOST.value = _SYSTEM
+                EnvType.HOST = _SYSTEM
                 return sys
         raise NotImplementedError(f"ERROR: Current system <{_SYSTEM}> is not supported by this toolchain yet.")
 
