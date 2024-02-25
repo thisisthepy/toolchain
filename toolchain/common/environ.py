@@ -68,11 +68,12 @@ class Environment:
     def init(cls, task=lambda: None, init_package=("python3", "openssl")):
         if cls.is_initialized():
             info(f"Build Environment for {cls.env_type.value} is found.")
-        argv_backup = sys.argv
-        sys.argv = [sys.argv[0], "build"] + list(init_package)
-        result = task()
-        sys.argv = argv_backup
-        return result
+        else:
+            argv_backup = sys.argv
+            sys.argv = [sys.argv[0], "build"] + list(init_package)
+            result = task()
+            sys.argv = argv_backup
+            return result
 
     @classmethod
     def build(cls, task=None):

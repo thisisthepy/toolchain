@@ -15,6 +15,7 @@ class MinGW(Environment):
 
     build_dir = ""
     dist_dir = Settings.work_dir + "/mingw"
+    cache_dir = Settings.cache_dir
 
     @classmethod
     def is_initialized(cls):
@@ -23,39 +24,47 @@ class MinGW(Environment):
     @classmethod
     def init(cls, *args, **kwargs):
         def task(*_, **__):
-            result = None
-            name = ""
-            rev_v = 1
-            
             url, filename, ext = Settings.binary_url.mingw
-            makedirs(Settings.cache_dir, exist_ok=True)
-            listings = glob(f"{filename}*{ext}", root_dir=Settings.cache_dir)
-            rev_list = [int(li.replace(filename+"-", "").replace(ext, "")) for li in listings]
+            result = None
+            rev_v = 0
+
+            def name():
+                return filename + f"-{rev_v}" + ext
+
+            makedirs(cls.cache_dir, exist_ok=True)
+            listings = glob(f"{cls.cache_dir}/{filename}*{ext}")
+            rev_list = [int(li.replace(f"{cls.cache_dir}/{filename}-", "").replace(ext, "")) for li in listings]
             rev_list.sort()
             if rev_list:
                 rev_v = rev_list[-1]
+                info(f"Found {name()} from download cache directory.")
 
-            for rev in range(rev_v, 10):
+            for rev in range(rev_v+1, 10):
                 respond = requests.get(url + filename + f"-{rev}" + ext)
                 if respond.status_code == 200:
                     result = respond
-                    name = filename + f"-{rev}" + ext
+                    rev_v = rev
                     info(f"Revision {rev} of Python {Settings.target_version} is found."
                          " Continue the iteration for searching newer python revision version.")
+                    continue
                 else:
                     info("404 Found. Stop iteration for searching python revision version."
-                         f" The latest version of Python is {Settings.target_version}{rev}.")
-            if result is None:
+                         f" The latest version of Python is {Settings.target_version}-{rev_v}.")
+                    break
+
+            file_path = cls.cache_dir + "/" + name()
+            if rev_list:
+                pass
+            elif result is None:
                 raise FileNotFoundError("ERROR: Cannot fetch MinGW python binary from MSYS2 repository."
                                         + " Please check the url information.")
+            else:
+                info("Downloading minGW binary from MSYS2 repository...")
+                with open(file_path, "wb+") as file:
+                    file.write(result.content)
+                info(f"Download complete: {file_path}")
 
-            file_path = cls.dist_dir + "/" + name
             makedirs(cls.dist_dir, exist_ok=True)
-            info("Downloading minGW binary from MSYS2 repository...")
-            with open(file_path, "wb+") as file:
-                file.write(result.content)
-            info(f"Download complete: {file_path}")
-
             extract_zst(file_path, cls.dist_dir)
             replace(cls.dist_dir+"/mingw64", cls.dist_dir+"/python3")
 
