@@ -72,7 +72,7 @@ class Environment:
         if cls.is_initialized():
             info(f"Build Environment for {cls.env_type.value} is found.")
         argv_backup = sys.argv
-        sys.argv = [sys.argv[0], "build"] + init_package
+        sys.argv = [sys.argv[0], "build"] + list(init_package)
         result = task()
         sys.argv = argv_backup
         return result

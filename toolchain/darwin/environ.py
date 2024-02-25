@@ -17,7 +17,7 @@ class Darwin(Environment):
     site_dir = f"{dist_dir}/hostpython3/lib/python{Settings.target_version_short}/site-packages"
 
     @classmethod
-    def init(cls, task=toolchainCL.build, init_package=("python3", "openssl, pyobjus")):
+    def init(cls, task=toolchainCL.build, init_package=("python3", "openssl", "pyobjus")):
         return super().init(task, init_package)
 
 
