@@ -40,11 +40,11 @@ class MinGW(Environment):
                 if respond.status_code == 200:
                     result = respond
                     name = filename + f"-{rev}" + ext
-                    info(f"Revision {rev} of Python {Settings.version} is found."
+                    info(f"Revision {rev} of Python {Settings.target_version} is found."
                          " Continue the iteration for searching newer python revision version.")
                 else:
                     info("404 Found. Stop iteration for searching python revision version."
-                         f" The latest version of Python is {Settings.version}{rev}.")
+                         f" The latest version of Python is {Settings.target_version}{rev}.")
             if result is None:
                 raise FileNotFoundError("ERROR: Cannot fetch MinGW python binary from MSYS2 repository."
                                         + " Please check the url information.")
