@@ -1,0 +1,23 @@
+apply plugin: 'com.android.library'
+apply plugin: 'com.chaquo.python'
+
+android {
+    namespace "com.chaquo.python.test_library1"
+    compileSdk 23
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 23
+        versionCode 1
+        versionName "0.0.1"
+        ndk {
+            abiFilters "x86"
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled true
+        }
+    }
+}

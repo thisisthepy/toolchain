@@ -2,7 +2,8 @@ plugins {
     id("org.gradle.toolchains.foojay-resolver-convention").version("0.8.0")
 }
 
-rootProject.name = "toolchain"
+rootProject.name = "pmm-toolchain"
 
-include("script-definition")
-include("host")
+include("toolchain-test:script-definition")
+include("toolchain-test:host")
+include("toolchain")
