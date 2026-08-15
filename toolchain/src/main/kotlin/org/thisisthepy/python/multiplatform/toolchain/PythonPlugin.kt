@@ -30,6 +30,8 @@ class PythonPlugin : Plugin<Project> {
             description = "Builds Python bundle including interpreter and source files"
             pythonVersion = extension.compileSdk
         }
+        // `packageDir` is read lazily in `afterEvaluate` below, once `extension.localLibraryPath`
+        // has its final value -- DSL blocks run before the plugin's own `afterEvaluate` callbacks.
         val packageTask = project.tasks.register<AssemblePythonPackageTask>(PACKAGE_TASK) {
             group = TASK_GROUP
             description = "Packages the Python application"
@@ -42,6 +44,14 @@ class PythonPlugin : Plugin<Project> {
 
         project.afterEvaluate {
             project.logger.lifecycle("Configured Python compileSdk: ${extension.compileSdk}")
+
+            // Only wires the directory through today; it must already be a `pypackpack` package
+            // (`pyproject.toml` + `src/{main,<platform>}`) for `BuildPythonArtifactTask` to bundle
+            // it, which nothing in this DSL enforces or documents yet -- see this task's report for
+            // why that is left as a follow-up rather than done here.
+            buildTask.configure {
+                packageDir = extension.localLibraryPath?.let { project.file(it) }
+            }
 
             extension.localLibraryPath?.let { path ->
                 try {

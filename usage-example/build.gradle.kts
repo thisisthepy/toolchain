@@ -13,6 +13,26 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
+    // Versioned explicitly, not via `includeBuild`: `:toolchain` is a regular subproject of this
+    // same build (`ToolchainProject`), not a nested build with its own settings file, so it cannot
+    // be its own composite-build plugin source the way `python-multiplatform-gradle-plugin` is for
+    // PythonMultiplatform's root build. Resolving by Maven coordinate through `mavenLocal()`
+    // (already in `pluginManagement.repositories`) is what makes this work today; it requires
+    // `./gradlew :toolchain:publishToMavenLocal` to have been run at least once first.
+    id("org.thisisthepy.python.multiplatform") version "1.0.0-alpha"
+}
+
+// Exercises the target DSL surface end to end -- until now `usage-example` did not apply the
+// plugin at all, so the DSL in `dsl/` had no executable definition (`docs/ecosystem.md` §2, §4
+// item 7). This is deliberately the subset of `(플러그인예시)build.gradle.kts` that today's tasks
+// (`PythonPlugin.kt`) actually read: `compileSdk` and `packaging`. The rest of the DSL surface
+// (`buildTypes`, `buildFeatures`, `platforms`, `integration()`) is declared but not wired to any
+// task yet -- see the plugin's own README/report for what is scaffolding versus live.
+python {
+    compileSdk = "3.13"
+    packaging {
+        fileName = "usage-example"
+    }
 }
 
 kotlin {
