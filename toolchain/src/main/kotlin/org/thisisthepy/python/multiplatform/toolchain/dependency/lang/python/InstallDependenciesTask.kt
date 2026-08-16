@@ -6,12 +6,12 @@ import org.gradle.api.GradleException
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendType
-import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BaseInterface as DependencyBackend
+import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendInterface as DependencyBackend
 import java.io.File
 
 /**
  * Delegates "install these Python dependencies" to `pypackpack`'s `uv` dependency backend
- * (`org.thisisthepy.python.multiplatform.packpack.dependency.backend.BaseInterface.create(BackendType.UV)`)
+ * (`org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendInterface.create(BackendType.UV)`)
  * instead of hand-rolling a requirements file and shelling out to a `uv install` subcommand that
  * does not exist (`uv` has no `install` verb; the previous implementation was never exercised end to
  * end -- see `BuildPythonArtifactTask`'s kdoc and this module's report for why nothing reached this

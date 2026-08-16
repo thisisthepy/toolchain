@@ -14,12 +14,11 @@ import kotlin.test.assertFailsWith
  * up a Gradle [org.gradle.api.Project], the same way `bundleWithPackpack` and `installWithPackpack`
  * were factored out of their tasks.
  *
- * Deliberately leaves `buildLevel` alone (stays hard-coded `"instant"` in `bundleWithPackpack`):
- * `pypackpack`'s `ResourceBundler` rejects every build level except `"instant"`
- * (`require(request.buildLevel == SUPPORTED_BUILD_LEVEL)`), and `BuildType.compileLevel` defaults to
- * `""` for both `DebugBuildType` and `ReleaseBuildType` -- wiring it through unconditionally would
- * turn a currently-green `packagePython` chain red the moment `buildLevel` is exposed to the DSL.
- * That is left as a follow-up once `pypackpack` bundles more than `instant`.
+ * `buildLevel` (`BuildType.compileLevel`) is wired separately, in `PythonPluginBuildLevelTest` /
+ * [resolveBuildLevel] -- not unconditionally, since `pypackpack`'s `ResourceBundler` still rejects
+ * every build level except `"instant"`, but as an explicit-rejection map: blank resolves to
+ * `"instant"` (preserving what was previously hard-coded), and anything else fails loudly instead of
+ * being silently ignored the way it was before that file existed.
  */
 class PythonPluginBuildTypeTest {
     @Test

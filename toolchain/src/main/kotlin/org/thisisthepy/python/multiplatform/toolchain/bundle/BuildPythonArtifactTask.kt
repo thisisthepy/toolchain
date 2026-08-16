@@ -4,7 +4,7 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
-import org.thisisthepy.python.multiplatform.packpack.bundle.BaseInterface
+import org.thisisthepy.python.multiplatform.packpack.bundle.BundlerInterface
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleRequest
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleResult
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleType
@@ -14,7 +14,7 @@ import java.io.File
 /**
  * Delegates "build a Python bundle" to `pypackpack`'s `resource` bundler
  * (`org.thisisthepy.python.multiplatform.packpack.bundle.resource.ResourceBundler`, reached
- * through `BaseInterface.create(BundleType.RESOURCE)`) instead of hand-copying files.
+ * through `BundlerInterface.create(BundleType.RESOURCE)`) instead of hand-copying files.
  *
  * `pypackpack` owns Python distribution acquisition, dependency resolution and bundling
  * (`docs/ecosystem.md` §1, §5: "ppp owns the work, toolchain owns the Gradle vocabulary"); this
@@ -55,6 +55,15 @@ open class BuildPythonArtifactTask : DefaultTask() {
     @get:Internal
     var buildType: String = "debug"
 
+    /**
+     * `pypackpack`'s `ResourceBundler` implements exactly one build level (`"instant"`) and rejects
+     * every other value (`require(request.buildLevel == "instant")`); `PythonPlugin.apply` only ever
+     * sets this to a value `resolveBuildLevel` (`PythonPlugin.kt`) has already validated, so by the
+     * time this field is read here it is either `"instant"` or the task's own default.
+     */
+    @get:Internal
+    var buildLevel: String = "instant"
+
     @TaskAction
     fun buildPython() {
         val bundleDir = File(project.layout.buildDirectory.get().asFile, "pythonBundle")
@@ -74,7 +83,7 @@ open class BuildPythonArtifactTask : DefaultTask() {
             return
         }
 
-        val result = bundleWithPackpack(source, target, buildType, bundleDir)
+        val result = bundleWithPackpack(source, target, buildType, bundleDir, buildLevel)
         logger.lifecycle(
             "Bundled ${result.fileCount} file(s) for Python '$pythonVersion' via packpack's " +
                 "'${result.bundleType.id}' bundler into ${result.outputDir}",
@@ -94,16 +103,18 @@ fun bundleWithPackpack(
     target: String,
     buildType: String,
     outputDir: File,
+    buildLevel: String = "instant",
 ): BundleResult {
     val request =
         BundleRequest(
             packageDir = packageDir,
             target = target,
             buildType = buildType,
+            buildLevel = buildLevel,
             outputDir = outputDir,
             overwrite = true,
         )
-    return BaseInterface.create(BundleType.RESOURCE)
+    return BundlerInterface.create(BundleType.RESOURCE)
         .bundle(request)
         .getOrElse { error ->
             throw GradleException("packpack resource bundling failed: ${error.message}", error)
