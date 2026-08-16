@@ -18,6 +18,12 @@ dependencies {
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("org.ow2.asm:asm-util:9.4")
     implementation("org.ow2.asm:asm:9.4")
+    // Needed to call `pypackpack`'s `dependency.backend.BaseInterface` (`suspend fun
+    // addDependencies`) from `InstallDependenciesTask` via `runBlocking`. `packpack` depends on the
+    // same artifact itself (`pypackpack/gradle/libs.versions.toml`), but as `implementation`, so it
+    // is not on this module's compile classpath transitively -- declared explicitly here at the same
+    // version to avoid a runtime-classpath-only mismatch.
+    implementation(libs.kotlinx.coroutines.core)
 
     // `toolchain` translates the Gradle DSL into `pypackpack` middleware calls -- it owns none of
     // the packaging/dependency-resolution/bundling logic itself (docs/ecosystem.md §1, §5). This is

@@ -1,13 +1,13 @@
 package org.thisisthepy.python.multiplatform.toolchain
 
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonExtension
+import org.thisisthepy.python.multiplatform.toolchain.dsl.BuildTypesContainer
 import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.InstallDependenciesTask
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.register
 import org.thisisthepy.python.multiplatform.toolchain.bundle.AssemblePythonPackageTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.BuildPythonArtifactTask
-import java.io.File
 
 
 class PythonPlugin : Plugin<Project> {
@@ -52,48 +52,37 @@ class PythonPlugin : Plugin<Project> {
             buildTask.configure {
                 packageDir = extension.localLibraryPath?.let { project.file(it) }
             }
-
-            extension.localLibraryPath?.let { path ->
-                try {
-                    val libFolder = project.file(path)
-                    if (!libFolder.exists() || !libFolder.isDirectory) {
-                        throw IllegalStateException("Library folder does not exist at: $path")
-                    }
-                    val localLibs = libFolder.walkTopDown().filter { it.isFile }.toList()
-                    project.logger.lifecycle("Loaded ${localLibs.size} library files from local path: $path")
-
-                    localLibs.forEach { file ->
-                        val relativePath = file.relativeTo(libFolder)
-                        project.logger.lifecycle("Detected library file: ${relativePath.path}")
-                    }
-
-                    val destDir = File(project.layout.buildDirectory.get().asFile, "pythonLibraries")
-                    destDir.mkdirs()
-
-                    localLibs.forEach { file ->
-                        val relativePath = file.relativeTo(libFolder)
-                        val destFile = File(destDir, relativePath.path)
-                        destFile.parentFile.mkdirs()
-                        file.copyTo(destFile, overwrite = true)
-                        project.logger.lifecycle("Copied ${relativePath.path} to ${destFile.absolutePath}")
-                    }
-
-                    if (project.extensions.findByName("android") != null) {
-                        project.logger.lifecycle("Android project detected. Copying Python libraries to assets.")
-                        val assetsDir = File(project.projectDir, "src/main/assets/python")
-                        project.logger.lifecycle("Assets directory: ${assetsDir.absolutePath}")
-                        val copyTask = project.tasks.register<org.gradle.api.tasks.Copy>("copyPythonLibrariesToAssets") {
-                            from(destDir)
-                            into(assetsDir)
-                        }
-                        project.tasks.named("preBuild") {
-                            dependsOn(copyTask)
-                        }
-                    }
-                } catch (e: Exception) {
-                    project.logger.error("Error loading local library files: ${e.message}")
-                }
+            installTask.configure {
+                packageDir = extension.localLibraryPath?.let { project.file(it) }
             }
+
+            // Wires `python { buildTypes { getByName("release") { ... } } }` through to
+            // `BuildPythonArtifactTask.buildType`, which previously stayed at its hard-coded default
+            // (`"debug"`) regardless of what a consumer declared -- nothing read `extension.buildTypes`
+            // at all. There is no AGP-style variant task graph here (`toolchain` registers one
+            // `buildPython` task, not one per build type -- see `docs/ecosystem.md`'s toolchain gap
+            // list item 3, "wire up DSL", for the larger unfinished piece), so selection is a Gradle
+            // project property rather than a task name: `-Ppython.buildType=release`, defaulting to
+            // `"debug"`. `resolveActiveBuildType` fails loudly on an undeclared name rather than
+            // silently falling back, so a typo in `-P` surfaces immediately instead of quietly
+            // building `debug`.
+            val requestedBuildType = (project.findProperty("python.buildType") as? String) ?: "debug"
+            buildTask.configure {
+                buildType = resolveActiveBuildType(extension.buildTypes, requestedBuildType)
+            }
+            // The naive copy-to-`build/pythonLibraries`-then-to-`src/main/assets/python` logic that
+            // used to live here is gone: `docs/ecosystem.md`'s toolchain gap list ("Delete redundant
+            // tasks ... and asset copy") named it directly, and it is now dead weight rather than a
+            // second code path doing the same job -- `buildTask` (`BuildPythonArtifactTask`) already
+            // delegates the real work to `pypackpack`'s `ResourceBundler` into `build/pythonBundle`
+            // (this task's own report; `docs/ecosystem.md` §1, §5). Confirmed nothing depended on
+            // it before deleting: no source under `usage-example/` reads `src/main/assets/python` or
+            // `build/pythonLibraries`, `usage-example` itself never sets `python.localLibraryPath`
+            // today, and `copyPythonLibrariesToAssets`/`preBuild` wiring existed only inside this
+            // now-removed block, so nothing outside it could have depended on that task by name
+            // either. Wiring the real bundle output into Android assets (or any other platform's
+            // resource step) is a separate, not-yet-designed follow-up, not a like-for-like
+            // replacement of this naive copy.
 
             val deps = extension.sourceSets.allSourceSets().flatMap { sourceSet ->
                 sourceSet.dependencies.implementations
@@ -103,4 +92,31 @@ class PythonPlugin : Plugin<Project> {
             }
         }
     }
+}
+
+/**
+ * Resolves which declared `python { buildTypes { ... } }` entry is active, factored out of
+ * [PythonPlugin.apply] so it can be exercised without a Gradle [org.gradle.api.Project] -- see
+ * `PythonPluginBuildTypeTest`.
+ *
+ * No declared build types at all (the common case today -- `usage-example` does not use the
+ * `buildTypes { }` block) passes [requestedName] straight through, so `buildType` keeps behaving
+ * exactly as it did before this DSL block was wired up. Once at least one build type is declared,
+ * [requestedName] must name one of them; an unmatched name throws rather than silently defaulting,
+ * since that is a configuration mistake and `bundleWithPackpack`'s `BundleRequest.buildType` value
+ * only affects packpack's output path convention (`<package>/build/packpack/resource/<buildType>/...`),
+ * not something that would otherwise fail loudly on its own.
+ */
+fun resolveActiveBuildType(
+    buildTypes: BuildTypesContainer,
+    requestedName: String,
+): String {
+    val declared = buildTypes.all()
+    if (declared.isEmpty()) return requestedName
+
+    return declared.firstOrNull { it.name == requestedName }?.name
+        ?: throw IllegalArgumentException(
+            "Unknown Python build type '$requestedName'. Declared build types: " +
+                declared.joinToString(", ") { it.name },
+        )
 }
