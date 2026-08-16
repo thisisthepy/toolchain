@@ -13,6 +13,7 @@ import org.gradle.kotlin.dsl.register
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.thisisthepy.python.multiplatform.toolchain.bundle.AssemblePythonPackageTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.BuildPythonArtifactTask
+import java.io.File
 
 
 class PythonPlugin : Plugin<Project> {
@@ -75,28 +76,6 @@ class PythonPlugin : Plugin<Project> {
                 packageDir = extension.localLibraryPath?.let { project.file(it) }
             }
 
-            // Wires `python { buildTypes { getByName("release") { ... } } }` through to
-            // `BuildPythonArtifactTask.buildType`, which previously stayed at its hard-coded default
-            // (`"debug"`) regardless of what a consumer declared -- nothing read `extension.buildTypes`
-            // at all. There is no AGP-style variant task graph here (`toolchain` registers one
-            // `buildPython` task, not one per build type -- see `docs/ecosystem.md`'s toolchain gap
-            // list item 3, "wire up DSL", for the larger unfinished piece), so selection is a Gradle
-            // project property rather than a task name: `-Ppython.buildType=release`, defaulting to
-            // `"debug"`. `resolveActiveBuildType` fails loudly on an undeclared name rather than
-            // silently falling back, so a typo in `-P` surfaces immediately instead of quietly
-            // building `debug`.
-            val requestedBuildType = (project.findProperty("python.buildType") as? String) ?: "debug"
-            val activeBuildTypeName = resolveActiveBuildType(extension.buildTypes, requestedBuildType)
-            val activeBuildType = extension.buildTypes.all().firstOrNull { it.name == activeBuildTypeName }
-            buildTask.configure {
-                buildType = activeBuildTypeName
-                // `compileLevel` (`python { buildTypes { getByName(...) { compileLevel = ... } } }`)
-                // was read by nothing until now -- see `resolveBuildLevel`'s kdoc for why it is wired
-                // as an explicit-rejection map onto `pypackpack`'s single supported build level
-                // (`"instant"`) rather than passed through unconditionally.
-                buildLevel = resolveBuildLevel(activeBuildType?.compileLevel ?: "")
-            }
-
             // `python { platforms { ... } }` (`DSLPlatforms.kt`) was read by nothing at all until now
             // -- `docs/ecosystem.md`'s gap list and this round's own prior report both name it
             // unwired. `validateDeclaredPlatforms` closes the mapping gap the prior round stopped at
@@ -104,10 +83,9 @@ class PythonPlugin : Plugin<Project> {
             // declared variant must now resolve to a real `pypackpack` target triple or the build
             // fails loudly, instead of the variant compiling and doing nothing.
             //
-            // This stops at validation, not target selection: `buildTask`/`packageTask` are each one
-            // task, not a per-variant graph, so there is nowhere yet to route a validated triple to
-            // -- that remains the same follow-up the prior round identified, just no longer blocked
-            // on the mapping itself.
+            // Validation runs first and independently of the graph below: an unmapped variant is a
+            // configuration mistake with no valid task to register, so it must fail configuration
+            // rather than produce a task that fails later.
             validateDeclaredPlatforms(extension.platforms)
 
             // "Check Kotlin-side enabled build target" (Issue #2's other `platforms` sub-item):
@@ -146,9 +124,211 @@ class PythonPlugin : Plugin<Project> {
             installTask.configure {
                 dependenciesList = collectInstallDependencies(extension.sourceSets.allSourceSets())
             }
+
+            // ---------------------------------------------------------------------------------
+            // The per-variant task graph. Everything above this point either validates a declared
+            // value or rejects it; this is what finally *routes* one. See `resolveVariants` and
+            // `PythonPluginVariantGraphTest` for the design and its grounds (one task per variant,
+            // not one task looping variants; `<verb><PlatformVariant><BuildType>` naming; opt-in via
+            // the `platforms` block so the existing chain is untouched).
+            // ---------------------------------------------------------------------------------
+            val variants = resolveVariants(extension.platforms, extension.buildTypes)
+            val bundleRoot = File(project.layout.buildDirectory.get().asFile, "pythonBundle")
+
+            if (variants.isEmpty()) {
+                // No `platforms { }` block: exactly the pre-graph behavior, unchanged. One host
+                // target, and the build type picked by a project property because there is no
+                // variant task name to ask for -- `-Ppython.buildType=release`, defaulting to
+                // `"debug"`. `resolveActiveBuildType` fails loudly on an undeclared name rather than
+                // silently falling back, so a typo in `-P` surfaces immediately.
+                val requestedBuildType = (project.findProperty("python.buildType") as? String) ?: DEFAULT_BUILD_TYPE
+                val activeBuildTypeName = resolveActiveBuildType(extension.buildTypes, requestedBuildType)
+                val activeBuildType = extension.buildTypes.all().firstOrNull { it.name == activeBuildTypeName }
+                buildTask.configure {
+                    buildType = activeBuildTypeName
+                    compileLevel = activeBuildType?.compileLevel ?: ""
+                }
+            } else {
+                variants.forEach { variant ->
+                    val variantBundleDir = File(bundleRoot, variant.dirName)
+
+                    val variantBuildTask =
+                        project.tasks.register<BuildPythonArtifactTask>(BUILD_TASK + variant.taskSuffix) {
+                            group = TASK_GROUP
+                            description =
+                                "Builds the Python bundle for ${variant.platformVariantName} " +
+                                    "(${variant.target}, ${variant.buildTypeName})"
+                            pythonVersion = extension.compileSdk
+                            packageDir = extension.localLibraryPath?.let { project.file(it) }
+                            target = variant.target
+                            buildType = variant.buildTypeName
+                            // Raw, not resolved: an unsupported level must fail this one task at
+                            // execution, not configuration for every variant. See
+                            // `BuildPythonArtifactTask.compileLevel`.
+                            compileLevel = variant.compileLevel
+                            minSdk = variant.minSdk
+                            bundleDir = variantBundleDir
+                            dependsOn(installTask)
+                        }
+
+                    val variantPackageTask =
+                        project.tasks.register<AssemblePythonPackageTask>(PACKAGE_TASK + variant.taskSuffix) {
+                            group = TASK_GROUP
+                            description =
+                                "Packages the Python bundle for ${variant.platformVariantName} " +
+                                    "(${variant.buildTypeName})"
+                            embedLevel = extension.packaging.embedLevel
+                            fileName = extension.packaging.fileName
+                            bundleDir = variantBundleDir
+                            variantName = variant.dirName
+                            dependsOn(variantBuildTask)
+                        }
+
+                    buildTask.configure { dependsOn(variantBuildTask) }
+                    packageTask.configure { dependsOn(variantPackageTask) }
+                }
+
+                // `buildPython`/`packagePython` become lifecycle tasks, the way AGP's `assemble` is
+                // once `assembleDebug`/`assembleRelease` exist: they keep their names (nothing that
+                // invokes them today has to change) but stop doing work of their own, because doing
+                // it would mean bundling the *host* triple that no declared variant asked for. An
+                // `onlyIf { false }` action is Gradle's own idiom for that; the task reports SKIPPED
+                // and its per-variant dependencies still run.
+                buildTask.configure {
+                    onlyIf { false }
+                }
+                packageTask.configure {
+                    onlyIf { false }
+                }
+                project.logger.lifecycle(
+                    "Python variant graph: " + variants.joinToString(", ") { "${it.dirName} -> ${it.target}" },
+                )
+            }
         }
     }
 }
+
+/** What `buildTypes { }` resolves to when a consumer declares none, matching the pre-graph default. */
+const val DEFAULT_BUILD_TYPE = "debug"
+
+/**
+ * One node of the per-variant task graph: a declared `python { platforms { ... } }` variant crossed
+ * with a declared `python { buildTypes { ... } }` entry.
+ *
+ * Both dimensions are needed. The platform variant decides the `pypackpack` target triple and the
+ * min SDK; the build type decides `BundleRequest.buildType` (which is `ppp`'s output path segment)
+ * and, through [compileLevel], the build level. Issue #2 asks for "a different level per variant",
+ * and `compileLevel` lives on `BuildType`, so a graph indexed only by platform could not express it.
+ */
+data class PythonVariant(
+    val platformVariantName: String,
+    val buildTypeName: String,
+    /** The canonical `pypackpack` target triple, from [PlatformTargetMapping]. */
+    val target: String,
+    /** Raw `BuildType.compileLevel`; resolved (and possibly rejected) per task, not here. */
+    val compileLevel: String,
+    /** Declared platform min SDK, or `null` when the platform declares none. */
+    val minSdk: Int?,
+) {
+    /**
+     * Appended to `buildPython`/`packagePython` to name this variant's tasks:
+     * `buildPythonAndroidArm64Release`.
+     *
+     * AGP spells variant tasks `assemble<Flavor><BuildType>` and KMP spells target tasks
+     * `compileKotlin<Target>`; both are "verb + capitalized dimensions" with the build type last,
+     * and this is the same. The platform segment keeps the DSL's own spelling, which is also the KMP
+     * target name (`androidArm64`, `iosSimulatorArm64`) `PlatformTargetMapping.kotlinTargetName`
+     * cross-references.
+     */
+    val taskSuffix: String
+        get() = platformVariantName.capitalizeFirst() + buildTypeName.capitalizeFirst()
+
+    /**
+     * This variant's output directory name under `build/pythonBundle/`, and the suffix on its zip.
+     * Lower-camel and hyphenated rather than [taskSuffix]'s concatenation, so a path stays readable:
+     * `build/pythonBundle/androidArm64-release/`, `build/distributions/app-androidArm64-release.zip`.
+     */
+    val dirName: String
+        get() = "$platformVariantName-$buildTypeName"
+}
+
+/**
+ * Expands the `platforms` and `buildTypes` DSL blocks into the variant list `PythonPlugin.apply`
+ * registers one `buildPython<Variant>`/`packagePython<Variant>` pair for -- see
+ * `PythonPluginVariantGraphTest` for the design record, and `PythonPlugin.apply` for the wiring.
+ *
+ * Empty when no platform variant is declared, which is deliberately the case for every consumer
+ * that exists today (`usage-example` declares no `platforms` block). The graph is opt-in: the
+ * platform block is what creates more than one target, and without it there is exactly one -- the
+ * host -- built by the single `buildPython` task exactly as before.
+ *
+ * Declaring platforms but no build types yields one [DEFAULT_BUILD_TYPE] variant per platform,
+ * matching what `resolveActiveBuildType` already defaults to.
+ *
+ * Throws for a platform variant `pypackpack` has no triple for (via [PlatformTargetMapping]) or a
+ * negative min SDK: both are configuration mistakes with no correct task to register. It does *not*
+ * throw for an unsupported `compileLevel` -- that rejection is per variant, and belongs to that
+ * variant's task action ([org.thisisthepy.python.multiplatform.toolchain.bundle.BuildPythonArtifactTask.compileLevel]).
+ */
+fun resolveVariants(
+    platforms: PlatformsExtension,
+    buildTypes: BuildTypesContainer,
+): List<PythonVariant> {
+    val platformVariants = declaredPlatformVariantsWithMinSdk(platforms)
+    if (platformVariants.isEmpty()) return emptyList()
+
+    val declaredBuildTypes = buildTypes.all().toList()
+    val buildTypeNames =
+        if (declaredBuildTypes.isEmpty()) listOf(DEFAULT_BUILD_TYPE) else declaredBuildTypes.map { it.name }
+    val compileLevels = declaredBuildTypes.associate { it.name to it.compileLevel }
+
+    return platformVariants.flatMap { (variantName, minSdk) ->
+        buildTypeNames.map { buildTypeName ->
+            PythonVariant(
+                platformVariantName = variantName,
+                buildTypeName = buildTypeName,
+                target = PlatformTargetMapping.canonicalTarget(variantName),
+                compileLevel = compileLevels[buildTypeName].orEmpty(),
+                minSdk = minSdk,
+            )
+        }
+    }
+}
+
+/**
+ * Pairs each declared platform variant with the min SDK its platform block declares
+ * (`android { androidSdk = 24 }`, `ios { iosSdk = 14 }`); desktop has no such property in the DSL,
+ * so its variants carry `null`.
+ *
+ * `0` is the DSL default for both properties and means *undeclared*, so it maps to `null` rather
+ * than being carried into a task as a real API level. A negative value is a mistake and is rejected
+ * by name.
+ */
+private fun declaredPlatformVariantsWithMinSdk(platforms: PlatformsExtension): List<Pair<String, Int?>> =
+    buildList {
+        platforms.android?.let { android ->
+            val minSdk = normalizeMinSdk(android.androidSdk, "androidSdk")
+            android.variants.forEach { add(it.name to minSdk) }
+        }
+        platforms.ios?.let { ios ->
+            val minSdk = normalizeMinSdk(ios.iosSdk, "iosSdk")
+            ios.variants.forEach { add(it.name to minSdk) }
+        }
+        platforms.desktop?.variants?.forEach { add(it.name to null) }
+    }
+
+private fun normalizeMinSdk(
+    declared: Int,
+    propertyName: String,
+): Int? {
+    require(declared >= 0) {
+        "python { platforms { ... } } declares a negative $propertyName ($declared); " +
+            "a min SDK must be zero (undeclared) or positive."
+    }
+    return declared.takeIf { it > 0 }
+}
+
+private fun String.capitalizeFirst(): String = replaceFirstChar { it.uppercaseChar() }
 
 /**
  * Resolves which declared `python { buildTypes { ... } }` entry is active, factored out of
@@ -207,6 +387,12 @@ fun collectInstallDependencies(sourceSets: List<SourceSetConfig>): List<String> 
  * value `bundleWithPackpack` hands `pypackpack`'s `BundleRequest`, factored out of
  * [PythonPlugin.apply] the same way [resolveActiveBuildType] was -- see `PythonPluginBuildLevelTest`.
  *
+ * Called from [org.thisisthepy.python.multiplatform.toolchain.bundle.BuildPythonArtifactTask]'s
+ * task action, **not** from configuration. It used to be called here in `afterEvaluate`, which was
+ * correct while there was a single `buildPython` task and wrong the moment there were several: a
+ * configuration-time throw fails every variant, and Issue #2 asks for the unsupported variant alone
+ * to be refused. See that task's `compileLevel` kdoc.
+ *
  * `pypackpack`'s `ResourceBundler` (`bundle/resource/ResourceBundler.kt`) implements exactly one
  * build level: `require(request.buildLevel == "instant")` rejects everything else, because
  * `bytecode`/`native`/`mixed` all need the compile stage's output, which `build` does not yet hand to
@@ -237,8 +423,14 @@ fun resolveBuildLevel(compileLevel: String): String {
  * Throws on the first unsupported variant (via `PlatformTargetMapping.canonicalTarget`) rather than
  * collecting every problem and continuing: `platforms` was previously read by nothing at all, so
  * there is no existing behavior a partial validation would need to preserve, and failing on the first
- * bad variant is the same policy [resolveActiveBuildType] and [resolveBuildLevel] already use for
- * their own unsupported-value cases.
+ * bad variant is the same policy [resolveActiveBuildType] already uses for its own unsupported-value
+ * case.
+ *
+ * This stays a *configuration-time* failure even now that [resolveVariants] exists, and deliberately
+ * so: an unmapped variant has no target triple, so there is no task that could be registered for it
+ * and then fail on its own. That is the opposite of an unsupported `compileLevel`, where a perfectly
+ * valid task exists and only its level is out of reach -- which is why that one is rejected per task
+ * instead. [resolveVariants] propagates this same rejection when it maps its variants.
  */
 fun validateDeclaredPlatforms(platforms: PlatformsExtension): List<String> {
     val variantNames = declaredPlatformVariantNames(platforms)

@@ -9,6 +9,7 @@ import org.thisisthepy.python.multiplatform.packpack.bundle.BundleRequest
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleResult
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleType
 import org.thisisthepy.python.multiplatform.packpack.utils.Platforms
+import org.thisisthepy.python.multiplatform.toolchain.resolveBuildLevel
 import java.io.File
 
 /**
@@ -56,17 +57,55 @@ open class BuildPythonArtifactTask : DefaultTask() {
     var buildType: String = "debug"
 
     /**
-     * `pypackpack`'s `ResourceBundler` implements exactly one build level (`"instant"`) and rejects
-     * every other value (`require(request.buildLevel == "instant")`); `PythonPlugin.apply` only ever
-     * sets this to a value `resolveBuildLevel` (`PythonPlugin.kt`) has already validated, so by the
-     * time this field is read here it is either `"instant"` or the task's own default.
+     * The raw `python { buildTypes { getByName(...) { compileLevel = ... } } }` value for this
+     * task's variant, resolved to `pypackpack`'s `BundleRequest.buildLevel` by
+     * [org.thisisthepy.python.multiplatform.toolchain.resolveBuildLevel] **inside the task action,
+     * not at configuration time**.
+     *
+     * Where that resolution happens is the whole point of the per-variant task graph. `pypackpack`'s
+     * `ResourceBundler` implements exactly one build level (`require(request.buildLevel ==
+     * "instant")`), so a consumer declaring `release { compileLevel = "native" }` has to be rejected
+     * somewhere. Rejecting in `PythonPlugin.apply`'s `afterEvaluate` -- what this did before the
+     * graph existed -- fails *configuration*, which takes every other variant down with it.
+     * Rejecting here fails one task, so `gradle packagePython --continue` still builds every variant
+     * whose level `ppp` does support. That is Issue #2's "reject only that variant, let the rest
+     * run" requirement, and it is only expressible because there is now one task per variant.
+     *
+     * Blank resolves to `"instant"`, which is what both `DebugBuildType` and `ReleaseBuildType`
+     * default to and what this value was hard-coded to before.
      */
     @get:Internal
-    var buildLevel: String = "instant"
+    var compileLevel: String = ""
+
+    /**
+     * Where this variant's bundle is written. `null` means `build/pythonBundle` -- the single
+     * hard-coded location used before the variant graph existed, and still what the aggregate
+     * `buildPython` uses when no `python { platforms { ... } }` block is declared. A variant task
+     * sets `build/pythonBundle/<platformVariant>-<buildType>` instead, so two variants cannot
+     * overwrite each other's payload.
+     */
+    @get:Internal
+    var bundleDir: File? = null
+
+    /**
+     * The declared platform min SDK for this variant (`platforms { android { androidSdk = 24 } }` or
+     * `ios { iosSdk = 14 }`), `null` when that platform declares none.
+     *
+     * **It is logged, not forwarded.** `pypackpack`'s `BundleRequest` (`bundle/BundlerInterface.kt`)
+     * has six fields -- `packageDir`, `target`, `buildType`, `buildLevel`, `outputDir`, `overwrite`
+     * -- and none of them carries an API level. The only API-level-aware surface anywhere in `ppp`
+     * is `Platforms.TARGET_ALIASES`, which maps `android_21_arm64` *and* `android_24_arm64` onto the
+     * same `aarch64-linux-android` triple, so encoding the min SDK into the target string would
+     * change nothing downstream while looking like it did. Carrying the value onto the variant task
+     * and printing it is what can be done honestly today; routing it needs a `BundleRequest` field
+     * that does not exist yet.
+     */
+    @get:Internal
+    var minSdk: Int? = null
 
     @TaskAction
     fun buildPython() {
-        val bundleDir = File(project.layout.buildDirectory.get().asFile, "pythonBundle")
+        val bundleDir = bundleDir ?: File(project.layout.buildDirectory.get().asFile, "pythonBundle")
         val source = packageDir
         if (source == null) {
             // Preserves the previous naive implementation's behavior for this case: it always
@@ -83,10 +122,17 @@ open class BuildPythonArtifactTask : DefaultTask() {
             return
         }
 
-        val result = bundleWithPackpack(source, target, buildType, bundleDir, buildLevel)
+        // Throws for anything `ppp`'s ResourceBundler cannot bundle. Deliberately here rather than
+        // during configuration -- see `compileLevel`'s kdoc.
+        val resolvedBuildLevel = resolveBuildLevel(compileLevel)
+
+        val result = bundleWithPackpack(source, target, buildType, bundleDir, resolvedBuildLevel)
         logger.lifecycle(
             "Bundled ${result.fileCount} file(s) for Python '$pythonVersion' via packpack's " +
-                "'${result.bundleType.id}' bundler into ${result.outputDir}",
+                "'${result.bundleType.id}' bundler into ${result.outputDir} " +
+                "(target $target, buildType $buildType, buildLevel $resolvedBuildLevel" +
+                (minSdk?.let { ", declared minSdk $it -- not forwarded, BundleRequest has no API level field" } ?: "") +
+                ")",
         )
     }
 }

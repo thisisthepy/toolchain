@@ -13,10 +13,12 @@ import kotlin.test.assertFailsWith
  * `PythonPlugin.apply`'s `afterEvaluate` for this, the same shape [resolveActiveBuildType] and
  * [collectInstallDependencies] already take.
  *
- * This intentionally stops at validation, not target selection: `BuildPythonArtifactTask` and
- * `AssemblePythonPackageTask` are each one task, not a per-variant graph, so there is nowhere yet to
- * route a validated triple to. What changes is that declaring a variant `pypackpack` cannot build
- * for is now a loud failure instead of silently compiling and doing nothing.
+ * These two checks stop at validation on purpose; routing a validated triple to a task is
+ * [resolveVariants]' job (`PythonPluginVariantGraphTest`), which did not exist when this file was
+ * written -- the note that used to stand here, "there is nowhere yet to route a validated triple
+ * to", no longer holds. [validateDeclaredPlatforms] stays a configuration-time rejection even so:
+ * an unmapped variant has no triple, so there is no task that could be registered for it and then
+ * fail on its own.
  */
 class PythonPluginPlatformsTest {
     @Test
