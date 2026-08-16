@@ -30,6 +30,12 @@ plugins {
 // task yet -- see the plugin's own README/report for what is scaffolding versus live.
 python {
     compileSdk = "3.13"
+    // A real `pypackpack` package (`pyproject.toml` + `src/main/<pkg>`), so the chain has a payload
+    // to carry. Without it `buildPython` skips `pypackpack` entirely and every step downstream of it
+    // -- the zip, and now the staging tasks -- correctly produces nothing, which makes "the artifact
+    // contains Python" unfalsifiable. `example_py` deliberately includes a non-`.py` file, because
+    // `ResourceBundler` carries data files next to modules and staging has to preserve that.
+    localLibraryPath = "python"
     packaging {
         fileName = "usage-example"
     }

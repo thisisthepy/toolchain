@@ -9,10 +9,15 @@ import org.thisisthepy.python.multiplatform.toolchain.dsl.SourceSetConfig
 import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.InstallDependenciesTask
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.tasks.TaskProvider
 import org.gradle.kotlin.dsl.register
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
+import org.thisisthepy.python.multiplatform.packpack.utils.Platforms
 import org.thisisthepy.python.multiplatform.toolchain.bundle.AssemblePythonPackageTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.BuildPythonArtifactTask
+import org.thisisthepy.python.multiplatform.toolchain.bundle.PythonStagingPlatform
+import org.thisisthepy.python.multiplatform.toolchain.bundle.StagePythonBundleTask
 import java.io.File
 
 
@@ -22,6 +27,14 @@ class PythonPlugin : Plugin<Project> {
         const val BUILD_TASK = "buildPython"
         const val INSTALL_TASK = "installPythonDependencies"
         const val PACKAGE_TASK = "packagePython"
+
+        /**
+         * Prefix of the tasks that put a built bundle where a platform's packaging step reads it --
+         * `stagePythonBundleAndroid`, `stagePythonBundleIos`, `stagePythonBundleDesktop`, plus a
+         * lifecycle task under the bare name. See `PythonPluginStagingTest` for why the dimension in
+         * the name is the destination rather than the variant.
+         */
+        const val STAGE_TASK = "stagePythonBundle"
     }
 
     override fun apply(project: Project) {
@@ -47,6 +60,20 @@ class PythonPlugin : Plugin<Project> {
 
         buildTask.configure { dependsOn(installTask) }
         packageTask.configure { dependsOn(buildTask) }
+
+        // ---------------------------------------------------------------------------------------
+        // Staging. Registered *here*, not in `afterEvaluate`, and that is the whole reason the
+        // destination roots are derived from the build directory alone (`PythonStagingPlatform.
+        // rootIn`): an AGP asset source root has to be declared while the consumer's build script is
+        // still being evaluated, because AGP reads its source sets in its own `afterEvaluate` and
+        // this plugin -- applied last in a `plugins { }` block, as `usage-example` applies it --
+        // registers its `afterEvaluate` callback after AGP's and therefore runs after it. A
+        // `srcDir` added at that point is added to a source set nothing will look at again.
+        //
+        // Only the *sources* of these tasks need the DSL, and those are filled in below.
+        // ---------------------------------------------------------------------------------------
+        val stageTasks = registerStagingTasks(project)
+        attachStagingToPackaging(project, stageTasks)
 
         project.afterEvaluate {
             // Blank stays a no-op skip, the same convention `packageDir == null` already uses below
@@ -134,6 +161,11 @@ class PythonPlugin : Plugin<Project> {
             // ---------------------------------------------------------------------------------
             val variants = resolveVariants(extension.platforms, extension.buildTypes)
             val bundleRoot = File(project.layout.buildDirectory.get().asFile, "pythonBundle")
+            // Hoisted out of the `variants.isEmpty()` branch it used to live in: staging has to know
+            // which build type is active in *both* cases -- to pick a variant's bundle in one, and
+            // to name the one it staged in the other.
+            val requestedBuildType = (project.findProperty("python.buildType") as? String) ?: DEFAULT_BUILD_TYPE
+            val activeBuildTypeName = resolveActiveBuildType(extension.buildTypes, requestedBuildType)
 
             if (variants.isEmpty()) {
                 // No `platforms { }` block: exactly the pre-graph behavior, unchanged. One host
@@ -141,12 +173,30 @@ class PythonPlugin : Plugin<Project> {
                 // variant task name to ask for -- `-Ppython.buildType=release`, defaulting to
                 // `"debug"`. `resolveActiveBuildType` fails loudly on an undeclared name rather than
                 // silently falling back, so a typo in `-P` surfaces immediately.
-                val requestedBuildType = (project.findProperty("python.buildType") as? String) ?: DEFAULT_BUILD_TYPE
-                val activeBuildTypeName = resolveActiveBuildType(extension.buildTypes, requestedBuildType)
                 val activeBuildType = extension.buildTypes.all().firstOrNull { it.name == activeBuildTypeName }
                 buildTask.configure {
                     buildType = activeBuildTypeName
                     compileLevel = activeBuildType?.compileLevel ?: ""
+                }
+
+                // Every destination gets the one host bundle, because that is the only bundle that
+                // exists. It carries the *host* family's `src/<family>` overlay, which is wrong for
+                // Android and iOS -- so it is a warning, not silence: declaring `platforms { }` is
+                // what makes each destination get a bundle built for it.
+                val hostTarget = Platforms.detectHostTarget()
+                stageTasks.forEach { (platform, stageTask) ->
+                    stageTask.configure {
+                        bundleDir = bundleRoot
+                        variantName = "host-$activeBuildTypeName"
+                        dependsOn(buildTask)
+                    }
+                    if (PythonStagingPlatform.forTarget(hostTarget) != platform) {
+                        project.logger.info(
+                            "Staging the host bundle ($hostTarget) into ${platform.name.lowercase()}'s " +
+                                "packaging step: no python { platforms { ... } } block is declared, so " +
+                                "there is no ${platform.name.lowercase()} bundle to stage instead.",
+                        )
+                    }
                 }
             } else {
                 variants.forEach { variant ->
@@ -203,9 +253,214 @@ class PythonPlugin : Plugin<Project> {
                 project.logger.lifecycle(
                     "Python variant graph: " + variants.joinToString(", ") { "${it.dirName} -> ${it.target}" },
                 )
+
+                // One destination takes one directory, so one variant per destination is chosen --
+                // see `selectStagingVariants` and `PythonPluginStagingTest` for the two rules and
+                // what they are grounded in. A destination with no eligible variant is left staging
+                // nothing rather than being handed a bundle built for a different platform.
+                val selected = selectStagingVariants(variants, activeBuildTypeName, Platforms.detectHostTarget())
+                stageTasks.forEach { (platform, stageTask) ->
+                    val variant = selected[platform]
+                    if (variant == null) {
+                        project.logger.info(
+                            "No python { platforms { ... } } variant of build type " +
+                                "'$activeBuildTypeName' maps to ${platform.name.lowercase()}, so " +
+                                "${STAGE_TASK + platform.taskSuffix} stages nothing.",
+                        )
+                        stageTask.configure { bundleDir = File(bundleRoot, "unselected-${platform.directoryName}") }
+                        return@forEach
+                    }
+                    stageTask.configure {
+                        bundleDir = File(bundleRoot, variant.dirName)
+                        variantName = variant.dirName
+                        dependsOn(BUILD_TASK + variant.taskSuffix)
+                    }
+                }
+                project.logger.lifecycle(
+                    "Python staging: " + PythonStagingPlatform.values().joinToString(", ") { platform ->
+                        "${platform.directoryName} <- ${selected[platform]?.dirName ?: "(nothing)"}"
+                    },
+                )
             }
         }
     }
+}
+
+/**
+ * Registers the three destination staging tasks plus the lifecycle task that runs all of them.
+ *
+ * Called from `apply`, not from `afterEvaluate` -- see the call site for why that is forced by AGP's
+ * source-set reading, and [PythonStagingPlatform.rootIn] for what it costs (the destination path
+ * cannot depend on the DSL).
+ */
+private fun registerStagingTasks(project: Project): Map<PythonStagingPlatform, TaskProvider<StagePythonBundleTask>> {
+    val buildDir = project.layout.buildDirectory.get().asFile
+    val tasks = PythonStagingPlatform.values().associateWith { platform ->
+        project.tasks.register<StagePythonBundleTask>(PythonPlugin.STAGE_TASK + platform.taskSuffix) {
+            group = PythonPlugin.TASK_GROUP
+            description = "Stages the built Python bundle where ${platform.directoryName} packaging reads it"
+            destinationDir = platform.rootIn(buildDir)
+        }
+    }
+    project.tasks.register(PythonPlugin.STAGE_TASK) {
+        group = PythonPlugin.TASK_GROUP
+        description = "Stages the built Python bundle into every platform destination this project has"
+        dependsOn(tasks.values)
+    }
+    return tasks
+}
+
+/**
+ * Hands each staged root to the packaging step that reads it.
+ *
+ * Three destinations, and they are not equally solved -- the honest summary of what each line below
+ * achieves:
+ *
+ * - **Desktop is wired end to end.** The staged root is added to the JVM target's own
+ *   `processResources`, so the payload is inside `desktopJar` and inside the `run` task's runtime
+ *   classpath directory. `from(task)` carries the task dependency as well as the files, which is
+ *   why no separate `dependsOn` is needed.
+ * - **Android is wired end to end.** The staged root is registered as an extra asset source root on
+ *   `main`, so it is merged into `assets/` in the APK -- without generating anything into `src/`,
+ *   which is what the deleted `afterEvaluate` copy did.
+ * - **iOS is staged but not attached.** A Kotlin/Native framework has no Gradle-side resource
+ *   mechanism to add files to: resources reach an iOS app through an Xcode "Copy Bundle Resources"
+ *   build phase, in a project file this plugin does not own (`usage-example`'s is
+ *   `src/iosMain/app.xcodeproj`, hand-maintained). The staged directory is produced and its path is
+ *   logged so the phase can point at it; automating the `.pbxproj` edit is a separate piece of work
+ *   and is not pretended to be done here.
+ *
+ * AGP and the Kotlin Multiplatform plugin are reached through `plugins.withId`, not by assuming they
+ * are already applied: this plugin may be applied before either, and `withId` fires whichever way
+ * round it happens. AGP is additionally not on this plugin's own compile classpath -- only
+ * `kotlin-gradle-plugin` is (`toolchain/build.gradle.kts`) -- so its source sets are reached
+ * reflectively, with a message rather than a `ClassCastException` if that surface moves.
+ */
+private fun attachStagingToPackaging(
+    project: Project,
+    stageTasks: Map<PythonStagingPlatform, TaskProvider<StagePythonBundleTask>>,
+) {
+    val desktopStage = stageTasks.getValue(PythonStagingPlatform.DESKTOP)
+    project.plugins.withId("org.jetbrains.kotlin.multiplatform") {
+        val kotlin = project.extensions.findByType(KotlinMultiplatformExtension::class.java) ?: return@withId
+        // A live view: `kotlin { jvm("desktop") }` is declared after `plugins { }`, so the target
+        // does not exist yet at this point and `forEach` would see nothing.
+        kotlin.targets.matching { it.platformType == KotlinPlatformType.jvm }.all {
+            // `"<target>ProcessResources"` rather than `KotlinCompilation.processResourcesTaskName`:
+            // that property is not on the `kotlin-gradle-plugin-api` interface (checked with
+            // `javap` against 2.0.20 -- `KotlinCompilation` exposes `compileKotlinTaskName` and
+            // `compileAllTaskName` and no resources equivalent), so reaching it would mean an
+            // internal type. `tasks.matching` is also a live view, so it is unaffected by whether
+            // the target's tasks exist yet, and matches nothing rather than failing if the naming
+            // convention ever changes -- with the `warn` below saying so.
+            val resourcesTaskName = "${name}ProcessResources"
+            var found = false
+            project.tasks.matching { it.name == resourcesTaskName }.configureEach {
+                found = true
+                val copy = this as? org.gradle.api.tasks.Copy
+                if (copy == null) {
+                    // Never observed; recorded rather than silently swallowed, because a
+                    // `dependsOn` alone would make the task run and put nothing in the jar.
+                    dependsOn(desktopStage)
+                    project.logger.warn(
+                        "$resourcesTaskName is not a Copy task, so the staged Python payload could " +
+                            "not be added to its resources; the desktop artifact will contain no Python.",
+                    )
+                } else {
+                    copy.from(desktopStage)
+                }
+            }
+            project.gradle.taskGraph.whenReady {
+                if (!found) {
+                    project.logger.info(
+                        "no '$resourcesTaskName' task exists, so the staged Python payload was not " +
+                            "added to the '$name' JVM target's resources.",
+                    )
+                }
+            }
+        }
+    }
+
+    val androidStage = stageTasks.getValue(PythonStagingPlatform.ANDROID)
+    val androidRoot = PythonStagingPlatform.ANDROID.rootIn(project.layout.buildDirectory.get().asFile)
+    listOf("com.android.application", "com.android.library").forEach { pluginId ->
+        project.plugins.withId(pluginId) {
+            registerAndroidAssetSourceDirectory(project, androidRoot)
+            // `assets.srcDir(File)` carries no task dependency, so the producing task has to be
+            // named. `preBuild` is AGP's own documented anchor and is what the deleted copy used;
+            // the merge tasks are added as well because they are what actually reads the directory
+            // and `preBuild` being upstream of them is a convention, not a guarantee.
+            project.tasks.matching {
+                it.name == "preBuild" || (it.name.startsWith("merge") && it.name.endsWith("Assets"))
+            }.configureEach { dependsOn(androidStage) }
+        }
+    }
+}
+
+/**
+ * `android.sourceSets.getByName("main").assets.srcDir(directory)`, reflectively.
+ *
+ * AGP is not a dependency of this plugin, so there is no `AndroidSourceSet` type to call. Each hop
+ * fails with a message naming what was not found rather than an NPE or a `ClassCastException`,
+ * because the failure mode this replaces -- the payload silently not reaching the APK -- is the one
+ * thing this whole change exists to stop.
+ */
+private fun registerAndroidAssetSourceDirectory(project: Project, directory: File) {
+    val android = project.extensions.findByName("android") ?: run {
+        project.logger.warn(
+            "an Android plugin is applied but there is no `android` extension, so the staged " +
+                "Python payload was not added to the APK's assets.",
+        )
+        return
+    }
+    runCatching {
+        val sourceSets = android.javaClass.methods.first { it.name == "getSourceSets" && it.parameterCount == 0 }
+            .invoke(android)
+        val main = sourceSets!!.javaClass.methods.first { it.name == "getByName" && it.parameterCount == 1 }
+            .invoke(sourceSets, "main")
+        val assets = main!!.javaClass.methods.first { it.name == "getAssets" && it.parameterCount == 0 }
+            .invoke(main)
+        assets!!.javaClass.methods.first { it.name == "srcDir" && it.parameterCount == 1 }
+            .invoke(assets, directory)
+    }.onFailure { error ->
+        project.logger.warn(
+            "could not add '$directory' to android.sourceSets.main.assets " +
+                "(${error.message}); the staged Python payload will not reach the APK.",
+        )
+    }
+}
+
+/**
+ * Picks the one variant each destination is staged from.
+ *
+ * Factored out of [PythonPlugin.apply] the same way [resolveActiveBuildType] and [resolveVariants]
+ * were, so the rules can be exercised without a Gradle [Project] -- see `PythonPluginStagingTest`,
+ * which carries the reasoning behind both of them.
+ *
+ * - Only variants of [activeBuildType] are eligible, because a destination that mixed build types
+ *   would ship the release payload out of a debug build with nothing saying so.
+ * - Among the eligible ones, desktop prefers the variant whose triple *is* [hostTarget] (three
+ *   desktop families are three different `src/<family>` overlays and only one of them runs here),
+ *   and falls back to the first declared. Android and iOS take the first declared, because at build
+ *   level `instant` a resource bundle carries no per-ABI content for them to differ by.
+ *
+ * A destination with no eligible variant is absent from the result rather than filled in with
+ * something built for another platform.
+ */
+fun selectStagingVariants(
+    variants: List<PythonVariant>,
+    activeBuildType: String,
+    hostTarget: String,
+): Map<PythonStagingPlatform, PythonVariant> {
+    val eligible = variants.filter { it.buildTypeName == activeBuildType }
+    return PythonStagingPlatform.values().mapNotNull { platform ->
+        val candidates = eligible.filter { PythonStagingPlatform.forTarget(it.target) == platform }
+        val chosen = when (platform) {
+            PythonStagingPlatform.DESKTOP -> candidates.firstOrNull { it.target == hostTarget } ?: candidates.firstOrNull()
+            else -> candidates.firstOrNull()
+        }
+        chosen?.let { platform to it }
+    }.toMap()
 }
 
 /** What `buildTypes { }` resolves to when a consumer declares none, matching the pre-graph default. */
