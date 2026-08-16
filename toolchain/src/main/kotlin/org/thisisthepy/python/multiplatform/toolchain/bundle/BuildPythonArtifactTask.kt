@@ -91,14 +91,10 @@ open class BuildPythonArtifactTask : DefaultTask() {
      * The declared platform min SDK for this variant (`platforms { android { androidSdk = 24 } }` or
      * `ios { iosSdk = 14 }`), `null` when that platform declares none.
      *
-     * **It is logged, not forwarded.** `pypackpack`'s `BundleRequest` (`bundle/BundlerInterface.kt`)
-     * has six fields -- `packageDir`, `target`, `buildType`, `buildLevel`, `outputDir`, `overwrite`
-     * -- and none of them carries an API level. The only API-level-aware surface anywhere in `ppp`
-     * is `Platforms.TARGET_ALIASES`, which maps `android_21_arm64` *and* `android_24_arm64` onto the
-     * same `aarch64-linux-android` triple, so encoding the min SDK into the target string would
-     * change nothing downstream while looking like it did. Carrying the value onto the variant task
-     * and printing it is what can be done honestly today; routing it needs a `BundleRequest` field
-     * that does not exist yet.
+     * Forwarded to `pypackpack` as `BundleRequest.minSdk` (added in `pypackpack`'s `6e36d3d`, after
+     * this field existed here with nowhere to send it -- see git history for that gap). `ppp`'s
+     * `ResourceBundler` validates it against the target's platform family and, when declared for an
+     * android-family target, records it in the bundle manifest.
      */
     @get:Internal
     var minSdk: Int? = null
@@ -126,12 +122,12 @@ open class BuildPythonArtifactTask : DefaultTask() {
         // during configuration -- see `compileLevel`'s kdoc.
         val resolvedBuildLevel = resolveBuildLevel(compileLevel)
 
-        val result = bundleWithPackpack(source, target, buildType, bundleDir, resolvedBuildLevel)
+        val result = bundleWithPackpack(source, target, buildType, bundleDir, resolvedBuildLevel, minSdk)
         logger.lifecycle(
             "Bundled ${result.fileCount} file(s) for Python '$pythonVersion' via packpack's " +
                 "'${result.bundleType.id}' bundler into ${result.outputDir} " +
                 "(target $target, buildType $buildType, buildLevel $resolvedBuildLevel" +
-                (minSdk?.let { ", declared minSdk $it -- not forwarded, BundleRequest has no API level field" } ?: "") +
+                (minSdk?.let { ", declared minSdk $it" } ?: "") +
                 ")",
         )
     }
@@ -143,6 +139,11 @@ open class BuildPythonArtifactTask : DefaultTask() {
  * `BuildPythonArtifactTaskTest`, which is what proves this call is real (produces
  * `ResourceBundler`'s actual on-disk manifest and payload) rather than merely compiling against
  * the dependency.
+ *
+ * @param minSdk forwarded to [BundleRequest.minSdk] verbatim. `null` (the default) matches every
+ *   caller that has no platform SDK to declare (e.g. a non-android target); `ppp`'s
+ *   `Platforms.requireValidMinSdk` rejects a non-null value declared against a non-android-family
+ *   [target], so callers should not pass one for those targets.
  */
 fun bundleWithPackpack(
     packageDir: File,
@@ -150,6 +151,7 @@ fun bundleWithPackpack(
     buildType: String,
     outputDir: File,
     buildLevel: String = "instant",
+    minSdk: Int? = null,
 ): BundleResult {
     val request =
         BundleRequest(
@@ -159,6 +161,7 @@ fun bundleWithPackpack(
             buildLevel = buildLevel,
             outputDir = outputDir,
             overwrite = true,
+            minSdk = minSdk,
         )
     return BundlerInterface.create(BundleType.RESOURCE)
         .bundle(request)

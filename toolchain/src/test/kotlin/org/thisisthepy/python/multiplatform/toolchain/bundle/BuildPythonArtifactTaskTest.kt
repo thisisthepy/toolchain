@@ -52,4 +52,35 @@ class BuildPythonArtifactTaskTest {
             "manifest should be the real packpack ResourceBundler manifest, not a toolchain stand-in",
         )
     }
+
+    /**
+     * `bundleWithPackpack` reads `BuildPythonArtifactTask.minSdk` but, before this test, had no
+     * parameter to carry it into the `BundleRequest` it builds -- see that task's kdoc on `minSdk`
+     * ("It is logged, not forwarded"). `pypackpack`'s `6e36d3d` added `BundleRequest.minSdk` and
+     * `ResourceBundler` records a declared value in its manifest
+     * (`ResourceBundlerTest.bundle_manifestRecordsDeclaredMinSdkForAnAndroidTarget`). This test
+     * proves the wiring all the way through: a `minSdk` passed to `bundleWithPackpack` for an
+     * android-family target must show up in the real manifest `ResourceBundler` writes.
+     *
+     * Before `bundleWithPackpack` gains a `minSdk` parameter, this fails to compile -- the
+     * pre-implementation failure this test is meant to record, not a regression.
+     */
+    @Test
+    fun `bundleWithPackpack forwards minSdk to packpack's BundleRequest for an android target`() {
+        val packageDir = fixturePackageDir()
+        val outputDir = kotlin.io.path.createTempDirectory("packpack-bundle-out-minsdk").toFile()
+
+        val result = bundleWithPackpack(
+            packageDir = packageDir,
+            target = "aarch64-linux-android",
+            buildType = "debug",
+            outputDir = outputDir,
+            minSdk = 24,
+        )
+
+        assertTrue(
+            result.manifestFile.readText().contains("\"minSdk\": 24"),
+            "declared minSdk should reach packpack's BundleRequest and be recorded in its manifest",
+        )
+    }
 }
