@@ -14,7 +14,19 @@ dependencies {
     //implementation("org.jetbrains.kotlin:kotlin-stdlib")
 
     implementation("org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.5.0")
-    implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.0")
+    // Pinned to the same version as the root catalog's `kotlin` entry (`gradle/libs.versions.toml`),
+    // not left as an independent literal. A skewed pin here (previously `2.0.0` against a `2.1.0`
+    // root) put two different `kotlin-gradle-plugin` versions on the plugin classpath any consumer
+    // sees once it applies both this plugin and `org.jetbrains.kotlin.multiplatform` in the same
+    // `plugins {}` block (as `usage-example/build.gradle.kts` does). Gradle does not merge/conflict
+    // -resolve those into one: `usage-example/build.gradle.kts` compiled its `KotlinWebpackConfig
+    // .DevServer()` call (browser { commonWebpackConfig { ... } }) against 2.0.0's shape (`proxy:
+    // Map<String, Any>`), while the actually-applied multiplatform plugin (2.1.0, `proxy:
+    // List<Proxy>` as of that release) drove `wasmJsBrowserTest` task creation at runtime --
+    // `NoSuchMethodError` on `DevServer.<init>` (root `./gradlew build` failure, reproduced via
+    // `ANDROID_HOME=... ./gradlew build --stacktrace`; confirmed by decompiling both
+    // `kotlin-gradle-plugin-{2.0.0,2.1.0}.jar`'s `KotlinWebpackConfig$DevServer.class` with `javap`).
+    implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:${libs.versions.kotlin.get()}")
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("org.ow2.asm:asm-util:9.4")
     implementation("org.ow2.asm:asm:9.4")

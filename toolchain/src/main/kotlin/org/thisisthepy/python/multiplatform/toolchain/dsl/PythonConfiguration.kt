@@ -72,6 +72,57 @@ internal object KotlinMultiplatformSourceSetConventionsImpl : KotlinMultiplatfor
     override val NamedDomainObjectContainer<KotlinSourceSet>.jsTest by KotlinSourceSetConvention
     override val NamedDomainObjectContainer<KotlinSourceSet>.androidMain by KotlinSourceSetConvention
 
+    // KGP 2.1.0 widened `KotlinMultiplatformSourceSetConventions` with per-target (not just
+    // per-family) accessors plus Android unit/instrumented test conventions -- none of this existed
+    // in 2.0.0, the version this object used to be compiled against. Kept in the same alphabetical-
+    // by-family grouping the interface itself uses, purely mechanical `by KotlinSourceSetConvention`
+    // delegates like every entry above (the delegate resolves the backing source set from the
+    // property name itself, so there is nothing target-specific to configure here).
+    override val NamedDomainObjectContainer<KotlinSourceSet>.androidUnitTest by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.androidInstrumentedTest by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.androidNativeArm32Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.androidNativeArm32Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.androidNativeArm64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.androidNativeArm64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.androidNativeX64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.androidNativeX64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.androidNativeX86Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.androidNativeX86Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.iosArm64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.iosArm64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.iosSimulatorArm64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.iosSimulatorArm64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.iosX64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.iosX64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.linuxArm32HfpMain by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.linuxArm32HfpTest by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.linuxArm64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.linuxArm64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.linuxX64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.linuxX64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.macosArm64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.macosArm64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.macosX64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.macosX64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.mingwX64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.mingwX64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.tvosArm64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.tvosArm64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.tvosSimulatorArm64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.tvosSimulatorArm64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.tvosX64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.tvosX64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.watchosArm32Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.watchosArm32Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.watchosArm64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.watchosArm64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.watchosDeviceArm64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.watchosDeviceArm64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.watchosSimulatorArm64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.watchosSimulatorArm64Test by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.watchosX64Main by KotlinSourceSetConvention
+    override val NamedDomainObjectContainer<KotlinSourceSet>.watchosX64Test by KotlinSourceSetConvention
+
     @ExperimentalWasmDsl
     override val NamedDomainObjectContainer<KotlinSourceSet>.wasmJsMain by KotlinSourceSetConvention
 
