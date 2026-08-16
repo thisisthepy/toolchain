@@ -33,3 +33,4 @@ rootProject.name = "ToolchainProject"
 
 include(":toolchain")
 include(":usage-example")
+include(":tcl")
