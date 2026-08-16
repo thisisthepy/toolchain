@@ -2,6 +2,7 @@ package org.thisisthepy.python.multiplatform.toolchain
 
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonExtension
 import org.thisisthepy.python.multiplatform.toolchain.dsl.BuildTypesContainer
+import org.thisisthepy.python.multiplatform.toolchain.dsl.SourceSetConfig
 import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.InstallDependenciesTask
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -84,11 +85,8 @@ class PythonPlugin : Plugin<Project> {
             // resource step) is a separate, not-yet-designed follow-up, not a like-for-like
             // replacement of this naive copy.
 
-            val deps = extension.sourceSets.allSourceSets().flatMap { sourceSet ->
-                sourceSet.dependencies.implementations
-            }
             installTask.configure {
-                dependenciesList = deps
+                dependenciesList = collectInstallDependencies(extension.sourceSets.allSourceSets())
             }
         }
     }
@@ -120,3 +118,28 @@ fun resolveActiveBuildType(
                 declared.joinToString(", ") { it.name },
         )
 }
+
+/**
+ * Collects the flat dependency list handed to [InstallDependenciesTask.dependenciesList], factored
+ * out of [PythonPlugin.apply] the same way [resolveActiveBuildType] was -- see
+ * `PythonPluginDependencyTest`.
+ *
+ * Folds `python { sourceSets { <name> { dependencies { integration(...) } } } }`
+ * (`DSLBuild.kt`'s `DependenciesExtension.integrations`) in alongside `implementation(...)`. Until
+ * now only `implementations` was read here, so an `integration()` declaration compiled but had zero
+ * effect -- it never reached [InstallDependenciesTask], so `installWithPackpack` never saw it and no
+ * `uv add` for it ever ran.
+ *
+ * This makes an `integration()` dependency install exactly like an `implementation()` one, no more
+ * and no less: `pypackpack`'s `uv` backend (`installWithPackpack` -> `DependencyBackend.addDependencies`)
+ * takes one flat `List<String>` with no type parameter, so it cannot treat the two differently even if
+ * asked to. `(플러그인예시)build.gradle.kts`'s comment on `integration()` describes more --
+ * "kotlin dependent python package - requires KLIBDEPENS file in whl dist directory ... KLIBDEPENS
+ * 파일 없으면 install을 그냥 쓰라고 워닝 표시" (warn instead of installing when the wheel has no
+ * `KLIBDEPENS` file) -- but grepping `pypackpack` for `KLIBDEPENS` turns up nothing: no wheel
+ * dist-info inspection exists anywhere in this repository or `pypackpack` to check against. Wiring
+ * that check is left undone rather than guessed at from one code comment; what is wired is the part
+ * that is unambiguous -- the dependency reaching installation instead of being silently dropped.
+ */
+fun collectInstallDependencies(sourceSets: List<SourceSetConfig>): List<String> =
+    sourceSets.flatMap { it.dependencies.implementations + it.dependencies.integrations }
