@@ -25,8 +25,8 @@ plugins {
 // Exercises the target DSL surface end to end -- until now `usage-example` did not apply the
 // plugin at all, so the DSL in `dsl/` had no executable definition (`docs/ecosystem.md` §2, §4
 // item 7). This is deliberately the subset of `(플러그인예시)build.gradle.kts` that today's tasks
-// (`PythonPlugin.kt`) actually read: `compileSdk` and `packaging`. The rest of the DSL surface
-// (`buildTypes`, `buildFeatures`, `platforms`, `integration()`) is declared but not wired to any
+// (`PythonPlugin.kt`) actually read: `compileSdk`, `packaging`, `buildTypes`, `platforms`, and
+// `integration()`. The rest of the DSL surface (`buildFeatures`) is declared but not wired to any
 // task yet -- see the plugin's own README/report for what is scaffolding versus live.
 python {
     compileSdk = "3.13"
