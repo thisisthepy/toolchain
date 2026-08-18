@@ -74,12 +74,17 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
     compilerOptions.freeCompilerArgs.add("-Xskip-metadata-version-check")
 }
 
+// `java-gradle-plugin` (applied above) already registers a `pluginMaven` publication `from(
+// components["java"])` for every `gradlePlugin { plugins { ... } }` entry, plus that plugin's
+// marker publication. A hand-written `mavenJava` publication doing the same `from(components
+// ["java"])` used to sit here too -- both published to the exact same coordinates (`group`/
+// `artifactId` default to the project's, and neither publication overrode them), so `publish
+// ToMavenLocal` published `mavenJava` then `pluginMaven` over it and warned "will overwrite each
+// other". Nothing on the consumer side ever resolved `mavenJava` by name -- consumers apply the
+// plugin id (resolved via the marker) and get the jar through `pluginMaven` -- so it was pure
+// duplication, not an intentional second artifact. Removed rather than re-coordinated: there was
+// no second artifact to keep.
 publishing {
-    publications {
-        create<MavenPublication>("mavenJava") {
-            from(components["java"])
-        }
-    }
     repositories {
         mavenLocal()
     }
