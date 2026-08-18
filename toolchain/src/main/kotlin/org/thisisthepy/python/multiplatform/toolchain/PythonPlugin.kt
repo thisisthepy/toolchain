@@ -18,6 +18,10 @@ import org.thisisthepy.python.multiplatform.toolchain.bundle.AssemblePythonPacka
 import org.thisisthepy.python.multiplatform.toolchain.bundle.BuildPythonArtifactTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.PythonStagingPlatform
 import org.thisisthepy.python.multiplatform.toolchain.bundle.StagePythonBundleTask
+import org.thisisthepy.python.multiplatform.toolchain.hotreload.CodePushPendingTask
+import org.thisisthepy.python.multiplatform.toolchain.hotreload.HotReloadPushTask
+import org.thisisthepy.python.multiplatform.toolchain.hotreload.validateCodePushConfig
+import org.thisisthepy.python.multiplatform.toolchain.hotreload.validateHotReloadConfig
 import java.io.File
 
 
@@ -35,6 +39,8 @@ class PythonPlugin : Plugin<Project> {
          * the name is the destination rather than the variant.
          */
         const val STAGE_TASK = "stagePythonBundle"
+        const val HOT_RELOAD_TASK = "hotReloadPython"
+        const val CODE_PUSH_TASK = "codePushPython"
     }
 
     override fun apply(project: Project) {
@@ -150,6 +156,60 @@ class PythonPlugin : Plugin<Project> {
 
             installTask.configure {
                 dependenciesList = collectInstallDependencies(extension.sourceSets.allSourceSets())
+            }
+
+            // ---------------------------------------------------------------------------------
+            // hotReload / codePush task registration.
+            //
+            // "성립하는 부분": DSL 검증 + 태스크 등록. 태스크가 하는 것과 못 하는 것을 태스크 자체가 말한다.
+            //
+            // hotReload: file-watch + adb-push + am-broadcast until python-multiplatform's runtime
+            //   receives HOT_RELOAD_BROADCAST_ACTION and calls importlib.reload(). That boundary
+            //   is the device runtime's job, not this task's.
+            //
+            // codePush: DSL validation only. Upload is NOT implemented -- there is no server.
+            //   CodePushPendingTask prints this explicitly when run, matching pypackpack's
+            //   UnimplementedDeployer pattern ("Result.failure, not TODO()").
+            // ---------------------------------------------------------------------------------
+            val anyBuildTypeEnablesHotReload = extension.buildTypes.all().any { it.enableHotReload }
+            val anyBuildTypeEnablesCodePush = extension.buildTypes.all().any { it.enableCodePush }
+
+            // Validate first; an invalid cert combination fails configuration before any task runs.
+            val hotReloadConfig = validateHotReloadConfig(
+                enabled = anyBuildTypeEnablesHotReload,
+                ext = extension.packaging.hotReload,
+            )
+            val codePushConfig = validateCodePushConfig(
+                enabled = anyBuildTypeEnablesCodePush,
+                ext = extension.packaging.codePush,
+            )
+
+            project.tasks.register<HotReloadPushTask>(HOT_RELOAD_TASK) {
+                group = TASK_GROUP
+                description = if (anyBuildTypeEnablesHotReload) {
+                    "Pushes changed Python source files to the connected device and signals a reload " +
+                        "(adb push + am broadcast ${org.thisisthepy.python.multiplatform.toolchain.hotreload.HOT_RELOAD_BROADCAST_ACTION})"
+                } else {
+                    "Hot reload is not enabled for any build type. " +
+                        "Set enableHotReload = true in python { buildTypes { getByName(\"debug\") { } } }."
+                }
+                hotReloadEnabled = hotReloadConfig.enabled
+                sourceRoot = extension.localLibraryPath?.let { project.file(it) }
+                remoteBasePath = "/data/local/tmp/${extension.packaging.fileName}/python"
+                serverHost = hotReloadConfig.serverHost
+            }
+
+            project.tasks.register<CodePushPendingTask>(CODE_PUSH_TASK) {
+                group = TASK_GROUP
+                description = if (anyBuildTypeEnablesCodePush) {
+                    "Code push is enabled but the upload client is not implemented yet. " +
+                        "See CodePushPendingTask kdoc for the boundary explanation."
+                } else {
+                    "Code push is not enabled for any build type. " +
+                        "Set enableCodePush = true in python { buildTypes { getByName(\"release\") { } } }."
+                }
+                codePushEnabled = codePushConfig.enabled
+                serverHost = codePushConfig.serverHost
             }
 
             // ---------------------------------------------------------------------------------
