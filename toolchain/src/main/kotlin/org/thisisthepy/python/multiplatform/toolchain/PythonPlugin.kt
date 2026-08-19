@@ -102,11 +102,16 @@ class PythonPlugin : Plugin<Project> {
             // (`pyproject.toml` + `src/{main,<platform>}`) for `BuildPythonArtifactTask` to bundle
             // it, which nothing in this DSL enforces or documents yet -- see this task's report for
             // why that is left as a follow-up rather than done here.
+            //
+            // `resolvePackageDir` also reads `sourceSets { commonMain { srcDirs(...) } }` as a
+            // fallback when `localLibraryPath` is unset -- see its kdoc and `PythonPluginSourceSetTest`.
+            val resolvedPackageDir =
+                resolvePackageDir(project.projectDir, extension.localLibraryPath, extension.sourceSets.allSourceSets())
             buildTask.configure {
-                packageDir = extension.localLibraryPath?.let { project.file(it) }
+                packageDir = resolvedPackageDir
             }
             installTask.configure {
-                packageDir = extension.localLibraryPath?.let { project.file(it) }
+                packageDir = resolvedPackageDir
             }
 
             // `python { platforms { ... } }` (`DSLPlatforms.kt`) was read by nothing at all until now
@@ -269,7 +274,7 @@ class PythonPlugin : Plugin<Project> {
                                 "Builds the Python bundle for ${variant.platformVariantName} " +
                                     "(${variant.target}, ${variant.buildTypeName})"
                             pythonVersion = extension.compileSdk
-                            packageDir = extension.localLibraryPath?.let { project.file(it) }
+                            packageDir = resolvedPackageDir
                             target = variant.target
                             buildType = variant.buildTypeName
                             // Raw, not resolved: an unsupported level must fail this one task at
@@ -670,6 +675,35 @@ fun resolveActiveBuildType(
             "Unknown Python build type '$requestedName'. Declared build types: " +
                 declared.joinToString(", ") { it.name },
         )
+}
+
+/**
+ * Resolves `python.localLibraryPath` / `python { sourceSets { commonMain { srcDirs(...) } } }` to
+ * the single package directory [BuildPythonArtifactTask.packageDir] /
+ * [org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.InstallDependenciesTask.packageDir]
+ * take, factored out of [PythonPlugin.apply] the same way [resolveActiveBuildType] was -- see
+ * `PythonPluginSourceSetTest`.
+ *
+ * `localLibraryPath` is the explicit override and wins whenever it is declared, matching its
+ * existing pre-graph behavior exactly (`usage-example` sets only `localLibraryPath`, no
+ * `sourceSets` block, and keeps resolving the same way). `commonMain.srcDirs` -- `DSLBuild.kt`'s
+ * `SourceSetConfig.srcDirs`, declared but read by nothing until now -- is the fallback: its first
+ * entry, resolved against [projectDir]. A [SourceSetConfig] carries a list because a Kotlin source
+ * set can add more than one Gradle `srcDir`, but `BuildPythonArtifactTask`/`InstallDependenciesTask`
+ * each take one package directory, so only the first is used -- the same single-value narrowing
+ * [selectStagingVariants] already does for desktop's staging variant.
+ *
+ * `null` when neither is declared, matching `localLibraryPath == null`'s existing meaning: no
+ * package configured yet, so `buildTask`/`installTask` skip `pypackpack` rather than failing.
+ */
+fun resolvePackageDir(
+    projectDir: File,
+    localLibraryPath: String?,
+    sourceSets: List<SourceSetConfig>,
+): File? {
+    localLibraryPath?.let { return File(projectDir, it) }
+    val commonMainSrcDir = sourceSets.firstOrNull { it.name == "commonMain" }?.srcDirs?.firstOrNull()
+    return commonMainSrcDir?.let { File(projectDir, it) }
 }
 
 /**
