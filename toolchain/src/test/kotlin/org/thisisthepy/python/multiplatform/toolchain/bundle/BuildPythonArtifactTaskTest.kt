@@ -83,4 +83,61 @@ class BuildPythonArtifactTaskTest {
             "declared minSdk should reach packpack's BundleRequest and be recorded in its manifest",
         )
     }
+
+    /**
+     * `python { sourceSets { commonMain { metaDirs(...) } } }` had nowhere to go until `pypackpack`'s
+     * `BundleRequest.metaDirs` existed for it to reach (see `PythonPluginSourceSetTest`'s
+     * `resolveMetaDirs`, the pure function that reads the DSL). This proves the value does not just
+     * compile through `bundleWithPackpack` -- the generated-meta file it names must land inside
+     * `ResourceBundler`'s real on-disk payload.
+     *
+     * Before `bundleWithPackpack` gains a `metaDirs` parameter, this fails to compile -- the
+     * pre-implementation failure this test is meant to record, not a regression.
+     */
+    @Test
+    fun `bundleWithPackpack forwards metaDirs to packpack's BundleRequest and they land in the real payload`() {
+        val packageDir = fixturePackageDir()
+        val outputDir = kotlin.io.path.createTempDirectory("packpack-bundle-out-metadirs").toFile()
+        val metaDir = kotlin.io.path.createTempDirectory("packpack-metadirs").toFile()
+        File(metaDir, "fixture_package/api.pyi").apply { parentFile.mkdirs() }.writeText("def ping() -> str: ...\n")
+
+        val result = bundleWithPackpack(
+            packageDir = packageDir,
+            target = "macos",
+            buildType = "debug",
+            outputDir = outputDir,
+            metaDirs = listOf(metaDir),
+        )
+
+        assertEquals(
+            "def ping() -> str: ...\n",
+            result.outputDir.resolve("python/fixture_package/api.pyi").readText(),
+        )
+        assertTrue(
+            result.manifestFile.readText().contains("\"path\": \"python/fixture_package/api.pyi\""),
+            "metaDirs file should be recorded in packpack's real manifest, not merely copied by toolchain",
+        )
+    }
+
+    /** Same wiring as `metaDirs`, for `python { sourceSets { commonMain { libDirs(...) } } }`. */
+    @Test
+    fun `bundleWithPackpack forwards libDirs to packpack's BundleRequest and they land in the real payload`() {
+        val packageDir = fixturePackageDir()
+        val outputDir = kotlin.io.path.createTempDirectory("packpack-bundle-out-libdirs").toFile()
+        val libDir = kotlin.io.path.createTempDirectory("packpack-libdirs").toFile()
+        File(libDir, "vendor_pkg/module.py").apply { parentFile.mkdirs() }.writeText("VENDORED = True\n")
+
+        val result = bundleWithPackpack(
+            packageDir = packageDir,
+            target = "macos",
+            buildType = "debug",
+            outputDir = outputDir,
+            libDirs = listOf(libDir),
+        )
+
+        assertEquals(
+            "VENDORED = True\n",
+            result.outputDir.resolve("python/vendor_pkg/module.py").readText(),
+        )
+    }
 }

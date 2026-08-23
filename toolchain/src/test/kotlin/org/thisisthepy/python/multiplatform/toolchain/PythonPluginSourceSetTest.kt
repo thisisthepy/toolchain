@@ -78,4 +78,60 @@ class PythonPluginSourceSetTest {
 
         assertEquals(File(projectDir, "src/commonMain/python"), resolved)
     }
+
+    /**
+     * `python { sourceSets { commonMain { metaDirs(...) } } }` (`DSLBuild.kt`'s
+     * `SourceSetConfig.metaDirs`) had nowhere to go -- `docs/ecosystem.md`'s gap list names it
+     * alongside `libDirs` as declared-but-unread -- until `pypackpack`'s `BundleRequest.metaDirs`
+     * existed for it to reach. Unlike [resolvePackageDir] (one package directory), every declared
+     * entry is kept: `ResourceBundler` merges each `metaDirs` directory wholesale, so there is no
+     * "pick the first one" narrowing to do here.
+     */
+    @Test
+    fun `commonMain metaDirs are all resolved against projectDir`() {
+        val commonMain =
+            SourceSetConfig("commonMain").apply {
+                metaDirs("src/commonMain/generated/meta", "src/commonMain/generated/meta2")
+            }
+
+        val resolved = resolveMetaDirs(projectDir, listOf(commonMain))
+
+        assertEquals(
+            listOf(File(projectDir, "src/commonMain/generated/meta"), File(projectDir, "src/commonMain/generated/meta2")),
+            resolved,
+        )
+    }
+
+    @Test
+    fun `no declared metaDirs resolves to an empty list`() {
+        assertEquals(emptyList(), resolveMetaDirs(projectDir, listOf(SourceSetConfig("commonMain"))))
+    }
+
+    @Test
+    fun `no commonMain source set at all resolves metaDirs to an empty list`() {
+        assertEquals(emptyList(), resolveMetaDirs(projectDir, emptyList()))
+    }
+
+    /** Same wiring as `metaDirs`, for `python { sourceSets { commonMain { libDirs(...) } } }`. */
+    @Test
+    fun `commonMain libDirs are all resolved against projectDir`() {
+        val commonMain =
+            SourceSetConfig("commonMain").apply {
+                libDirs("src/commonMain/build/site-packages")
+            }
+
+        val resolved = resolveLibDirs(projectDir, listOf(commonMain))
+
+        assertEquals(listOf(File(projectDir, "src/commonMain/build/site-packages")), resolved)
+    }
+
+    @Test
+    fun `no declared libDirs resolves to an empty list`() {
+        assertEquals(emptyList(), resolveLibDirs(projectDir, listOf(SourceSetConfig("commonMain"))))
+    }
+
+    @Test
+    fun `no commonMain source set at all resolves libDirs to an empty list`() {
+        assertEquals(emptyList(), resolveLibDirs(projectDir, emptyList()))
+    }
 }

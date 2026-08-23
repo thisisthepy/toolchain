@@ -99,6 +99,24 @@ open class BuildPythonArtifactTask : DefaultTask() {
     @get:Internal
     var minSdk: Int? = null
 
+    /**
+     * `python { sourceSets { commonMain { metaDirs(...) } } }`, resolved by
+     * [org.thisisthepy.python.multiplatform.toolchain.resolveMetaDirs] and forwarded to `pypackpack`
+     * as [BundleRequest.metaDirs] verbatim. Empty by default, matching every caller that declares no
+     * `metaDirs` -- see [BundleRequest.metaDirs]'s kdoc for what it is: generated metadata (`.pyi`
+     * stubs) merged into the resource bundle's payload.
+     */
+    @get:Internal
+    var metaDirs: List<File> = emptyList()
+
+    /**
+     * `python { sourceSets { commonMain { libDirs(...) } } }`, resolved by
+     * [org.thisisthepy.python.multiplatform.toolchain.resolveLibDirs] and forwarded to `pypackpack`
+     * as [BundleRequest.libDirs] verbatim. Empty by default -- see [BundleRequest.libDirs]'s kdoc.
+     */
+    @get:Internal
+    var libDirs: List<File> = emptyList()
+
     @TaskAction
     fun buildPython() {
         val bundleDir = bundleDir ?: File(project.layout.buildDirectory.get().asFile, "pythonBundle")
@@ -122,7 +140,7 @@ open class BuildPythonArtifactTask : DefaultTask() {
         // during configuration -- see `compileLevel`'s kdoc.
         val resolvedBuildLevel = resolveBuildLevel(compileLevel)
 
-        val result = bundleWithPackpack(source, target, buildType, bundleDir, resolvedBuildLevel, minSdk)
+        val result = bundleWithPackpack(source, target, buildType, bundleDir, resolvedBuildLevel, minSdk, metaDirs, libDirs)
         logger.lifecycle(
             "Bundled ${result.fileCount} file(s) for Python '$pythonVersion' via packpack's " +
                 "'${result.bundleType.id}' bundler into ${result.outputDir} " +
@@ -144,6 +162,10 @@ open class BuildPythonArtifactTask : DefaultTask() {
  *   caller that has no platform SDK to declare (e.g. a non-android target); `ppp`'s
  *   `Platforms.requireValidMinSdk` rejects a non-null value declared against a non-android-family
  *   [target], so callers should not pass one for those targets.
+ * @param metaDirs forwarded to [BundleRequest.metaDirs] verbatim. Empty by default, matching every
+ *   caller that declares no `python { sourceSets { commonMain { metaDirs(...) } } }`.
+ * @param libDirs forwarded to [BundleRequest.libDirs] verbatim. Empty by default, matching every
+ *   caller that declares no `python { sourceSets { commonMain { libDirs(...) } } }`.
  */
 fun bundleWithPackpack(
     packageDir: File,
@@ -152,6 +174,8 @@ fun bundleWithPackpack(
     outputDir: File,
     buildLevel: String = "instant",
     minSdk: Int? = null,
+    metaDirs: List<File> = emptyList(),
+    libDirs: List<File> = emptyList(),
 ): BundleResult {
     val request =
         BundleRequest(
@@ -162,6 +186,8 @@ fun bundleWithPackpack(
             outputDir = outputDir,
             overwrite = true,
             minSdk = minSdk,
+            metaDirs = metaDirs,
+            libDirs = libDirs,
         )
     return BundlerInterface.create(BundleType.RESOURCE)
         .bundle(request)

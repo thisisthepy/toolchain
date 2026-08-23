@@ -107,8 +107,15 @@ class PythonPlugin : Plugin<Project> {
             // fallback when `localLibraryPath` is unset -- see its kdoc and `PythonPluginSourceSetTest`.
             val resolvedPackageDir =
                 resolvePackageDir(project.projectDir, extension.localLibraryPath, extension.sourceSets.allSourceSets())
+            // `metaDirs`/`libDirs` (`DSLBuild.kt`'s `SourceSetConfig`) reach `pypackpack`'s
+            // `BundleRequest` the same way `commonMain.srcDirs` reaches `packageDir` above --
+            // resolved once here and threaded into whichever build task(s) actually run below.
+            val resolvedMetaDirs = resolveMetaDirs(project.projectDir, extension.sourceSets.allSourceSets())
+            val resolvedLibDirs = resolveLibDirs(project.projectDir, extension.sourceSets.allSourceSets())
             buildTask.configure {
                 packageDir = resolvedPackageDir
+                metaDirs = resolvedMetaDirs
+                libDirs = resolvedLibDirs
             }
             installTask.configure {
                 packageDir = resolvedPackageDir
@@ -275,6 +282,8 @@ class PythonPlugin : Plugin<Project> {
                                     "(${variant.target}, ${variant.buildTypeName})"
                             pythonVersion = extension.compileSdk
                             packageDir = resolvedPackageDir
+                            metaDirs = resolvedMetaDirs
+                            libDirs = resolvedLibDirs
                             target = variant.target
                             buildType = variant.buildTypeName
                             // Raw, not resolved: an unsupported level must fail this one task at
@@ -704,6 +713,38 @@ fun resolvePackageDir(
     localLibraryPath?.let { return File(projectDir, it) }
     val commonMainSrcDir = sourceSets.firstOrNull { it.name == "commonMain" }?.srcDirs?.firstOrNull()
     return commonMainSrcDir?.let { File(projectDir, it) }
+}
+
+/**
+ * Resolves `python { sourceSets { commonMain { metaDirs(...) } } }` (`DSLBuild.kt`'s
+ * `SourceSetConfig.metaDirs`) to the `List<File>` `pypackpack`'s `BundleRequest.metaDirs` takes,
+ * factored out the same way [resolvePackageDir] was -- see `PythonPluginSourceSetTest`.
+ *
+ * Unlike [resolvePackageDir], which narrows `commonMain.srcDirs` to a single package directory,
+ * every declared entry is kept: `ResourceBundler` merges each `metaDirs` directory wholesale
+ * (`ResourceBundler`'s KDoc, assumption 9), so there is no single value to pick here. Empty when
+ * `commonMain` declares none, or when there is no `commonMain` source set at all -- both preserve
+ * the pre-existing behavior of a bundle request with no `metaDirs`.
+ */
+fun resolveMetaDirs(
+    projectDir: File,
+    sourceSets: List<SourceSetConfig>,
+): List<File> {
+    val metaDirs = sourceSets.firstOrNull { it.name == "commonMain" }?.metaDirs.orEmpty()
+    return metaDirs.map { File(projectDir, it) }
+}
+
+/**
+ * Resolves `python { sourceSets { commonMain { libDirs(...) } } }` to the `List<File>`
+ * `pypackpack`'s `BundleRequest.libDirs` takes -- the same wiring as [resolveMetaDirs], for the
+ * sibling DSL list.
+ */
+fun resolveLibDirs(
+    projectDir: File,
+    sourceSets: List<SourceSetConfig>,
+): List<File> {
+    val libDirs = sourceSets.firstOrNull { it.name == "commonMain" }?.libDirs.orEmpty()
+    return libDirs.map { File(projectDir, it) }
 }
 
 /**
