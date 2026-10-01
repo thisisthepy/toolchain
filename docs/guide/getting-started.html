@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en" data-title-en="Getting started · toolchain" data-title-ko="시작하기 · toolchain">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started · toolchain</title>
+<meta name="description" content="toolchain: declare the Python half of a Kotlin Multiplatform app in Gradle.">
+<meta name="theme-color" content="#0f9d76">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<header class="site-header"><div class="wrap">
+<a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" fill="none"><rect x="1.5" y="1.5" width="21" height="21" rx="6" stroke="currentColor" stroke-opacity=".35" stroke-width="1.5"/><circle cx="8" cy="8.5" r="2.4" fill="#0f9d76"/><circle cx="16" cy="15.5" r="2.4" fill="#0f9d76"/><path d="M8 11v1.5a3 3 0 0 0 3 3h2.6" stroke="#0f9d76" stroke-width="1.8" stroke-linecap="round"/></svg><span translate="no">toolchain</span></a>
+<nav class="top-nav" aria-label="Main" data-label-en="Main" data-label-ko="주 메뉴"><a href="index.html"><span data-lang="en">Home</span><span data-lang="ko">홈</span></a><a href="getting-started.html" aria-current="page"><span data-lang="en">Start</span><span data-lang="ko">시작</span></a><a href="concepts.html"><span data-lang="en">Concepts</span><span data-lang="ko">개념</span></a><a href="guide-variants.html"><span data-lang="en">Guides</span><span data-lang="ko">가이드</span></a><a href="ecosystem.html"><span data-lang="en">Ecosystem</span><span data-lang="ko">생태계</span></a><a href="status.html"><span data-lang="en">Status</span><span data-lang="ko">상태</span></a></nav>
+<div class="controls">
+<button class="ctl" id="lang-toggle" type="button" aria-label="Switch language" data-label-en="Switch language to Korean" data-label-ko="언어를 영어로 전환"><span data-lang="en">한국어</span><span data-lang="ko">English</span></button>
+<button class="ctl" id="theme-toggle" type="button" aria-label="Toggle theme" data-label-en="Toggle light or dark theme" data-label-ko="밝은 테마와 어두운 테마 전환"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+</div>
+</div></header>
+<main>
+<div class="wrap doc"><nav class="doc-side" aria-label="Documentation" data-label-en="Documentation" data-label-ko="문서"><p data-lang="en">Documentation</p><p data-lang="ko">문서</p><a href="getting-started.html" aria-current="page"><span data-lang="en">Getting started</span><span data-lang="ko">시작하기</span></a><a href="concepts.html"><span data-lang="en">Concepts</span><span data-lang="ko">개념</span></a><a href="guide-variants.html"><span data-lang="en">Platforms & build types</span><span data-lang="ko">플랫폼과 빌드 타입</span></a><a href="guide-dependencies.html"><span data-lang="en">Source sets & dependencies</span><span data-lang="ko">소스셋과 의존성</span></a><a href="guide-staging.html"><span data-lang="en">Into the app</span><span data-lang="ko">앱 안으로</span></a><a href="guide-tcl.html"><span data-lang="en">tcl for Python users</span><span data-lang="ko">Python 사용자를 위한 tcl</span></a><a href="ecosystem.html"><span data-lang="en">Ecosystem</span><span data-lang="ko">생태계</span></a><a href="status.html"><span data-lang="en">Status & FAQ</span><span data-lang="ko">상태와 FAQ</span></a></nav><article class="doc-body">
+<h1><span data-lang="en">Getting started</span><span data-lang="ko">시작하기</span></h1>
+<p data-lang="en" class="muted">From an empty Kotlin Multiplatform module to a Python payload inside its artifacts, in five steps.</p><p data-lang="ko" class="muted">빈 Kotlin Multiplatform 모듈에서 산출물 안의 Python 페이로드까지, 다섯 단계.</p>
+
+<section>
+<h2><span data-lang="en">1. Prerequisites</span><span data-lang="ko">1. 준비물</span></h2>
+<div class="table-wrap"><table><thead><tr><th><span data-lang="en">Need</span><span data-lang="ko">필요한 것</span></th><th><span data-lang="en">Why</span><span data-lang="ko">이유</span></th></tr></thead><tbody><tr><td><span data-lang="en">JDK 17+ and Gradle 8.9 (wrapper)</span><span data-lang="ko">JDK 17 이상, Gradle 8.9 (래퍼)</span></td><td><span data-lang="en">The build itself.</span><span data-lang="ko">빌드 자체.</span></td></tr><tr><td><span data-lang="en"><code>uv</code> on <code>PATH</code></span><span data-lang="ko"><code>PATH</code> 의 <code>uv</code></span></td><td><span data-lang="en">pypackpack installs dependencies with it.</span><span data-lang="ko">pypackpack 이 의존성 설치에 씁니다.</span></td></tr><tr><td><span data-lang="en"><code>packpack:0.1.0</code> in Maven Local</span><span data-lang="ko">Maven Local 의 <code>packpack:0.1.0</code></span></td><td><span data-lang="en">The plugin depends on pypackpack as a library.</span><span data-lang="ko">플러그인이 pypackpack 을 라이브러리로 씁니다.</span></td></tr><tr><td><span data-lang="en">Android SDK (<code>ANDROID_HOME</code>)</span><span data-lang="ko">Android SDK (<code>ANDROID_HOME</code>)</span></td><td><span data-lang="en">Only if your module has an Android target.</span><span data-lang="ko">모듈에 Android 타깃이 있을 때만.</span></td></tr></tbody></table></div>
+<pre><code class="language-shell"># in a pypackpack checkout
+./gradlew :packpack:publishToMavenLocal
+
+# in this repository
+./gradlew :toolchain:publishToMavenLocal</code></pre>
+<div class="note"><p data-lang="en">The plugin is pre-release and resolved from <code>mavenLocal()</code>. Add <code>mavenLocal()</code> to <code>pluginManagement.repositories</code> in your <code>settings.gradle.kts</code>.</p><p data-lang="ko">플러그인은 출시 전이며 <code>mavenLocal()</code> 에서 받습니다. <code>settings.gradle.kts</code> 의 <code>pluginManagement.repositories</code> 에 <code>mavenLocal()</code> 을 추가하세요.</p></div>
+</section>
+
+<section>
+<h2><span data-lang="en">2. A Python package</span><span data-lang="ko">2. Python 패키지</span></h2>
+<p data-lang="en">The plugin bundles a <em>pypackpack package</em>: a directory with a <code>pyproject.toml</code> and its code under <code>src/main/</code>. Platform-specific code can sit in <code>src/android</code>, <code>src/ios</code> and so on; the bundler overlays it.</p><p data-lang="ko">플러그인이 번들링하는 것은 <em>pypackpack 패키지</em>입니다. <code>pyproject.toml</code> 이 있고 코드가 <code>src/main/</code> 아래에 있는 디렉터리입니다. 플랫폼 전용 코드는 <code>src/android</code>, <code>src/ios</code> 등에 두면 번들러가 덮어씌웁니다.</p>
+<pre><code class="language-text">usage-example/python/
+├── pyproject.toml
+└── src/main/example_py/
+    ├── __init__.py
+    └── data/table.json      # data files travel with the modules</code></pre>
+</section>
+
+<section>
+<h2><span data-lang="en">3. Apply the plugin</span><span data-lang="ko">3. 플러그인 적용</span></h2>
+<pre><code class="language-kotlin">plugins {
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.android.application)
+    id(&quot;org.thisisthepy.python.multiplatform&quot;) version &quot;1.0.0-alpha&quot;
+}
+
+python {
+    compileSdk = &quot;3.13&quot;
+    localLibraryPath = &quot;python&quot;
+    packaging {
+        fileName = &quot;usage-example&quot;
+    }
+}</code></pre>
+<p data-lang="en">This is the repository's own <code>usage-example/build.gradle.kts</code>. Instead of <code>localLibraryPath</code> you can point <code>sourceSets { commonMain { srcDirs(...) } }</code> at the package.</p><p data-lang="ko">이 저장소의 <code>usage-example/build.gradle.kts</code> 그대로입니다. <code>localLibraryPath</code> 대신 <code>sourceSets { commonMain { srcDirs(...) } }</code> 로 패키지를 가리켜도 됩니다.</p>
+</section>
+
+<section>
+<h2><span data-lang="en">4. Run it</span><span data-lang="ko">4. 실행</span></h2>
+<pre><code class="language-shell">./gradlew :usage-example:packagePython       # installPythonDependencies → buildPython → zip
+./gradlew :usage-example:stagePythonBundle   # copy python/ where each platform packages from
+./gradlew tasks --group python               # everything the plugin registered</code></pre>
+</section>
+
+<section>
+<h2><span data-lang="en">5. What you get</span><span data-lang="ko">5. 결과물</span></h2>
+<div class="table-wrap"><table><thead><tr><th><span data-lang="en">Path</span><span data-lang="ko">경로</span></th><th><span data-lang="en">Contents</span><span data-lang="ko">내용</span></th></tr></thead><tbody><tr><td><code>build/pythonBundle/</code></td><td><span data-lang="en"><code>python/</code> + <code>resource-manifest.json</code>, from pypackpack</span><span data-lang="ko">pypackpack 이 만든 <code>python/</code> + <code>resource-manifest.json</code></span></td></tr><tr><td><code>build/distributions/&lt;fileName&gt;.zip</code></td><td><span data-lang="en">The bundle, zipped</span><span data-lang="ko">번들의 zip</span></td></tr><tr><td><code>build/pythonStaging/desktop/python/</code></td><td><span data-lang="en">Added to the desktop jar's resources</span><span data-lang="ko">데스크톱 jar 리소스에 추가됨</span></td></tr><tr><td><code>build/pythonStaging/android/python/</code></td><td><span data-lang="en">Added to the APK's <code>assets/</code></span><span data-lang="ko">APK 의 <code>assets/</code> 에 추가됨</span></td></tr><tr><td><code>build/pythonStaging/ios/python/</code></td><td><span data-lang="en">Staged; point an Xcode “Copy Bundle Resources” phase at it</span><span data-lang="ko">스테이징만 됨. Xcode “Copy Bundle Resources” 단계가 이곳을 가리키게 하세요</span></td></tr></tbody></table></div>
+<p data-lang="en">Next: give each target its own bundle in <a href="guide-variants.html">Platforms &amp; build types</a>.</p><p data-lang="ko">다음: <a href="guide-variants.html">플랫폼과 빌드 타입</a>에서 타깃마다 번들을 따로 만드세요.</p>
+</section>
+</article></div>
+</main>
+<footer class="site-footer"><div class="wrap">
+<nav aria-label="All pages" data-label-en="All pages" data-label-ko="모든 페이지"><a href="index.html"><span data-lang="en">Home</span><span data-lang="ko">홈</span></a><a href="getting-started.html"><span data-lang="en">Getting started</span><span data-lang="ko">시작하기</span></a><a href="concepts.html"><span data-lang="en">Concepts</span><span data-lang="ko">개념</span></a><a href="guide-variants.html"><span data-lang="en">Platforms & build types</span><span data-lang="ko">플랫폼과 빌드 타입</span></a><a href="guide-dependencies.html"><span data-lang="en">Source sets & dependencies</span><span data-lang="ko">소스셋과 의존성</span></a><a href="guide-staging.html"><span data-lang="en">Into the app</span><span data-lang="ko">앱 안으로</span></a><a href="guide-tcl.html"><span data-lang="en">tcl for Python users</span><span data-lang="ko">Python 사용자를 위한 tcl</span></a><a href="ecosystem.html"><span data-lang="en">Ecosystem</span><span data-lang="ko">생태계</span></a><a href="status.html"><span data-lang="en">Status & FAQ</span><span data-lang="ko">상태와 FAQ</span></a></nav>
+<p data-lang="en">Part of the <a href="ecosystem.html">thisisthepy</a> ecosystem. MIT licensed. Source: <a href="https://github.com/thisisthepy/toolchain">github.com/thisisthepy/toolchain</a>.</p><p data-lang="ko"><a href="ecosystem.html">thisisthepy</a> 생태계의 일부입니다. MIT 라이선스. 소스: <a href="https://github.com/thisisthepy/toolchain">github.com/thisisthepy/toolchain</a>.</p>
+</div></footer>
+</body>
+</html>

@@ -1,0 +1,240 @@
+# Specification
+
+What `toolchain` does — the behavioural contract. Every item stays inside `docs/INTENT.md`; an item
+that does not is listed at the end under **Outside intent — needs a decision**.
+
+Each item carries a status:
+
+- **implemented** — the behaviour exists in code *and* a test in this repository exercises it
+  (the test file is cited).
+- **partial** — some of the behaviour exists, or it exists but no test here exercises it. What is
+  missing is said.
+- **planned** — the example build file or an issue asks for it; the code does not do it (or only
+  declares a DSL property that nothing reads).
+
+Status was assigned on 2026-10-02 by reading `toolchain/src`, `tcl/src` and their tests. No status
+here comes from a roadmap, a commit message or an issue checkbox.
+
+Paths below are abbreviated: `plugin/` = `toolchain/src/main/kotlin/org/thisisthepy/python/multiplatform/toolchain/`,
+`ptest/` = the matching `toolchain/src/test/kotlin/...` directory, `tcl/` = `tcl/src/{main,test}/kotlin/org/thisisthepy/python/multiplatform/tcl/`.
+
+---
+
+## 1. Plugin
+
+### 1.1 Applying the plugin
+Plugin id `org.thisisthepy.python.multiplatform`, implementation class `PythonPlugin`
+(`toolchain/build.gradle.kts` `gradlePlugin { }`). Applying it creates the `python` extension
+(`PythonExtension`) and registers the tasks of §1.10–§1.15, all in group `python`.
+Consumers resolve it from `mavenLocal()` after `./gradlew :toolchain:publishToMavenLocal`; the plugin
+itself depends on `org.thisisthepy.python.multiplatform:packpack:0.1.0` from `mavenLocal()`.
+
+**Status: partial** — the wiring exists (`plugin/PythonPlugin.kt`), but no test in this repository
+applies the plugin to a Gradle `Project`; it is exercised only by building `usage-example`.
+
+### 1.2 `compileSdk` — the Python version
+`compileSdk` accepts `X.Y`, `X.Y.Z`, `X.Y.Z-alpha[N]` or `X.Y.Z-rc[N]` and classifies it into
+`PythonReleaseChannel { ALPHA, RC, NORMAL }`. `toReleaseString()` strips the channel to the `X.Y.Z`
+form `pypackpack` accepts. A blank value is a silent skip; a malformed one fails configuration.
+
+**Status: implemented** — `plugin/dsl/PythonVersion.kt`; `ptest/dsl/PythonVersionTest.kt`.
+
+The parsed version is logged and handed to `buildPython` as `pythonVersion`, which only logs it: it
+does **not** choose which interpreter is bundled. Named version constants such as
+`PY3_11_9_ALPHA` (example build file) do not exist. → *Interpreter selection by `compileSdk` and
+version constants: **planned**.* Automatic build of an unknown version: see INTENT §4.1.
+
+### 1.3 `defaultConfig { versionCode, versionName, pip { … } }`
+The DSL classes exist (`plugin/dsl/DSLCore.kt`) with different names from the example
+(`autoUpdateImplicitDependencies` for `autoUpdate`; `pipCentral`/`pipLocal`/`pipJit` for
+`central`/`local`/`jit`; no `url =` property and no `localRecipes`). Nothing reads any of it.
+
+**Status: planned.**
+
+### 1.4 Platforms
+Declared as
+`platforms { android { androidSdk = 24; variants(androidArm64(), androidX64()) }; ios { iosSdk = 14; variants(…) }; desktop { variants(…) } }`.
+Each variant maps to a `pypackpack` target triple and a Kotlin target name:
+
+| Variant | Target triple | Kotlin target |
+|---|---|---|
+| `androidArm64` | `aarch64-linux-android` | `androidNativeArm64` |
+| `androidX64` | `x86_64-linux-android` | `androidNativeX64` |
+| `iosArm64` | `arm64-apple-ios` | `iosArm64` |
+| `iosX64` | `x86_64-apple-ios-simulator` | `iosX64` |
+| `iosSimulatorArm64` | `arm64-apple-ios-simulator` | `iosSimulatorArm64` |
+| `macosX64` / `macosArm64` | `x86_64-apple-darwin` / `aarch64-apple-darwin` | same name |
+| `linuxX64` / `linuxArm64` | `x86_64-unknown-linux-gnu` / `aarch64-unknown-linux-gnu` | same name |
+| `mingwX64` | `x86_64-pc-windows-msvc` | `mingwX64` |
+
+`androidArm32` and `androidX86` are **rejected** at configuration with a message saying why
+(`pypackpack` defines no such triple). An unknown name is rejected with the supported list. A
+declared variant whose Kotlin target is not enabled in the consumer's `kotlin { }` block produces a
+**warning**, not a failure. `androidSdk`/`iosSdk` of `0` mean "undeclared"; negative values are
+rejected; a declared value is forwarded to `pypackpack` as `BundleRequest.minSdk`.
+
+**Status: implemented** — `plugin/dsl/DSLPlatforms.kt`, `plugin/PythonPlugin.kt`;
+`ptest/dsl/PlatformTargetMappingTest.kt`, `ptest/PythonPluginPlatformsTest.kt`,
+`ptest/PythonPluginVariantGraphTest.kt`, `ptest/bundle/BuildPythonArtifactTaskTest.kt` (minSdk).
+
+The DSL *shape* differs from the example build file, which writes `android("android") { … }` and
+`listOf(androidArm64(), …)` directly inside `python { }` — see INTENT §4.2. The example's
+32-bit/x86 Android variants are rejected rather than built.
+
+### 1.5 Build types
+`buildTypes { getByName("debug") { … }; getByName("release") { … } }`. Only `debug` and `release`
+exist; any other name throws. `debug` forbids setting `useCodeMinifier`, `excludeMetaclass` and
+`enableCodePush` (setting them throws). Without a `platforms` block the active build type is chosen
+by `-Ppython.buildType=<name>` (default `debug`); an undeclared name fails loudly.
+
+**Status: implemented** — `plugin/dsl/DSLBuild.kt`, `resolveActiveBuildType` in `plugin/PythonPlugin.kt`;
+`ptest/PythonPluginBuildTypeTest.kt`. (The debug-only setter rejections have no test: partial.)
+
+### 1.6 `compileLevel`
+Blank resolves to `instant`; `instant` passes. `bytecode`, `native` and `mixed` are rejected with
+"not implemented by pypackpack's resource bundler yet" — **inside the variant's task action**, so
+`--continue` still builds every other variant.
+
+**Status: implemented** (the rejection) — `resolveBuildLevel`; `ptest/PythonPluginBuildLevelTest.kt`,
+`ptest/PythonPluginVariantGraphTest.kt`.
+→ *Building at `bytecode` / `native` / `mixed`: **planned**, blocked on `pypackpack`.*
+
+### 1.7 `useCodeMinifier`, `excludeMetaclass`
+Declared on `ReleaseBuildType`; nothing reads them. **Status: planned.**
+
+### 1.8 Per-variant task graph
+When `platforms` declares at least one variant, every variant is crossed with every declared build
+type (or `debug` alone if none is declared). Each pair gets
+`buildPython<Variant><BuildType>` and `packagePython<Variant><BuildType>`, writes to
+`build/pythonBundle/<variant>-<buildType>/`, and zips to
+`build/distributions/<fileName>-<variant>-<buildType>.zip`. `buildPython` and `packagePython` become
+lifecycle tasks (their own action is skipped). Without a `platforms` block there is exactly one
+host-target chain, as before.
+
+**Status: implemented** (resolution and naming) — `resolveVariants`, `PythonVariant`;
+`ptest/PythonPluginVariantGraphTest.kt`. The task registration itself is untested here.
+
+### 1.9 Source sets
+`sourceSets { val commonMain by getting { srcDirs(…); metaDirs(…); libDirs(…) } }`. The three
+directory functions are accepted only on `commonMain` and throw elsewhere. The package directory is
+`localLibraryPath` if set, else the **first** `commonMain.srcDirs` entry, else none (bundling and
+installation are skipped). Every `metaDirs` and `libDirs` entry is forwarded to `pypackpack` as
+`BundleRequest.metaDirs` / `libDirs`.
+
+**Status: implemented** — `resolvePackageDir`, `resolveMetaDirs`, `resolveLibDirs`;
+`ptest/PythonPluginSourceSetTest.kt`, `ptest/bundle/BuildPythonArtifactTaskTest.kt`.
+
+### 1.10 Dependencies and `installPythonDependencies`
+`dependencies { implementation("pkg"); integration("pkg") }` in any source set. All source sets'
+`implementation` **and** `integration` entries are flattened into one list and installed into the
+package directory through `pypackpack`:
+`BackendInterface.create(BackendType.UV)` → `addDependencies(…, workingDir = packageDir)` (a real
+`uv add`). An empty list or no package directory is a skip, not a failure.
+
+**Status: implemented** — `plugin/dependency/lang/python/InstallDependenciesTask.kt`;
+`ptest/PythonPluginDependencyTest.kt`, `ptest/dependency/lang/python/InstallDependenciesTaskTest.kt`
+(needs `uv` and network).
+→ *Per-source-set targeting (an `androidMain` dependency only for Android): **planned** — today
+every dependency is installed for every target.*
+→ *`integration()` checking the wheel for `KLIBDEPENS` and warning when absent: **planned**.*
+
+### 1.11 Bundling — `buildPython`
+Builds a `pypackpack` `BundleRequest` (package dir, target triple, build type, build level, output
+dir, `overwrite = true`, minSdk, metaDirs, libDirs) and calls
+`BundlerInterface.create(BundleType.RESOURCE).bundle(request)`. The result is `python/` plus a
+`resource-manifest.json`. A failure becomes a `GradleException`. No package directory: the output
+directory is created empty and `pypackpack` is not called.
+
+**Status: implemented** — `plugin/bundle/BuildPythonArtifactTask.kt`;
+`ptest/bundle/BuildPythonArtifactTaskTest.kt`.
+
+### 1.12 Packaging — `packagePython`
+Zips the bundle directory to `build/distributions/<fileName>.zip` (or `<fileName>-<variant>.zip`).
+Fails if the bundle directory does not exist.
+
+**Status: partial** — `plugin/bundle/AssemblePythonPackageTask.kt`; no test here.
+→ *`embedLevel` (0 no interpreter / 1 external / 2 embedded, auto-raised with a warning where a
+platform cannot honour it, overridable from `gradle.properties`): **planned** — it is only logged.*
+
+### 1.13 Staging into the app — `stagePythonBundle{Android,Ios,Desktop}`
+Copies the bundle's `python/` subtree (never the manifest) into
+`build/pythonStaging/<android|ios|desktop>/python/`, deleting what a previous run staged first. The
+bundle payload is a declared input, so a changed package re-stages. One variant is chosen per
+destination: only variants of the active build type; desktop prefers the host's own triple, else the
+first declared; Android and iOS take the first declared. A destination with no matching variant
+stages nothing.
+
+**Status: implemented** (copy rule and selection) — `plugin/bundle/StagePythonBundleTask.kt`,
+`selectStagingVariants`; `ptest/bundle/StagePythonBundleTaskTest.kt`, `ptest/PythonPluginStagingTest.kt`.
+
+Hand-off to the platform's packaging step:
+
+- Desktop: the staged root is added to the JVM target's `<target>ProcessResources`, so the payload
+  is in the desktop jar. **partial** — untested here.
+- Android: the staged root is added to `android.sourceSets.main.assets` (reflectively), so the
+  payload is in the APK's `assets/`. **partial** — untested here.
+- iOS: staged but **not attached** to the Xcode project. **planned.**
+- Putting the staged `python/` on `sys.path` at run time is `python-multiplatform`'s side.
+
+### 1.14 Hot reload — `hotReloadPython`
+`packaging { hotReload { serverHost; redirectErrorStream; cert { keyStore | autoGenerate } } }` is
+validated when any build type sets `enableHotReload = true`: `serverHost` must be non-blank, and
+`keyStore` and `autoGenerate` are mutually exclusive. The task collects every `.py` under
+`localLibraryPath`, runs `adb push` for each to `/data/local/tmp/<fileName>/python/…`, then
+`adb shell am broadcast -a org.thisisthepy.python.RELOAD_PYTHON`.
+
+**Status: partial** — `plugin/hotreload/`; `ptest/PythonPluginHotReloadTest.kt`,
+`ptest/hotreload/WatchAndPushTest.kt` test the validation and the command list; the task action
+itself is untested. `serverHost` and `cert` are validated but not used for transport (adb only);
+the source root ignores `commonMain.srcDirs`; Android only (a desktop copy helper,
+`executeLocalCopy`, exists and is tested but no task calls it).
+→ *A hot-reload server reachable at `serverHost`, and a "run" entry point for it: **planned**.*
+
+### 1.15 Code push — `codePushPython`
+`packaging { codePush { serverHost; cert; uploadConfig { forceUpload; login { id; password } } } }`
+is validated the same way when any build type sets `enableCodePush = true`. The task prints that no
+upload client exists.
+
+**Status: partial** (validation) — `plugin/hotreload/HotReloadConfig.kt`, `CodePushPendingTask.kt`;
+`ptest/PythonPluginCodePushTest.kt`. → *Upload: **planned**.*
+
+### 1.16 `buildFeatures { metaclass, compose }`
+Declared (`BuildFeaturesExtension`); nothing reads them. **Status: planned.**
+
+### 1.17 `projectFlavors { }`
+Present in the example build file; absent from the DSL. **Status: planned.**
+
+## 2. `tcl` — toolchain-lite
+
+### 2.1 `tcl install <package>`
+Finds the nearest `pyproject.toml` at or above the working directory. If there is none, runs
+`uv init --bare` there first (through `pypackpack`'s `BackendInterface.initProject`), then
+`addDependencies` for the package. Exit code 0 on success and the `uv` output on stdout; 1 with a
+message on stderr for a missing argument, an unknown command or a failed install. No arguments
+prints `Usage: tcl install <package>`.
+
+**Status: implemented** — `tcl/Cli.kt`, `tcl/Installer.kt`; `tcl/CliArgsTest.kt`,
+`tcl/InstallerTest.kt` (needs `uv` and network). Run with `./gradlew :tcl:run --args="install <pkg>"`.
+
+---
+
+## Outside intent — needs a decision
+
+These exist in the code but are not asked for by the example build file or the issues.
+
+1. **`python { localLibraryPath = "…" }`** — not in the example build file, which uses
+   `sourceSets { commonMain { srcDirs(…) } }`. It overrides `srcDirs` and is the only source root
+   hot reload reads. `usage-example` depends on it.
+2. **`-Ppython.buildType=<name>`** — a project property choosing the active build type when no
+   `platforms` block exists. The example build file says nothing about selecting a build type.
+3. **Hot reload over `adb push` + broadcast.** The example describes an HTTPS `serverHost` with a
+   certificate; the implemented transport is Android-only `adb`.
+4. **Unreferenced code**: `PythonMultiplatformPlugin.kt` (a second `Plugin` that is not registered
+   in `gradlePlugin { }`), `dependency/reslover.kt`, `dependency/lang/kotlin/decompileKotlinMeta.kt`
+   (a `main()` generating Python from Kotlin metadata — related to `buildFeatures.metaclass` but not
+   wired), `bundle/PythonLocalLoader.kt`, `dependency/DependencyType.kt`, and
+   `BinariesExtension` / `FrozenPackConfig` / `BuildTypeEnum` in `dsl/DSLPlatforms.kt`. Nothing calls
+   any of them.
+5. **`pyproject.toml`** declares a flit-built Python package named `toolchain` (Python 3.9–3.13)
+   that does not exist in the repository — the root `toolchain/` directory is the Gradle module.
+   Nothing builds or tests it.
