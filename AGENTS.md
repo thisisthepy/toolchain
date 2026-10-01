@@ -49,12 +49,12 @@ build caches, model weights, `node_modules`) into every worktree is how 86 workt
 |---|---|
 | `work/<topic>` | You. All work happens here. |
 | `develop` | Merged into from work branches after verification. Never commit to it directly. |
-| `release` | **Automation only.** Kept in sync from `develop` with the main-only file layout. |
+| `release` | **CI only.** Not a standing branch: CI regenerates it from every push to `develop`, in the main-only file layout, and opens the PR into `main`. It may not exist. Never write to it. |
 | `main` | **Pull request from `release` only.** Never push or merge to it directly. |
 
 `main` carries a reduced layout: of the Markdown files, only `README.md` stays at the repository
 root, and `docs/` keeps only its subdirectories (no Markdown files directly under `docs/`).
-`tools/release/sync-release.sh` produces that layout; do not hand-edit `release` or `main`.
+CI runs `tools/release/sync-release.sh` (`.github/workflows/release-sync.yml`) to produce that layout; do not hand-edit `release` or `main`.
 
 ## 5. Intent → Spec → Test → Code
 
