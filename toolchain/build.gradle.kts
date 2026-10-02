@@ -70,6 +70,13 @@ gradlePlugin {
 // rejected as out of scope -- `compose-multiplatform 1.7.0` (`gradle/libs.versions.toml`) is not
 // verified against it, and that is exactly the kind of build-wide change a single delegation should
 // not carry.
+// `TypedpythonCheckTaskTest` installs the real `typedpython` gate, which is not on PyPI yet:
+// `-Ptypedpython.wheelDir=<dir>` names the directory holding its wheel. Forwarded as-is; the test
+// fails with that instruction when it is missing rather than skipping.
+tasks.test {
+    systemProperty("typedpython.wheelDir", providers.gradleProperty("typedpython.wheelDir").getOrElse(""))
+}
+
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions.freeCompilerArgs.add("-Xskip-metadata-version-check")
 }
