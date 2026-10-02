@@ -130,6 +130,10 @@ jobs:
           cat consumer.log
           grep -q "iniconfig" consumer.log || { echo "the dependency was not installed"; exit 1; }
           ls -la usage-example/build/distributions/
+          # #16: the dependency is installed for the host triple and reaches the payload, not only the venv.
+          test -f usage-example/build/pythonDeps/host/iniconfig/__init__.py || { echo "iniconfig was not installed for the host triple"; exit 1; }
+          test -f usage-example/build/pythonBundle/python/iniconfig/__init__.py || { echo "iniconfig is not in the bundle"; exit 1; }
+          unzip -l usage-example/build/distributions/*.zip | grep -q "python/iniconfig/__init__.py" || { echo "iniconfig is not in the zip"; exit 1; }
 
   guide:
     runs-on: ubuntu-latest

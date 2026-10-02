@@ -63,14 +63,14 @@ The resolved version is handed to `buildPython` as `pythonVersion`, which only l
 ### 1.3 `defaultConfig { versionCode, versionName, pip { … } }`
 `pip { autoUpdate; repositories { central { setUrl(…) }; local { url = … }; jit { url; localRecipes { add(…) } } } }`,
 spelled as the example build file spells it (INTENT §4.3), becomes options of the `uv add` that
-`installPythonDependencies` runs (§1.10):
+`installPythonDependencies` runs and of every per-target `uv pip install` (§1.10):
 
 | DSL | `uv add` option |
 |---|---|
 | `central { setUrl(a, b, …) }` | `--default-index a`; the other URLs, minus repeats of `a`, as `--index` |
 | `local { url = … }` | `--find-links <dir>`; a `file:` URI becomes a path |
 | `autoUpdate = true` | `--upgrade` |
-| `jit { … }` | **rejected**: pypackpack has no recipe build. The rejection fails `installPythonDependencies` only, and only when it has something to install. |
+| `jit { … }` | **rejected**: pypackpack has no recipe build. The rejection fails `installPythonDependencies` and the per-target install tasks, each only when it has something to install. |
 
 **Status: implemented** — `resolvePipArguments` / `resolvePipSettings` in
 `plugin/dependency/lang/python/PipRepositories.kt`; `ptest/dependency/lang/python/PipRepositoriesTest.kt`
@@ -193,23 +193,65 @@ installation are skipped). Every `metaDirs` and `libDirs` entry is forwarded to 
 `ptest/PythonPluginSourceSetTest.kt`, `ptest/bundle/BuildPythonArtifactTaskTest.kt`.
 
 ### 1.10 Dependencies and `installPythonDependencies`
-`dependencies { implementation("pkg"); integration("pkg") }` in any source set. All source sets'
-`implementation` **and** `integration` entries are flattened into one list and installed into the
-package directory through `pypackpack`:
-`BackendInterface.create(BackendType.UV)` → `addDependencies(…, workingDir = packageDir)` (a real
-`uv add`). An empty list or no package directory is a skip, not a failure.
+`dependencies { implementation("pkg"); integration("pkg") }` in a source set. Two installations
+read these declarations.
 
-**Status: implemented** — `plugin/dependency/lang/python/InstallDependenciesTask.kt`;
-`ptest/PythonPluginDependencyTest.kt`, `ptest/dependency/lang/python/InstallDependenciesTaskTest.kt`
-(needs `uv` and network).
-→ *Per-source-set targeting (an `androidMain` dependency only for Android): **planned** — today
-every dependency is installed for every target.*
+**Into the package's venv — `installPythonDependencies`.** All source sets' `implementation` **and**
+`integration` entries are flattened into one list and installed into the package directory through
+`pypackpack`: `BackendInterface.create(BackendType.UV)` → `addDependencies(…, workingDir = packageDir)`
+(a real `uv add`). This records the dependencies in the package's `pyproject.toml` and leaves the
+`<package>/.venv` that `compileLevel = "bytecode"` compiles with (§1.6). It does not feed a bundle. An
+empty list or no package directory is a skip, not a failure.
+
+**Per target — `installPythonDependencies<Set>`.** What reaches a bundle is installed separately,
+once per *dependency set*: a platform variant crossed with a flavor (§1.17). The build type is not
+part of it, because it changes neither the requirement list nor the triple, so `debug` and `release`
+share one install.
+
+- A set reads `commonMain`, then its family's source set — `androidMain`, `iosMain` or `desktopMain`
+  (macOS, Linux and Windows are one `desktopMain`, as they are one staging destination, §1.13) —
+  then `<flavor>Main`. Entries keep that order; repeats are dropped. `buildFeatures { compose }` adds
+  `pythonx-compose` to every set (§1.16).
+- The task (`installPythonDependenciesAndroidArm64`, `…AndroidArm64Free`) clears
+  `build/pythonDeps/<set>/` (`androidArm64`, `androidArm64-free`) and calls `pypackpack`'s
+  `UVBackend.installDependenciesToTarget(targetDir, pythonPlatform = <the variant's triple>, extraArgs,
+  workingDir)` — `uv pip install -r pyproject.toml --target <dir> --python-platform <triple>`. That
+  call reads only a `pyproject.toml` in `workingDir`, so the task writes one listing the set's
+  requirements into its temporary directory (`build/tmp/<task>/`) and passes that directory.
+- Options: the `pip { }` repositories (§1.3), `python-version` = `compileSdk`'s `major.minor` (wheel
+  tags carry the CPython ABI), and `only-binary = :all:` (no sdist is built with the host compiler).
+  A requirement with no wheel for the triple fails that set's task with uv's message, which names it.
+- Every bundle task of the set (§1.11) lists `build/pythonDeps/<set>/` **first** in `libDirs` and
+  depends on the task, so a declared `libDirs(…)` tree overrides an installed file.
+- Without a platform variant the host chain does the same: `installPythonDependenciesHost`,
+  `commonMain` + `desktopMain`, the host triple, `build/pythonDeps/host/`.
+- Dependencies in a source set no set reads (`androidArm64Main`, `fooMain`, or `<flavor>Main` with no
+  such flavor) fail every per-target task with a message naming it, instead of reaching no bundle.
+- Task inputs are the requirement list, triple, options and rejections; the output is the directory.
+  `pip { autoUpdate = true }` makes the task never up to date. No package directory skips the task.
+
+**Status: implemented** — `plugin/dependency/lang/python/InstallDependenciesTask.kt`,
+`plugin/dependency/lang/python/InstallTargetDependenciesTask.kt`, `plugin/TargetDependencies.kt`;
+`ptest/PythonPluginDependencyTest.kt`, `ptest/TargetDependenciesTest.kt` (source-set selection per
+family and flavor, options, rejection), `ptest/PythonPluginTargetDependenciesTest.kt` (tasks,
+install directories, `libDirs` and dependencies on an applied plugin),
+`ptest/dependency/lang/python/InstallDependenciesTaskTest.kt` and
+`ptest/dependency/lang/python/InstallTargetDependenciesTaskTest.kt` (a real install of `six` for
+`aarch64-linux-android`; both need `uv` and network). CI's consumer job checks that usage-example's
+`iniconfig` is in the bundle and the zip.
+→ *Known limits: without `compileSdk` no `python-version` is passed and uv uses the interpreter it
+finds. `installPythonDependencies` still `uv add`s every source set for the host, so a package with
+no host wheel fails it even if only `androidMain` declares it. `pypackpack`'s `ResourceBundler` drops
+`.pyd` files and directories named `build`/`dist`, so a Windows extension module does not reach a
+`mingwX64` bundle.*
 → *`integration()` checking the wheel for `KLIBDEPENS` and warning when absent: **planned**.*
 
 ### 1.11 Bundling — `buildPython`
 Builds a `pypackpack` `BundleRequest` (package dir, target triple, build type, build level, output
 dir, `overwrite = true`, minSdk, metaDirs, libDirs) and calls
-`BundlerInterface.create(BundleType.RESOURCE).bundle(request)`. The result is `python/` plus a
+`BundlerInterface.create(BundleType.RESOURCE).bundle(request)`. `libDirs` is the task's
+dependency set's `build/pythonDeps/<set>/` (§1.10) followed by the declared `libDirs(…)` (§1.9), so
+the installed packages land in `python/` beside the app's modules. The result is `python/` plus a
 `resource-manifest.json`. A failure becomes a `GradleException`. No package directory: the output
 directory is created empty and `pypackpack` is not called.
 
@@ -288,12 +330,13 @@ or `-P`) with no default:
 
 | Property | Value | Effect |
 |---|---|---|
-| `python.compose.pythonxCompose` | a pip requirement naming `pythonx-compose` (`pythonx-compose==0.1.0`), or an existing directory of wheels (absolute, relative to the project directory, or a `file:` URI) | The requirement — or `pythonx-compose` for a directory — is appended to `installPythonDependencies`' list. A directory is appended to the `find-links` option `pip { repositories { local } }` produces, comma-separated after it (uv splits `--find-links` on commas). |
+| `python.compose.pythonxCompose` | a pip requirement naming `pythonx-compose` (`pythonx-compose==0.1.0`), or an existing directory of wheels (absolute, relative to the project directory, or a `file:` URI) | The requirement — or `pythonx-compose` for a directory — is appended to `installPythonDependencies`' list and to every per-target list (§1.10). A directory is appended to the `find-links` option `pip { repositories { local } }` produces, comma-separated after it (uv splits `--find-links` on commas). |
 | `python.compose.kotlinModule` | a Maven coordinate `group:artifact:version` of `python-multiplatform-compose` | Added to Kotlin Multiplatform `commonMain`'s `implementation` when `org.jetbrains.kotlin.multiplatform` is applied. |
 
 Failures, each naming the property and what it is for:
 - `pythonxCompose` missing, or neither a directory nor a `pythonx-compose` requirement: carried to
-  `installPythonDependencies` and thrown from its action (§14), so tasks that install nothing still run.
+  `installPythonDependencies` and the per-target install tasks and thrown from their actions (§14), so
+  tasks that install nothing still run.
 - `kotlinModule` missing or not `group:artifact:version`, with the Kotlin Multiplatform plugin
   applied: fails configuration. A dependency has no task action to carry a rejection to, and every
   Kotlin compilation includes `commonMain`, so there is no narrower valid place.
@@ -314,14 +357,13 @@ between platform and build type: `buildPythonAndroidArm64FreeDebug`,
 type's name; anything else fails configuration. Staging (§1.13) takes the variants of one flavor:
 `-Ppython.flavor=<name>`, else the first declared; an undeclared name fails loudly. Flavors with
 no platform variant could change nothing, so the host `buildPython` fails with that reason. A
-flavor's own dependencies go in a `<flavor>Main` source set; like every source set's, they are
-installed into the one package directory today (§1.10).
+flavor's own dependencies go in a `<flavor>Main` source set and are installed only for that
+flavor's variants (§1.10).
 
 **Status: implemented** — `plugin/dsl/DSLFlavors.kt`, `resolveVariants`, `resolveActiveFlavor`,
 `flavorsWithoutVariantsRejection` in `plugin/PythonPlugin.kt`; `ptest/PythonPluginFlavorsTest.kt`
 (including task registration on an applied plugin).
-→ *Per-flavor properties, and installing a `<flavor>Main` dependency only into that flavor's
-variants: **planned** (with #16).*
+→ *Per-flavor properties: **planned**.*
 
 ## 2. `tcl` — toolchain-lite
 

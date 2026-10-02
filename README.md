@@ -126,7 +126,7 @@ An honest summary — the full contract, item by item, is on the guide's
 | `compileSdk` parsing (alpha / rc / normal) | ✅ implemented |
 | Platforms → target triples, Kotlin target cross-check, min SDK | ✅ implemented |
 | `debug` / `release` and the per-variant task graph | ✅ implemented |
-| `implementation` / `integration` dependencies via `uv` | ✅ implemented — not yet per source set |
+| `implementation` / `integration` dependencies via `uv`, per source set, installed for each variant's own triple into its bundle | ✅ implemented |
 | Bundling via `pypackpack` at the `instant` level | ✅ implemented |
 | `bytecode` compile level (`.pyc`; needs a `.venv` matching `compileSdk`) | ✅ implemented |
 | `native` / `mixed` compile levels | ⏳ planned — rejected loudly today |

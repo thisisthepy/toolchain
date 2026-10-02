@@ -35,8 +35,11 @@
 <section>
 <h2><span data-lang="en">The task chain</span><span data-lang="ko">태스크 사슬</span></h2>
 <pre><code class="language-text">installPythonDependencies   uv add &lt;implementation + integration deps&gt;   (pypackpack)
+installPythonDependencies&lt;Set&gt;
+                            uv pip install --target build/pythonDeps/&lt;set&gt;
+                              --python-platform &lt;triple&gt;               (pypackpack)
         ↓
-buildPython                 BundleRequest → ResourceBundler             (pypackpack)
+buildPython                 BundleRequest(libDirs = pythonDeps/&lt;set&gt;) → ResourceBundler
         ↓
 packagePython               build/distributions/&lt;fileName&gt;.zip
 
