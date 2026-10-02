@@ -53,6 +53,11 @@ python {
     packaging {
         fileName = "usage-example"
     }
+    // `compose = true` is left out: it needs `python.compose.pythonxCompose` and
+    // `python.compose.kotlinModule`, and neither artifact is published yet (docs/SPEC.md §1.16).
+    buildFeatures {
+        metaclass = true
+    }
 }
 
 kotlin {

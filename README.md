@@ -132,7 +132,8 @@ An honest summary — the full contract, item by item, is on the guide's
 | Staging into the desktop jar and the APK | 🟡 partial — iOS is staged but not attached |
 | Hot reload | 🟡 partial — Android only, over `adb` |
 | Code push | 🟡 partial — validation only, no upload |
-| `embedLevel`, `buildFeatures`, `projectFlavors`, `pip { }` | ⏳ planned |
+| `buildFeatures { metaclass, compose }` | ✅ implemented — compose locations come from two Gradle properties |
+| `embedLevel`, `projectFlavors`, `pip { }` | ⏳ planned |
 | `tcl install` | ✅ implemented |
 
 ## 📖 Documentation

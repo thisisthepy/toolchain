@@ -137,7 +137,15 @@ Blank resolves to `instant`; `instant` passes. `bytecode`, `native` and `mixed` 
 → *Building at `bytecode` / `native` / `mixed`: **planned**, blocked on `pypackpack`.*
 
 ### 1.7 `useCodeMinifier`, `excludeMetaclass`
-Declared on `ReleaseBuildType`; nothing reads them. **Status: planned.**
+Both are declared on `ReleaseBuildType` (`debug`'s setters throw, §1.5).
+
+`excludeMetaclass = true` leaves `commonMain`'s `metaDirs` out of that build type's bundle tasks
+only: `buildPython<Variant><BuildType>` for each variant of it, and the host `buildPython` when it is
+the active build type (`-Ppython.buildType`). Other build types keep them (§1.16 `metaclass` aside).
+
+**Status: implemented** (`excludeMetaclass`) — `resolveBundledMetaDirs` in `plugin/BuildFeatures.kt`;
+`ptest/BuildFeaturesTest.kt`, `ptest/PythonPluginBuildFeaturesTest.kt`.
+→ *`useCodeMinifier`: declared, read by nothing. **planned**, blocked on `pypackpack` (no minifier).*
 
 ### 1.8 Per-variant task graph
 When at least one platform variant is declared, every variant is crossed with every declared build
@@ -156,7 +164,8 @@ host-target chain, as before.
 directory functions are accepted only on `commonMain` and throw elsewhere. The package directory is
 `localLibraryPath` if set, else the **first** `commonMain.srcDirs` entry, else none (bundling and
 installation are skipped). Every `metaDirs` and `libDirs` entry is forwarded to `pypackpack` as
-`BundleRequest.metaDirs` / `libDirs`.
+`BundleRequest.metaDirs` / `libDirs` — `metaDirs` subject to `buildFeatures { metaclass }` and
+`excludeMetaclass` (§1.16, §1.7).
 
 **Status: implemented** — `resolvePackageDir`, `resolveMetaDirs`, `resolveLibDirs`;
 `ptest/PythonPluginSourceSetTest.kt`, `ptest/bundle/BuildPythonArtifactTaskTest.kt`.
@@ -247,7 +256,33 @@ upload client exists.
 `ptest/PythonPluginCodePushTest.kt`. → *Upload: **planned**.*
 
 ### 1.16 `buildFeatures { metaclass, compose }`
-Declared (`BuildFeaturesExtension`); nothing reads them. **Status: planned.**
+**`metaclass`** (default `true`): `true` forwards `commonMain`'s `metaDirs` to `BundleRequest.metaDirs`
+as §1.9 describes; `false` forwards none, from every bundle task. A build type's `excludeMetaclass`
+(§1.7) also drops them, for that build type only.
+
+**`compose`** (default `false`): `true` wires the Compose wrapper in two halves. Neither artifact is
+published to a remote yet, so their locations come from Gradle project properties (`gradle.properties`
+or `-P`) with no default:
+
+| Property | Value | Effect |
+|---|---|---|
+| `python.compose.pythonxCompose` | a pip requirement naming `pythonx-compose` (`pythonx-compose==0.1.0`), or an existing directory of wheels (absolute, relative to the project directory, or a `file:` URI) | The requirement — or `pythonx-compose` for a directory — is appended to `installPythonDependencies`' list. A directory is appended to the `find-links` option `pip { repositories { local } }` produces, comma-separated after it (uv splits `--find-links` on commas). |
+| `python.compose.kotlinModule` | a Maven coordinate `group:artifact:version` of `python-multiplatform-compose` | Added to Kotlin Multiplatform `commonMain`'s `implementation` when `org.jetbrains.kotlin.multiplatform` is applied. |
+
+Failures, each naming the property and what it is for:
+- `pythonxCompose` missing, or neither a directory nor a `pythonx-compose` requirement: carried to
+  `installPythonDependencies` and thrown from its action (§14), so tasks that install nothing still run.
+- `kotlinModule` missing or not `group:artifact:version`, with the Kotlin Multiplatform plugin
+  applied: fails configuration. A dependency has no task action to carry a rejection to, and every
+  Kotlin compilation includes `commonMain`, so there is no narrower valid place.
+- Kotlin Multiplatform not applied: the Kotlin half is skipped with a warning and `kotlinModule` is
+  not required; `pythonx-compose` is still installed.
+
+**Status: implemented** — `resolveBundledMetaDirs`, `resolveComposePythonInstall`,
+`mergeComposeFindLinks`, `resolveComposeKotlinDependency` in `plugin/BuildFeatures.kt`;
+`ptest/BuildFeaturesTest.kt`, `ptest/PythonPluginBuildFeaturesTest.kt` (task wiring on a ProjectBuilder
+project, the Kotlin dependency with `org.jetbrains.kotlin.multiplatform` applied). Installing a real
+`pythonx-compose` is not exercised: the package is not published.
 
 ### 1.17 `projectFlavors { }`
 `projectFlavors { create("free"); create("paid") }`, AGP-style (decided 2026-10-03; the example
