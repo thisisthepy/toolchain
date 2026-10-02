@@ -4,7 +4,7 @@ import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonExtension
 import org.thisisthepy.python.multiplatform.toolchain.dsl.BuildTypesContainer
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PlatformTargetMapping
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PlatformsExtension
-import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonVersion
+import org.thisisthepy.python.multiplatform.toolchain.dsl.resolvePythonSdk
 import org.thisisthepy.python.multiplatform.toolchain.dsl.SourceSetConfig
 import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.InstallDependenciesTask
 import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.resolvePipSettings
@@ -54,7 +54,6 @@ class PythonPlugin : Plugin<Project> {
         val buildTask = project.tasks.register<BuildPythonArtifactTask>(BUILD_TASK) {
             group = TASK_GROUP
             description = "Builds Python bundle including interpreter and source files"
-            pythonVersion = extension.compileSdk
         }
         // `packageDir` is read lazily in `afterEvaluate` below, once `extension.localLibraryPath`
         // has its final value -- DSL blocks run before the plugin's own `afterEvaluate` callbacks.
@@ -89,14 +88,23 @@ class PythonPlugin : Plugin<Project> {
             // string is a real configuration mistake and fails loudly. See `PythonVersion`/
             // `PythonReleaseChannel` (`dsl/PythonVersion.kt`) for the format and the Issue #2 item
             // ("Python version setup -- Version Enum (alpha, rc, normal)") this implements.
-            if (extension.compileSdk.isNotBlank()) {
-                val parsedVersion = PythonVersion.parse(extension.compileSdk)
+            //
+            // A version python-multiplatform does not provide is not a configuration failure: it is
+            // carried to the bundling tasks as `pythonSdkRejection` and fails them there (§14).
+            val pythonSdk = resolvePythonSdk(extension.compileSdk)
+            if (pythonSdk != null) {
                 project.logger.lifecycle(
                     "Configured Python compileSdk: ${extension.compileSdk} " +
-                        "(release ${parsedVersion.toReleaseString()}, channel ${parsedVersion.channel})",
+                        "(release ${pythonSdk.version.toReleaseString()}, channel ${pythonSdk.version.channel}" +
+                        (if (pythonSdk.fromConstant) ", named constant" else "") + ")",
                 )
             } else {
                 project.logger.lifecycle("Configured Python compileSdk: ${extension.compileSdk}")
+            }
+            val pythonVersionLabel = pythonSdk?.version?.toString() ?: "default"
+            buildTask.configure {
+                pythonVersion = pythonVersionLabel
+                pythonSdkRejection = pythonSdk?.rejection
             }
 
             // Only wires the directory through today; it must already be a `pypackpack` package
@@ -284,7 +292,8 @@ class PythonPlugin : Plugin<Project> {
                             description =
                                 "Builds the Python bundle for ${variant.platformVariantName} " +
                                     "(${variant.target}, ${variant.buildTypeName})"
-                            pythonVersion = extension.compileSdk
+                            pythonVersion = pythonVersionLabel
+                            pythonSdkRejection = pythonSdk?.rejection
                             packageDir = resolvedPackageDir
                             metaDirs = resolvedMetaDirs
                             libDirs = resolvedLibDirs

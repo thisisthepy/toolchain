@@ -39,11 +39,22 @@ form `pypackpack` accepts. A blank value is a silent skip; a malformed one fails
 
 **Status: implemented** — `plugin/dsl/PythonVersion.kt`; `ptest/dsl/PythonVersionTest.kt`.
 
-The parsed version is logged and handed to `buildPython` as `pythonVersion`, which only logs it: it
-does **not** choose which interpreter is bundled. Named version constants such as
-`PY3_11_9_ALPHA` (example build file) do not exist. → *Interpreter selection by `compileSdk` and
-version constants: **planned**.* → *A string version the server lacks is built automatically; a
-named constant is restricted to server versions (INTENT §4.1, decided): **planned**.*
+`compileSdk` takes either form the example build file writes, both with `=` (Gradle's Kotlin
+assignment overloading on `PythonSdk`): a string, `compileSdk = "3.14.7"`, or a named constant,
+`compileSdk = PY3_14_7`. Constants exist only for versions python-multiplatform provides a runtime
+for — its pinned `pythonVersion` (3.14.7) and the older 3.13.0 archive — so the example's
+`PY3_11_9_ALPHA` does not compile (INTENT §4.1). A string resolves to a provided version (`X.Y`
+takes the newest `X.Y.*`). A string naming a version that is not provided would be built
+automatically (INTENT §4.1), which is not available yet: the reason fails `buildPython…` (only
+when there is a package to bundle), not the configuration.
+
+**Status: implemented** — `plugin/dsl/PythonSdk.kt`; `ptest/dsl/PythonSdkTest.kt`,
+`ptest/bundle/BuildPythonSdkRejectionTest.kt`; `usage-example` uses `compileSdk = PY3_14_7`.
+
+The resolved version is handed to `buildPython` as `pythonVersion`, which only logs it: it does
+**not** choose which interpreter is bundled. → *Interpreter selection by `compileSdk`: **planned**
+(#18).* → *Automatic build of a version python-multiplatform does not provide: **planned**, past
+2026-11.*
 
 ### 1.3 `defaultConfig { versionCode, versionName, pip { … } }`
 `pip { autoUpdate; repositories { central { setUrl(…) }; local { url = … }; jit { url; localRecipes { add(…) } } } }`,

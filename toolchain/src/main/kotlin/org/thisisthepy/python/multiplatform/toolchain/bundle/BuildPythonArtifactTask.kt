@@ -2,7 +2,9 @@ package org.thisisthepy.python.multiplatform.toolchain.bundle
 
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundlerInterface
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleRequest
@@ -38,6 +40,14 @@ open class BuildPythonArtifactTask : DefaultTask() {
     // for follow-up.
     @get:Internal
     var pythonVersion: String = "default"
+
+    /**
+     * Why `compileSdk` cannot be provided (a version python-multiplatform has no runtime for, which
+     * would need an automatic CPython build). Fails this task only when it has a package to bundle.
+     */
+    @get:Input
+    @get:Optional
+    var pythonSdkRejection: String? = null
 
     /**
      * The `pypackpack` package directory: must contain `pyproject.toml` and a Python source root
@@ -135,6 +145,8 @@ open class BuildPythonArtifactTask : DefaultTask() {
             )
             return
         }
+
+        pythonSdkRejection?.let { throw GradleException(it) }
 
         // Throws for anything `ppp`'s ResourceBundler cannot bundle. Deliberately here rather than
         // during configuration -- see `compileLevel`'s kdoc.
