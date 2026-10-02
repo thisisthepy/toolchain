@@ -49,6 +49,11 @@ open class BuildPythonArtifactTask : DefaultTask() {
     @get:Optional
     var pythonSdkRejection: String? = null
 
+    /** Why declared `projectFlavors` cannot apply (no platform variant); fails like [pythonSdkRejection]. */
+    @get:Input
+    @get:Optional
+    var flavorRejection: String? = null
+
     /**
      * The `pypackpack` package directory: must contain `pyproject.toml` and a Python source root
      * (`src/main`, `src`, or the package root itself -- see `ResourceBundler`'s kdoc for the exact
@@ -147,6 +152,7 @@ open class BuildPythonArtifactTask : DefaultTask() {
         }
 
         pythonSdkRejection?.let { throw GradleException(it) }
+        flavorRejection?.let { throw GradleException(it) }
 
         // Throws for anything `ppp`'s ResourceBundler cannot bundle. Deliberately here rather than
         // during configuration -- see `compileLevel`'s kdoc.

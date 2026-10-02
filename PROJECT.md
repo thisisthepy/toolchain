@@ -23,6 +23,8 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
   안드로이드는 CPython 공식 지원(PEP 738)대로 arm64·x86_64 만 — `androidArm32()`/`androidX86()` 은
   이유를 밝히는 컴파일 오류
 - `debug` / `release` 빌드 타입, `-Ppython.buildType`, 변형 × 빌드 타입 태스크 그래프
+- `projectFlavors { create("free") }` → 변형 × 플레이버 × 빌드 타입(`buildPythonAndroidArm64FreeDebug`),
+  스테이징은 `-Ppython.flavor`(기본: 첫 플레이버). 플랫폼 변형 없이 선언하면 `buildPython` 이 이유와 함께 실패
 - `compileLevel`: `instant` 만 지원, 나머지는 해당 변형의 태스크에서만 실패
 - `commonMain` 의 `srcDirs` / `metaDirs` / `libDirs` 전달
 - `implementation` / `integration` 의존성 → `uv add` (`pypackpack` 백엔드)
@@ -45,7 +47,7 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 
 **계획 (선언만 있거나 없음)**
 - `bytecode` / `native` / `mixed` 컴파일 레벨 (`pypackpack` 쪽 선행 필요)
-- `embedLevel` 의미, `useCodeMinifier`, `excludeMetaclass`, `buildFeatures`, `projectFlavors`,
+- `embedLevel` 의미, `useCodeMinifier`, `excludeMetaclass`, `buildFeatures`,
   `versionCode`/`versionName`, `pip { jit }`, `integration()` 의 `KLIBDEPENS` 검사,
   `compileSdk` 로 인터프리터 선택
 

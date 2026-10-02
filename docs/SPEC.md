@@ -245,7 +245,21 @@ upload client exists.
 Declared (`BuildFeaturesExtension`); nothing reads them. **Status: planned.**
 
 ### 1.17 `projectFlavors { }`
-Present in the example build file; absent from the DSL. **Status: planned.**
+`projectFlavors { create("free"); create("paid") }`, AGP-style (decided 2026-10-03; the example
+build file declares the block empty). Each flavor is crossed into the per-variant graph (§1.8)
+between platform and build type: `buildPythonAndroidArm64FreeDebug`,
+`build/pythonBundle/androidArm64-free-debug/`. A flavor name is lower-camel, unique and not a build
+type's name; anything else fails configuration. Staging (§1.13) takes the variants of one flavor:
+`-Ppython.flavor=<name>`, else the first declared; an undeclared name fails loudly. Flavors with
+no platform variant could change nothing, so the host `buildPython` fails with that reason. A
+flavor's own dependencies go in a `<flavor>Main` source set; like every source set's, they are
+installed into the one package directory today (§1.10).
+
+**Status: implemented** — `plugin/dsl/DSLFlavors.kt`, `resolveVariants`, `resolveActiveFlavor`,
+`flavorsWithoutVariantsRejection` in `plugin/PythonPlugin.kt`; `ptest/PythonPluginFlavorsTest.kt`
+(including task registration on an applied plugin).
+→ *Per-flavor properties, and installing a `<flavor>Main` dependency only into that flavor's
+variants: **planned** (with #16).*
 
 ## 2. `tcl` — toolchain-lite
 

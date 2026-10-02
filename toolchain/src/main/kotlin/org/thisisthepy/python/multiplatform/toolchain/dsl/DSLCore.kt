@@ -17,12 +17,14 @@ open class PythonExtension @Inject constructor(objects: ObjectFactory) {
     val buildFeatures: BuildFeaturesExtension = BuildFeaturesExtension()
     val sourceSets: SourceSetsExtension = objects.newInstance(SourceSetsExtension::class.java)
     val platforms: PlatformsExtension = PlatformsExtension()
+    val projectFlavors: ProjectFlavorsContainer = ProjectFlavorsContainer()
 
     fun defaultConfig(action: DefaultConfig.() -> Unit) = defaultConfig.apply(action)
     fun packaging(action: PackagingExtension.() -> Unit) = packaging.apply(action)
     fun buildTypes(action: BuildTypesContainer.() -> Unit) = buildTypes.apply(action)
     fun buildFeatures(action: BuildFeaturesExtension.() -> Unit) = buildFeatures.apply(action)
     fun sourceSets(action: SourceSetsExtension.() -> Unit) = sourceSets.apply(action)
+    fun projectFlavors(action: ProjectFlavorsContainer.() -> Unit) = projectFlavors.apply(action)
 
     // Platforms are declared directly inside `python { }`, as the example build file writes them
     // (see [PlatformsExtension]); there is no `platforms { }` block.
