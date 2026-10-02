@@ -29,11 +29,15 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 - `defaultConfig { pip { autoUpdate; repositories { central / local } } }` → `uv add` 옵션
   (`--default-index`·`--index` / `--find-links` / `--upgrade`). `jit` 는 설치 태스크에서만 이유와 함께 거부
 - `pypackpack` `ResourceBundler` 로 번들링
+- 플러그인 적용: `python` 확장과 모든 태스크 등록 (`PythonPluginApplyTest`)
+- `packagePython` zip: 파일명·위치·항목, 번들 디렉터리가 없으면 실패 (`AssemblePythonPackageTaskTest`)
 - 스테이징 복사 규칙과 플랫폼별 변형 선택
+- 데스크톱 jar 로의 스테이징 연결: `desktopProcessResources` (`PythonPluginAttachmentTest`)
 - `tcl install <package>`
 
 **부분**
-- 플러그인 적용 자체, `packagePython` zip, jar / APK 로의 스테이징 연결 — 이 저장소에 테스트 없음
+- APK 로의 스테이징 연결: `android.sourceSets.main.assets` 등록은 실제 AGP 로 테스트됨
+  (`PythonPluginAttachmentTest`), `preBuild`/`merge*Assets` 의존성은 Android SDK 가 있어야 생기므로 테스트 없음
 - iOS: 스테이징만 되고 Xcode 프로젝트에 연결되지 않음
 - 핫 리로드: Android 전용 `adb push` + 브로드캐스트. `serverHost`, `cert` 는 검증만
 - 코드 푸시: 검증과 안내 태스크만, 업로드 없음
