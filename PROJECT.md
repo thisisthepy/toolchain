@@ -31,6 +31,12 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 - `defaultConfig { pip { autoUpdate; repositories { central / local } } }` → `uv add` 옵션
   (`--default-index`·`--index` / `--find-links` / `--upgrade`). `jit` 는 설치 태스크에서만 이유와 함께 거부
 - `defaultConfig { versionCode, versionName }` → 페이로드 버전으로 번들 manifest 에 기록(`"versionName"`/`"versionCode"`)
+- `buildFeatures { metaclass }`(기본 `true`) 와 `release` 의 `excludeMetaclass`: `false`/`true` 이면 해당
+  번들 태스크에서 `metaDirs` 를 전달하지 않음 (`BuildFeaturesTest`, `PythonPluginBuildFeaturesTest`)
+- `buildFeatures { compose }`: `pythonx-compose` 를 설치 목록에, `python-multiplatform-compose` 를 Kotlin
+  `commonMain` 의 `implementation` 에 추가. 위치는 Gradle 속성 `python.compose.pythonxCompose`(pip 요구사항
+  또는 wheel 디렉터리 → `--find-links` 에 쉼표로 추가)와 `python.compose.kotlinModule`(`group:artifact:version`).
+  앞의 것이 없으면 설치 태스크에서만, 뒤의 것이 없으면 구성 단계에서 실패. KMP 가 없으면 Kotlin 쪽은 경고 후 생략
 - `pypackpack` `ResourceBundler` 로 번들링
 - 플러그인 적용: `python` 확장과 모든 태스크 등록 (`PythonPluginApplyTest`)
 - `packagePython` zip: 파일명·위치·항목, 번들 디렉터리가 없으면 실패 (`AssemblePythonPackageTaskTest`)
@@ -48,7 +54,7 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 
 **계획 (선언만 있거나 없음)**
 - `bytecode` / `native` / `mixed` 컴파일 레벨 (`pypackpack` 쪽 선행 필요)
-- `embedLevel` 의미, `useCodeMinifier`, `excludeMetaclass`, `buildFeatures`,
+- `embedLevel` 의미, `useCodeMinifier`,
   `pip { jit }`, `integration()` 의 `KLIBDEPENS` 검사,
   `compileSdk` 로 인터프리터 선택
 
@@ -64,7 +70,7 @@ Python 코드와 의존성이 실려 빌드·실행되는 상태. 기한을 맞�
 | M3 쓸 수 있는 수준 | 11-30 | iOS 페이로드 연결(#20), TypedPython 검사 태스크(#21), 세 플랫폼 실행(#22) | 예시 앱이 Android 에뮬레이터·iOS 시뮬레이터·데스크톱에서 Python 과 의존성을 실행 | python-multiplatform 런타임 로딩에 의존 |
 
 11-30 이후로 넘김: `native`/`mixed`(pypackpack Cython 슬롯은 pypackpack M3, 나머지 컴파일러는 빈 껍데기),
-`useCodeMinifier`/`excludeMetaclass`(pypackpack 에 minifier 없음), 코드 푸시 업로드와 HTTPS 핫 리로드 서버
+`useCodeMinifier`(pypackpack 에 minifier 없음), 코드 푸시 업로드와 HTTPS 핫 리로드 서버
 (지금은 `adb` 로 동작), 서버에 없는 CPython 자동 빌드(빌드 파이프라인 필요), `pip { jit }`(레시피 빌드 필요).
 
 ## 구조

@@ -130,7 +130,8 @@ flowchart LR
 | 데스크톱 jar 와 APK 로의 스테이징 | 🟡 부분 — iOS 는 스테이징만 되고 연결되지 않음 |
 | 핫 리로드 | 🟡 부분 — Android 전용, `adb` 경유 |
 | 코드 푸시 | 🟡 부분 — 검증만, 업로드 없음 |
-| `embedLevel`, `buildFeatures`, `projectFlavors`, `pip { }` | ⏳ 계획 |
+| `buildFeatures { metaclass, compose }` | ✅ 구현됨 — compose 위치는 Gradle 속성 두 개로 지정 |
+| `embedLevel`, `projectFlavors`, `pip { }` | ⏳ 계획 |
 | `tcl install` | ✅ 구현됨 |
 
 ## 📖 문서
