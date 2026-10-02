@@ -195,6 +195,7 @@ class PythonPlugin : Plugin<Project> {
             installTask.configure {
                 dependenciesList = collectInstallDependencies(extension.sourceSets.allSourceSets()) +
                     composePython.requirements
+                integrationsList = collectIntegrationDependencies(extension.sourceSets.allSourceSets())
                 val pip = resolvePipSettings(extension.defaultConfig.pip)
                 pipArguments = mergeComposeFindLinks(pip.arguments.orEmpty(), composePython.findLinks)
                 pipRejection = pip.rejection
@@ -864,16 +865,18 @@ fun resolveLibDirs(
  * This makes an `integration()` dependency install exactly like an `implementation()` one, no more
  * and no less: `pypackpack`'s `uv` backend (`installWithPackpack` -> `DependencyBackend.addDependencies`)
  * takes one flat `List<String>` with no type parameter, so it cannot treat the two differently even if
- * asked to. `(플러그인예시)build.gradle.kts`'s comment on `integration()` describes more --
- * "kotlin dependent python package - requires KLIBDEPENS file in whl dist directory ... KLIBDEPENS
- * 파일 없으면 install을 그냥 쓰라고 워닝 표시" (warn instead of installing when the wheel has no
- * `KLIBDEPENS` file) -- but grepping `pypackpack` for `KLIBDEPENS` turns up nothing: no wheel
- * dist-info inspection exists anywhere in this repository or `pypackpack` to check against. Wiring
- * that check is left undone rather than guessed at from one code comment; what is wired is the part
- * that is unambiguous -- the dependency reaching installation instead of being silently dropped.
+ * asked to. The `KLIBDEPENS` check the example's comment describes runs after installation instead
+ * (`findIntegrationsWithoutKlibDepens`, fed by [collectIntegrationDependencies]); it only warns.
  */
 fun collectInstallDependencies(sourceSets: List<SourceSetConfig>): List<String> =
     sourceSets.flatMap { it.dependencies.implementations + it.dependencies.integrations }
+
+/**
+ * Only the `integration(...)` entries, handed to [InstallDependenciesTask.integrationsList] so that,
+ * after the flat install, each can be checked for a `KLIBDEPENS` file (`findIntegrationsWithoutKlibDepens`).
+ */
+fun collectIntegrationDependencies(sourceSets: List<SourceSetConfig>): List<String> =
+    sourceSets.flatMap { it.dependencies.integrations }
 
 /**
  * Resolves `python { buildTypes { getByName(...) { compileLevel = ... } } }` to the `buildLevel`
