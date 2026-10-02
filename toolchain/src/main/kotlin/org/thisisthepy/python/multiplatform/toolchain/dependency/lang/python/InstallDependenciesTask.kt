@@ -43,6 +43,14 @@ open class InstallDependenciesTask : DefaultTask() {
     var dependenciesList: List<String> = emptyList()
 
     /**
+     * The `integration(...)` subset of [dependenciesList] (which holds them too, installed like
+     * `implementation`). After installation each is checked for a `KLIBDEPENS` file
+     * ([findIntegrationsWithoutKlibDepens]). `@Internal`: it only drives a warning.
+     */
+    @get:Internal
+    var integrationsList: List<String> = emptyList()
+
+    /**
      * The `pypackpack` package directory dependencies are added to: must already contain a
      * `pyproject.toml` (`uv add` requires one). `null` mirrors `BuildPythonArtifactTask.packageDir`
      * -- no package configured yet means installation is skipped rather than failed.
@@ -92,6 +100,19 @@ open class InstallDependenciesTask : DefaultTask() {
 
         val output = installWithPackpack(dir, dependenciesList, pipArguments)
         logger.lifecycle("Installed ${dependenciesList.size} dependenc(y/ies) via packpack's uv backend: $output")
+
+        if (integrationsList.isNotEmpty()) {
+            val sitePackages = findSitePackages(File(dir, ".venv"))
+            if (sitePackages == null) {
+                logger.warn(
+                    "Cannot check integration() packages for $KLIBDEPENS_FILE_NAME: no site-packages " +
+                        "under ${File(dir, ".venv")}.",
+                )
+            } else {
+                findIntegrationsWithoutKlibDepens(sitePackages, integrationsList)
+                    .forEach { logger.warn(klibDepensWarning(it)) }
+            }
+        }
     }
 }
 
