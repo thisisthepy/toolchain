@@ -128,7 +128,8 @@ An honest summary — the full contract, item by item, is on the guide's
 | `debug` / `release` and the per-variant task graph | ✅ implemented |
 | `implementation` / `integration` dependencies via `uv` | ✅ implemented — not yet per source set |
 | Bundling via `pypackpack` at the `instant` level | ✅ implemented |
-| `bytecode` / `native` / `mixed` compile levels | ⏳ planned — rejected loudly today |
+| `bytecode` compile level (`.pyc`; needs a `.venv` matching `compileSdk`) | ✅ implemented |
+| `native` / `mixed` compile levels | ⏳ planned — rejected loudly today |
 | Staging into the desktop jar and the APK | 🟡 partial — iOS is staged but not attached |
 | Hot reload | 🟡 partial — Android only, over `adb` |
 | Code push | 🟡 partial — validation only, no upload |

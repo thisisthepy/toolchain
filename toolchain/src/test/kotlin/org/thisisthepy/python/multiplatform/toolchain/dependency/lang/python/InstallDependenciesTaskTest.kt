@@ -1,7 +1,11 @@
 package org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python
 
+import org.thisisthepy.python.multiplatform.toolchain.bundle.locateVenvInterpreter
+import org.thisisthepy.python.multiplatform.toolchain.bundle.venvPythonVersion
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertNotNull
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -51,6 +55,26 @@ class InstallDependenciesTaskTest {
             pyproject.contains("iniconfig"),
             "pyproject.toml should record the dependency packpack's uv backend actually added, not a toolchain stand-in",
         )
+    }
+
+    /**
+     * The `.venv` `uv add` leaves in the package directory is the one `compileLevel = "bytecode"`
+     * compiles with (Issue #15): pypackpack's `ResourceBundler` looks for `<dir>/.venv/bin/python3`
+     * walking up from the package, and toolchain's `bytecodeInterpreterRejection` reads its
+     * `pyvenv.cfg` to compare minor versions with `compileSdk`. This pins both against real `uv`.
+     */
+    @Test
+    fun `the venv uv add creates is one the bytecode level can find and read`() {
+        val packageDir = fixturePackageDir()
+
+        installWithPackpack(packageDir, listOf("iniconfig"))
+
+        val interpreter = assertNotNull(locateVenvInterpreter(packageDir), "uv add should create <package>/.venv")
+        // The venv directory, not the interpreter, is canonicalised: on Linux `.venv/bin/python3` is a
+        // symlink to the system interpreter, which canonicalPath would follow out of the venv.
+        assertEquals(File(packageDir, ".venv").canonicalFile, interpreter.absoluteFile.parentFile.parentFile.canonicalFile, interpreter.path)
+        val (major, minor) = assertNotNull(venvPythonVersion(interpreter), "uv's pyvenv.cfg should carry version_info")
+        assertTrue(major == 3 && minor >= 13, "requires-python >=3.13, got $major.$minor")
     }
 
     @Test

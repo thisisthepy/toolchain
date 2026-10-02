@@ -128,13 +128,35 @@ by `-Ppython.buildType=<name>` (default `debug`); an undeclared name fails loudl
 `ptest/PythonPluginBuildTypeTest.kt`. (The debug-only setter rejections have no test: partial.)
 
 ### 1.6 `compileLevel`
-Blank resolves to `instant`; `instant` passes. `bytecode`, `native` and `mixed` are rejected with
-"not implemented by pypackpack's resource bundler yet" — **inside the variant's task action**, so
+Blank resolves to `instant`. `instant` and `bytecode` pass through to `BundleRequest.buildLevel`.
+`native` and `mixed` are rejected with a message naming the planned compile slot (pypackpack#19);
+any other value is rejected too. Rejection happens **inside the variant's task action**, so
 `--continue` still builds every other variant.
 
-**Status: implemented** (the rejection) — `resolveBuildLevel`; `ptest/PythonPluginBuildLevelTest.kt`,
-`ptest/PythonPluginVariantGraphTest.kt`.
-→ *Building at `bytecode` / `native` / `mixed`: **planned**, blocked on `pypackpack`.*
+`bytecode` is `pypackpack`'s `ResourceBundler`: `compileall -b` writes `foo.pyc` beside `foo.py`;
+`debug` keeps the `.py`, `release` deletes it and ships only `.pyc`. It compiles with the interpreter
+at `<dir>/.venv/{bin/python3,bin/python,Scripts/python.exe}`, the first found walking up from the
+package directory. Before calling it, the task checks that interpreter
+(`bytecodeInterpreterRejection`) and fails that variant when:
+
+- **no `.venv` is found** — the message names the directory searched and two ways to make one:
+  declare a dependency, so `installPythonDependencies` (`uv add`) creates `<package>/.venv`, or run
+  `uv venv --python <X.Y>` there. toolchain does not create the venv itself: choosing and acquiring
+  an interpreter is `pypackpack`'s work, and `uv venv` would replace a `.venv` that `uv add` made.
+- **its minor version differs from `compileSdk`'s** — a `.pyc`'s magic number changes with every
+  CPython minor release, so a 3.13 `.pyc` does not load on a 3.14 runtime. The venv's version is read
+  from its `pyvenv.cfg` (`version =` from the stdlib `venv`, `version_info =` from `uv`/`virtualenv`).
+
+**Status: implemented** — `resolveBuildLevel` in `plugin/PythonPlugin.kt`, `bytecodeInterpreterRejection`
+in `plugin/bundle/BuildPythonArtifactTask.kt`; `ptest/PythonPluginBuildLevelTest.kt`,
+`ptest/PythonPluginVariantGraphTest.kt`, `ptest/bundle/BytecodeLevelTest.kt` (real `compileall`:
+debug has `.py` + `.pyc`, release has `.pyc` only; needs `python3` on `PATH`),
+`ptest/dependency/lang/python/InstallDependenciesTaskTest.kt` (the `uv add` venv is found and read).
+
+Known limits of the version check: it is skipped when `compileSdk` is not declared (nothing to
+compare with), and when the venv has no readable `pyvenv.cfg` (a hand-made `.venv/bin/python3`
+symlink, for example). In both cases the `.venv`'s own interpreter decides the magic number.
+→ *Building at `native` / `mixed`: **planned**, blocked on pypackpack#19.*
 
 ### 1.7 `useCodeMinifier`, `excludeMetaclass`
 Both are declared on `ReleaseBuildType` (`debug`'s setters throw, §1.5).
@@ -166,6 +188,9 @@ directory functions are accepted only on `commonMain` and throw elsewhere. The p
 installation are skipped). Every `metaDirs` and `libDirs` entry is forwarded to `pypackpack` as
 `BundleRequest.metaDirs` / `libDirs` — `metaDirs` subject to `buildFeatures { metaclass }` and
 `excludeMetaclass` (§1.16, §1.7).
+
+The `by getting { … }` block is applied at declaration (`provideDelegate`), so it takes effect even if
+the property is never read (issue #35); see `SourceSetGettingDelegateTest`.
 
 **Status: implemented** — `resolvePackageDir`, `resolveMetaDirs`, `resolveLibDirs`;
 `ptest/PythonPluginSourceSetTest.kt`, `ptest/bundle/BuildPythonArtifactTaskTest.kt`.
