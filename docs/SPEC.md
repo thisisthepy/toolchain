@@ -237,8 +237,25 @@ Fails if the bundle directory does not exist.
 `ptest/bundle/AssemblePythonPackageTaskTest.kt` runs the real task's action: the archive name and
 location for the aggregate and a variant task, the zip entries, and the failure when the bundle
 directory is missing.
-→ *`embedLevel` (0 no interpreter / 1 external / 2 embedded, auto-raised with a warning where a
-platform cannot honour it, overridable from `gradle.properties`): **planned** — it is only logged.*
+`packaging { embedLevel }` — 0 no interpreter bundled, 1 the app uses an external interpreter, 2 the
+interpreter is bundled inside the app. The level is resolved per packaging task by
+`resolveEmbedLevel(declared, override, platformFamily)` (the family is `Platforms.getPlatformFamily`
+of the variant's target; the host chain uses the host's family):
+
+| family | 0 | 1 | 2 |
+|---|---|---|---|
+| macos, linux, windows | 0 | 1 | 2 |
+| android, ios (sandboxed, no system Python) | raised to 2, warning | raised to 2, warning | 2 |
+
+The `python.embedLevel` property (`gradle.properties` or `-P`) overrides the DSL value and is then
+raised the same way. A value outside 0..2, or not a number, fails configuration naming the property.
+Each packaging task carries the resolved level as an `@Input`, logs it, and writes
+`<archive>.embed.json` (level, platform family, warning, `"interpreterBundled": false`) beside the zip.
+
+**Status: partial** — resolution, override, the warning and the record are implemented
+(`ptest/EmbedLevelTest.kt`, `ptest/PythonPluginEmbedLevelTest.kt`). Levels 1 and 2 do **not** yet
+change the payload: no interpreter is added or omitted, because acquiring one is #18 and
+pypackpack#21, which are not available. Until then the level is only recorded.
 
 ### 1.13 Staging into the app — `stagePythonBundle{Android,Ios,Desktop}`
 Copies the bundle's `python/` subtree (never the manifest) into
