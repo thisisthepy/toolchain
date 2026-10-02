@@ -8,6 +8,7 @@ import org.thisisthepy.python.multiplatform.toolchain.dsl.ProjectFlavorsContaine
 import org.thisisthepy.python.multiplatform.toolchain.dsl.resolvePythonSdk
 import org.thisisthepy.python.multiplatform.toolchain.dsl.SourceSetConfig
 import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.InstallDependenciesTask
+import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.InstallTargetDependenciesTask
 import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.resolvePipSettings
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -141,9 +142,10 @@ class PythonPlugin : Plugin<Project> {
             // `metaDirs` is set per bundle task below, once its build type is known:
             // `buildFeatures { metaclass }` and that build type's `excludeMetaclass` decide whether
             // they are forwarded (`resolveBundledMetaDirs`).
+            // `libDirs` is set per bundle task below: each one also takes its own dependency set's
+            // `build/pythonDeps/<set>/` (`InstallTargetDependenciesTask`).
             buildTask.configure {
                 packageDir = resolvedPackageDir
-                libDirs = resolvedLibDirs
             }
             installTask.configure {
                 packageDir = resolvedPackageDir
@@ -202,14 +204,51 @@ class PythonPlugin : Plugin<Project> {
                 project.findProperty(COMPOSE_PYTHON_PROPERTY)?.toString(),
                 project.projectDir,
             )
+            val pip = resolvePipSettings(extension.defaultConfig.pip)
+            val pipArgumentsWithCompose = mergeComposeFindLinks(pip.arguments.orEmpty(), composePython.findLinks)
             installTask.configure {
                 dependenciesList = collectInstallDependencies(extension.sourceSets.allSourceSets()) +
                     composePython.requirements
                 integrationsList = collectIntegrationDependencies(extension.sourceSets.allSourceSets())
-                val pip = resolvePipSettings(extension.defaultConfig.pip)
-                pipArguments = mergeComposeFindLinks(pip.arguments.orEmpty(), composePython.findLinks)
+                pipArguments = pipArgumentsWithCompose
                 pipRejection = pip.rejection
                 composeRejection = composePython.rejection
+            }
+
+            // Per-target installation (SPEC §1.10, #16). `installPythonDependencies` above stays: its
+            // `uv add` records every source set's dependencies in the package's pyproject.toml and
+            // leaves the `<package>/.venv` that `compileLevel = "bytecode"` compiles with. What reaches
+            // a bundle is installed separately, per dependency set, for that set's own triple.
+            val projectBuildDir = project.layout.buildDirectory.get().asFile
+            val declaredSourceSets = extension.sourceSets.allSourceSets()
+            val sourceSetRejection =
+                unreachableSourceSetRejection(declaredSourceSets, extension.projectFlavors.all().map { it.name })
+            val targetArguments = targetInstallArguments(pythonSdk?.version, pipArgumentsWithCompose)
+            val hasPackage = resolvedPackageDir != null
+            fun registerTargetInstall(
+                taskSuffix: String,
+                dependencySet: String,
+                target: String,
+                flavorName: String?,
+            ): TaskProvider<InstallTargetDependenciesTask> {
+                val platform = PythonStagingPlatform.forTarget(target)
+                val setRequirements =
+                    collectTargetDependencies(declaredSourceSets, platform, flavorName) + composePython.requirements
+                return project.tasks.register<InstallTargetDependenciesTask>(INSTALL_TASK + taskSuffix) {
+                    group = TASK_GROUP
+                    description = "Installs the Python dependencies of " +
+                        dependencySourceSetNames(platform, flavorName).joinToString(", ") +
+                        " for $target into build/$TARGET_DEPENDENCIES_DIRECTORY/$dependencySet"
+                    requirements = setRequirements.distinct()
+                    pythonPlatform = target
+                    installArguments = targetArguments
+                    rejection = composePython.rejection ?: sourceSetRejection
+                    pipRejection = pip.rejection
+                    installDir = targetDependenciesDir(projectBuildDir, dependencySet)
+                    // No package means no bundle reads this directory (`BuildPythonArtifactTask` skips
+                    // too), so nothing is downloaded for it.
+                    onlyIf { hasPackage }
+                }
             }
 
             // Kotlin half: see `resolveComposeKotlinDependency` for why a missing coordinate fails
@@ -307,7 +346,14 @@ class PythonPlugin : Plugin<Project> {
                 // `"debug"`. `resolveActiveBuildType` fails loudly on an undeclared name rather than
                 // silently falling back, so a typo in `-P` surfaces immediately.
                 val activeBuildType = extension.buildTypes.all().firstOrNull { it.name == activeBuildTypeName }
+                // The host bundle carries the host triple's wheels: `commonMain` + `desktopMain`,
+                // installed for `Platforms.detectHostTarget()` -- the triple `buildTask.target`
+                // defaults to. Installed packages come first in `libDirs`, so a directory the
+                // consumer declares with `libDirs(...)` (a vendored tree) overrides them.
+                val hostInstall = registerTargetInstall("Host", HOST_DEPENDENCY_SET, Platforms.detectHostTarget(), null)
                 buildTask.configure {
+                    libDirs = listOf(targetDependenciesDir(projectBuildDir, HOST_DEPENDENCY_SET)) + resolvedLibDirs
+                    dependsOn(hostInstall)
                     buildType = activeBuildTypeName
                     compileLevel = activeBuildType?.compileLevel ?: ""
                     metaDirs = resolveBundledMetaDirs(
@@ -337,8 +383,18 @@ class PythonPlugin : Plugin<Project> {
                     }
                 }
             } else {
+                // One install per dependency set (platform variant x flavor), shared by its build types.
+                val targetInstalls = mutableMapOf<String, TaskProvider<InstallTargetDependenciesTask>>()
                 variants.forEach { variant ->
                     val variantBundleDir = File(bundleRoot, variant.dirName)
+                    val targetInstall = targetInstalls.getOrPut(variant.dependencySetName) {
+                        registerTargetInstall(
+                            variant.dependencyTaskSuffix,
+                            variant.dependencySetName,
+                            variant.target,
+                            variant.flavorName,
+                        )
+                    }
 
                     val variantBuildTask =
                         project.tasks.register<BuildPythonArtifactTask>(BUILD_TASK + variant.taskSuffix) {
@@ -358,7 +414,9 @@ class PythonPlugin : Plugin<Project> {
                                 extension.buildTypes.all()
                                     .firstOrNull { it.name == variant.buildTypeName }?.excludeMetaclass ?: false,
                             )
-                            libDirs = resolvedLibDirs
+                            // Installed packages first, so a declared `libDirs(...)` overrides them.
+                            libDirs = listOf(targetDependenciesDir(projectBuildDir, variant.dependencySetName)) +
+                                resolvedLibDirs
                             target = variant.target
                             buildType = variant.buildTypeName
                             // Raw, not resolved: an unsupported level must fail this one task at
@@ -367,7 +425,7 @@ class PythonPlugin : Plugin<Project> {
                             compileLevel = variant.compileLevel
                             minSdk = variant.minSdk
                             bundleDir = variantBundleDir
-                            dependsOn(installTask)
+                            dependsOn(installTask, targetInstall)
                         }
 
                     val variantFamily = Platforms.getPlatformFamily(variant.target)
@@ -664,6 +722,19 @@ data class PythonVariant(
      */
     val dirName: String
         get() = listOfNotNull(platformVariantName, flavorName, buildTypeName).joinToString("-")
+
+    /**
+     * The dependency set this variant's bundle takes its installed packages from: [dirName] without
+     * the build type, because the build type changes neither the requirement list
+     * (`collectTargetDependencies`) nor the triple. `build/pythonDeps/androidArm64-free/`, shared by
+     * `androidArm64-free-debug` and `androidArm64-free-release`.
+     */
+    val dependencySetName: String
+        get() = listOfNotNull(platformVariantName, flavorName).joinToString("-")
+
+    /** Appended to `installPythonDependencies` to name the set's install task: `installPythonDependenciesAndroidArm64Free`. */
+    val dependencyTaskSuffix: String
+        get() = platformVariantName.capitalizeFirst() + flavorName.orEmpty().capitalizeFirst()
 }
 
 /**

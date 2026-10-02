@@ -29,7 +29,15 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
   패키지 위쪽의 `.venv` 가 없거나 그 마이너 버전이 `compileSdk` 와 다르면 해당 변형에서 실패.
   `native`/`mixed` 는 해당 변형의 태스크에서만 실패 (pypackpack#19)
 - `commonMain` 의 `srcDirs` / `metaDirs` / `libDirs` 전달
-- `implementation` / `integration` 의존성 → `uv add` (`pypackpack` 백엔드). 설치 후 `integration` 패키지의 `.venv` site-packages `*.dist-info/KLIBDEPENS` 를 확인하고 없으면 `implementation` 을 쓰라고 경고 (실패 아님; KLIBDEPENS 위치는 가정 — 어디에도 정의 없음)
+- `implementation` / `integration` 의존성 → `uv add` (`pypackpack` 백엔드, 패키지의 `.venv` 와 `pyproject.toml`)
+- 타깃별 의존성 설치 (#16): 의존성 집합(플랫폼 변형 × 플레이버)마다 `installPythonDependencies<Set>` 이
+  `commonMain` + `<계열>Main`(`androidMain`/`iosMain`/`desktopMain`) + `<flavor>Main` 의 의존성을 그 트리플용으로
+  `build/pythonDeps/<set>/` 에 설치(`uv pip install --target --python-platform`, `compileSdk` 의 X.Y,
+  `only-binary`)하고, 그 집합의 번들 태스크가 이 디렉터리를 `libDirs` 맨 앞에 받는다. 변형이 없으면
+  `installPythonDependenciesHost`(호스트 트리플, `build/pythonDeps/host/`). 어떤 변형도 읽지 않는 소스셋의
+  의존성은 설치 태스크에서 거부 (`TargetDependenciesTest`, `PythonPluginTargetDependenciesTest`,
+  `InstallTargetDependenciesTaskTest`)
+- `integration` 패키지는 설치 후 `.venv` site-packages 의 `*.dist-info/KLIBDEPENS` 를 확인하고 없으면 `implementation` 을 쓰라고 경고 (실패 아님; KLIBDEPENS 위치는 가정 — 어디에도 정의 없음)
 - `defaultConfig { pip { autoUpdate; repositories { central / local } } }` → `uv add` 옵션
   (`--default-index`·`--index` / `--find-links` / `--upgrade`). `jit` 는 설치 태스크에서만 이유와 함께 거부
 - `defaultConfig { versionCode, versionName }` → 페이로드 버전으로 번들 manifest 에 기록(`"versionName"`/`"versionCode"`)
@@ -52,10 +60,12 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 - iOS: 스테이징만 되고 Xcode 프로젝트에 연결되지 않음
 - 핫 리로드: Android 전용 `adb push` + 브로드캐스트. `serverHost`, `cert` 는 검증만
 - 코드 푸시: 검증과 안내 태스크만, 업로드 없음
+- `installPythonDependencies`(`uv add`)는 여전히 모든 소스셋을 호스트용으로 설치하므로, 호스트 wheel 이 없는
+  `androidMain` 전용 패키지는 이 태스크에서 실패할 수 있음. `ResourceBundler` 가 `.pyd` 를 빼므로 Windows
+  확장 모듈은 `mingwX64` 번들에 들어가지 않음
 - `embedLevel`: 플랫폼별 0/1/2 결정(Android·iOS 는 경고와 함께 2 로 상향), `python.embedLevel` 속성 재정의,
   `<zip>.embed.json` 기록까지 구현 (`EmbedLevelTest`, `PythonPluginEmbedLevelTest`). 인터프리터를 넣거나 빼는 일은
   인터프리터 확보(#18, pypackpack#21) 가 없어 아직 안 함 — 레벨 1·2 는 페이로드를 바꾸지 않음
-- 의존성이 소스셋별로 구분되지 않음 (전부 하나의 목록으로 설치)
 
 **계획 (선언만 있거나 없음)**
 - `native` / `mixed` 컴파일 레벨 (pypackpack#19 선행 필요)
@@ -114,6 +124,12 @@ Python 테스트는 없다. 루트 `pyproject.toml` 이 가리키는 Python 패�
   밝히고 실패한다. 인터프리터를 고르고 받아 오는 일은 `pypackpack` 몫(AGENTS.md §13)이고, `uv venv` 는
   `uv add` 가 만든 `.venv` 를 덮어쓴다. `.pyc` 매직 넘버 때문에 `pyvenv.cfg` 의 마이너 버전을 `compileSdk`
   와 비교해 다르면 거부한다(`compileSdk` 미선언이거나 `pyvenv.cfg` 가 없으면 비교하지 않음).
+- **번들의 의존성은 타깃별 설치에서 온다** (#16): `uv add` 의 `.venv` 는 호스트용이라 번들에 쓰지 않는다.
+  설치 단위는 변형이 아니라 의존성 집합(플랫폼 × 플레이버)이다. 빌드 타입은 요구사항 목록도 트리플도 바꾸지
+  않으므로 debug/release 가 한 번 설치를 공유한다. `pypackpack` 의 `installDependenciesToTarget` 는
+  `workingDir` 의 `-r pyproject.toml` 만 읽으므로, 집합의 요구사항을 적은 `pyproject.toml` 을 태스크의 임시
+  디렉터리(`build/tmp/<task>/`)에 써서 넘긴다. 설치된 패키지를 `libDirs` 맨 앞에 두어 사용자가 선언한
+  `libDirs(...)` 가 덮어쓸 수 있게 한다.
 
 ## 열린 질문
 
