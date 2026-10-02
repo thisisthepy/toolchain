@@ -46,11 +46,22 @@ version constants: **planned**.* → *A string version the server lacks is built
 named constant is restricted to server versions (INTENT §4.1, decided): **planned**.*
 
 ### 1.3 `defaultConfig { versionCode, versionName, pip { … } }`
-The DSL classes exist (`plugin/dsl/DSLCore.kt`) with different names from the example
-(`autoUpdateImplicitDependencies` for `autoUpdate`; `pipCentral`/`pipLocal`/`pipJit` for
-`central`/`local`/`jit`; no `url =` property and no `localRecipes`). Nothing reads any of it.
+`pip { autoUpdate; repositories { central { setUrl(…) }; local { url = … }; jit { url; localRecipes { add(…) } } } }`,
+spelled as the example build file spells it (INTENT §4.3), becomes options of the `uv add` that
+`installPythonDependencies` runs (§1.10):
 
-**Status: planned.**
+| DSL | `uv add` option |
+|---|---|
+| `central { setUrl(a, b, …) }` | `--default-index a`; the other URLs, minus repeats of `a`, as `--index` |
+| `local { url = … }` | `--find-links <dir>`; a `file:` URI becomes a path |
+| `autoUpdate = true` | `--upgrade` |
+| `jit { … }` | **rejected**: pypackpack has no recipe build. The rejection fails `installPythonDependencies` only, and only when it has something to install. |
+
+**Status: implemented** — `resolvePipArguments` / `resolvePipSettings` in
+`plugin/dependency/lang/python/PipRepositories.kt`; `ptest/dependency/lang/python/PipRepositoriesTest.kt`
+(including a real `uv add` sent to the declared index).
+→ *`jit` / `localRecipes`: **planned**, needs a recipe build in pypackpack.*
+→ *`versionCode`, `versionName`: **planned** — nothing reads them (#11).*
 
 ### 1.4 Platforms
 Declared directly inside `python { }`, as the example build file writes them:

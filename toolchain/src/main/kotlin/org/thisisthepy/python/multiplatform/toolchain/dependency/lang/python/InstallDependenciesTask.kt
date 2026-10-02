@@ -3,7 +3,9 @@ package org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python
 import kotlinx.coroutines.runBlocking
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendType
 import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendInterface as DependencyBackend
@@ -48,6 +50,15 @@ open class InstallDependenciesTask : DefaultTask() {
     @get:Internal
     var packageDir: File? = null
 
+    /** `uv add` options from `defaultConfig { pip { … } }` ([resolvePipSettings]). */
+    @get:Input
+    var pipArguments: Map<String, String> = emptyMap()
+
+    /** Why the pip settings cannot be honoured; fails this task only when it has something to install. */
+    @get:Input
+    @get:Optional
+    var pipRejection: String? = null
+
     @TaskAction
     fun installDependencies() {
         logger.lifecycle("Installing Python dependencies using uv...")
@@ -65,7 +76,9 @@ open class InstallDependenciesTask : DefaultTask() {
             return
         }
 
-        val output = installWithPackpack(dir, dependenciesList)
+        pipRejection?.let { throw GradleException(it) }
+
+        val output = installWithPackpack(dir, dependenciesList, pipArguments)
         logger.lifecycle("Installed ${dependenciesList.size} dependenc(y/ies) via packpack's uv backend: $output")
     }
 }
@@ -85,6 +98,7 @@ open class InstallDependenciesTask : DefaultTask() {
 fun installWithPackpack(
     packageDir: File,
     dependencies: List<String>,
+    extraArgs: Map<String, String> = emptyMap(),
 ): String {
     if (dependencies.isEmpty()) return ""
 
@@ -94,7 +108,7 @@ fun installWithPackpack(
         backend.addDependencies(
             packageName = null,
             dependencies = dependencies,
-            extraArgs = null,
+            extraArgs = extraArgs,
             workingDir = packageDir,
         )
     }.getOrElse { error ->

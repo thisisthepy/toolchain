@@ -13,7 +13,7 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 | 실행 가능한 부분집합 | `usage-example/build.gradle.kts` |
 | 의도 / 계약 | `docs/INTENT.md` / `docs/SPEC.md` |
 
-## 현재 상태 (2026-10-02, 코드와 테스트를 읽고 판정)
+## 현재 상태 (2026-10-03, 코드와 테스트를 읽고 판정)
 
 **구현됨 (테스트 있음)**
 - `compileSdk` 버전 문자열 파싱 (alpha / rc / normal 채널)
@@ -25,6 +25,8 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 - `compileLevel`: `instant` 만 지원, 나머지는 해당 변형의 태스크에서만 실패
 - `commonMain` 의 `srcDirs` / `metaDirs` / `libDirs` 전달
 - `implementation` / `integration` 의존성 → `uv add` (`pypackpack` 백엔드)
+- `defaultConfig { pip { autoUpdate; repositories { central / local } } }` → `uv add` 옵션
+  (`--default-index`·`--index` / `--find-links` / `--upgrade`). `jit` 는 설치 태스크에서만 이유와 함께 거부
 - `pypackpack` `ResourceBundler` 로 번들링
 - 스테이징 복사 규칙과 플랫폼별 변형 선택
 - `tcl install <package>`
@@ -39,7 +41,23 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 **계획 (선언만 있거나 없음)**
 - `bytecode` / `native` / `mixed` 컴파일 레벨 (`pypackpack` 쪽 선행 필요)
 - `embedLevel` 의미, `useCodeMinifier`, `excludeMetaclass`, `buildFeatures`, `projectFlavors`,
-  `defaultConfig { pip { } }`, `integration()` 의 `KLIBDEPENS` 검사, `compileSdk` 로 인터프리터 선택
+  `versionCode`/`versionName`, `pip { jit }`, `integration()` 의 `KLIBDEPENS` 검사,
+  `compileSdk` 로 인터프리터 선택
+
+## 마일스톤 (2026-10-03 확정, GitHub 마일스톤과 연결)
+
+"실제로 쓸 수 있는 수준" = 예시 빌드 파일(32비트 안드로이드 제외)로 Android(arm64·x86_64)·iOS·데스크톱 앱에
+Python 코드와 의존성이 실려 빌드·실행되는 상태. 기한을 맞추려고 품질 기준은 낮추지 않고 범위를 줄인다.
+
+| 마일스톤 | 기한 | 범위 | 완료 기준 | 근거 |
+|---|---|---|---|---|
+| M1 DSL = 예시 파일 | 10-17 | 플랫폼(#7 완료), pip(#9), `compileSdk` 상수(#10), `defaultConfig` 버전(#11), `buildFeatures`(#12), `projectFlavors`(#13), 플러그인 적용·zip·jar/APK 테스트(#14) | 예시 파일의 모든 속성이 컴파일되고, 읽히거나 좁게 거부됨. `usage-example` 이 그 모양으로 빌드됨 | 이슈 7개, 외부 의존 없음 |
+| M2 실제 페이로드 | 11-07 | `bytecode`(#15), 소스셋·타깃별 의존성(#16), `embedLevel`(#17), `compileSdk` 로 인터프리터 선택(#18), `KLIBDEPENS`(#19) | 각 변형의 번들에 그 타깃의 wheel 이 들어가고, bytecode 변형은 `.pyc` 를 실음 | pypackpack M2(타깃별 실제 설치)에 의존 |
+| M3 쓸 수 있는 수준 | 11-30 | iOS 페이로드 연결(#20), TypedPython 검사 태스크(#21), 세 플랫폼 실행(#22) | 예시 앱이 Android 에뮬레이터·iOS 시뮬레이터·데스크톱에서 Python 과 의존성을 실행 | python-multiplatform 런타임 로딩에 의존 |
+
+11-30 이후로 넘김: `native`/`mixed`(pypackpack Cython 슬롯은 pypackpack M3, 나머지 컴파일러는 빈 껍데기),
+`useCodeMinifier`/`excludeMetaclass`(pypackpack 에 minifier 없음), 코드 푸시 업로드와 HTTPS 핫 리로드 서버
+(지금은 `adb` 로 동작), 서버에 없는 CPython 자동 빌드(빌드 파이프라인 필요), `pip { jit }`(레시피 빌드 필요).
 
 ## 구조
 

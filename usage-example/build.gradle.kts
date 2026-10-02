@@ -36,6 +36,18 @@ python {
     // contains Python" unfalsifiable. `example_py` deliberately includes a non-`.py` file, because
     // `ResourceBundler` carries data files next to modules and staging has to preserve that.
     localLibraryPath = "python"
+    // The example build file's pip block, minus `jit` (rejected until pypackpack builds recipes).
+    // PyPI repeated as the default index changes nothing, but it makes the wiring part of a real build.
+    defaultConfig {
+        pip {
+            autoUpdate = false
+            repositories {
+                central {
+                    setUrl("https://pypi.org/simple", "https://pypi.org/simple")
+                }
+            }
+        }
+    }
     packaging {
         fileName = "usage-example"
     }
