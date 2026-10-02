@@ -29,8 +29,12 @@ Plugin id `org.thisisthepy.python.multiplatform`, implementation class `PythonPl
 Consumers resolve it from `mavenLocal()` after `./gradlew :toolchain:publishToMavenLocal`; the plugin
 itself depends on `org.thisisthepy.python.multiplatform:packpack:0.1.0` from `mavenLocal()`.
 
-**Status: partial** — the wiring exists (`plugin/PythonPlugin.kt`), but no test in this repository
-applies the plugin to a Gradle `Project`; it is exercised only by building `usage-example`.
+**Status: implemented** — `plugin/PythonPlugin.kt`; `ptest/PythonPluginApplyTest.kt` applies the
+plugin id to a ProjectBuilder project and checks the extension, every task name and type
+(`installPythonDependencies`, `buildPython`, `packagePython`, `stagePythonBundle` and its
+`Android`/`Ios`/`Desktop` tasks; `hotReloadPython` and `codePushPython` after evaluation), the
+`python` group, and the `packagePython → buildPython → installPythonDependencies` chain. Resolving
+the plugin from `mavenLocal()` is still exercised only by building `usage-example`.
 
 ### 1.2 `compileSdk` — the Python version
 `compileSdk` accepts `X.Y`, `X.Y.Z`, `X.Y.Z-alpha[N]` or `X.Y.Z-rc[N]` and classifies it into
@@ -180,7 +184,10 @@ directory is created empty and `pypackpack` is not called.
 Zips the bundle directory to `build/distributions/<fileName>.zip` (or `<fileName>-<variant>.zip`).
 Fails if the bundle directory does not exist.
 
-**Status: partial** — `plugin/bundle/AssemblePythonPackageTask.kt`; no test here.
+**Status: implemented** — `plugin/bundle/AssemblePythonPackageTask.kt`;
+`ptest/bundle/AssemblePythonPackageTaskTest.kt` runs the real task's action: the archive name and
+location for the aggregate and a variant task, the zip entries, and the failure when the bundle
+directory is missing.
 → *`embedLevel` (0 no interpreter / 1 external / 2 embedded, auto-raised with a warning where a
 platform cannot honour it, overridable from `gradle.properties`): **planned** — it is only logged.*
 
@@ -198,9 +205,17 @@ stages nothing.
 Hand-off to the platform's packaging step:
 
 - Desktop: the staged root is added to the JVM target's `<target>ProcessResources`, so the payload
-  is in the desktop jar. **partial** — untested here.
+  is in the desktop jar. **implemented** — `ptest/PythonPluginAttachmentTest.kt` (Kotlin
+  Multiplatform with `jvm("desktop")`: `stagePythonBundleDesktop` is a dependency of
+  `desktopProcessResources` and the staged file is among its sources). Not tested: the fallback for
+  a `<target>ProcessResources` that is not a `Copy` task (dependency plus warning), and the built jar
+  itself.
 - Android: the staged root is added to `android.sourceSets.main.assets` (reflectively), so the
-  payload is in the APK's `assets/`. **partial** — untested here.
+  payload is in the APK's `assets/`. **partial** — `ptest/PythonPluginAttachmentTest.kt` applies the
+  real `com.android.application` (AGP 8.5.2, test classpath only) and checks the staged root is a
+  `main` asset source directory. Not tested: the `preBuild` / `merge*Assets` → `stagePythonBundleAndroid`
+  dependency (AGP creates those tasks only when the project is evaluated against an Android SDK,
+  which `:toolchain:test` does not require), and the built APK.
 - iOS: staged but **not attached** to the Xcode project. **planned.**
 - Putting the staged `python/` on `sys.path` at run time is `python-multiplatform`'s side.
 

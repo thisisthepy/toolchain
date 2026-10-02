@@ -46,6 +46,12 @@ dependencies {
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)
+    // Test-only: `PythonPluginAttachmentTest` applies `com.android.application` to a ProjectBuilder
+    // project to check that the staged Android root really lands in `android.sourceSets.main.assets`
+    // (the plugin reaches that object reflectively, so only a real AGP proves the method chain).
+    // Same version as `usage-example` (`gradle/libs.versions.toml` `agp`); never on the plugin's
+    // own runtime classpath.
+    testImplementation("com.android.tools.build:gradle:${libs.versions.agp.get()}")
 }
 
 gradlePlugin {
