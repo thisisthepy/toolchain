@@ -3,24 +3,18 @@ package org.thisisthepy.python.multiplatform.toolchain
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /**
- * Reverses part of the judgement call `PythonPluginBuildTypeTest`'s kdoc recorded: `buildLevel` ==
- * `BuildType.compileLevel` was left completely unread by `PythonPlugin.apply`, because
- * `pypackpack`'s `ResourceBundler` (`bundle/resource/ResourceBundler.kt`) rejects every build level
- * except `"instant"` (`require(request.buildLevel == SUPPORTED_BUILD_LEVEL)`) and wiring
- * `compileLevel` straight through would have turned the newly-green `packagePython` chain red the
- * moment a consumer declared `buildTypes { getByName("release") { compileLevel = "bytecode" } }` --
- * which the reference file `(플러그인예시)build.gradle.kts` does, verbatim.
+ * `BuildType.compileLevel` -> `pypackpack`'s `BundleRequest.buildLevel` ([resolveBuildLevel]).
  *
- * [resolveBuildLevel] is the same explicit-rejection shape `PlatformTargetMapping` uses for
- * unsupported target variants, applied here instead of leaving the field unread: a blank
- * `compileLevel` (today's default for both `DebugBuildType` and `ReleaseBuildType`, and what
- * `usage-example` leaves it at) keeps resolving to `"instant"`, exactly `bundleWithPackpack`'s old
- * hard-coded value, so nothing that passes today stops passing. A `compileLevel` naming anything
- * `ppp` cannot bundle yet -- `"bytecode"`, `"native"`, `"mixed"`, all three of which the reference
- * file's `BuildTypeEnum` names -- now fails loudly with a message pointing at what *is* supported,
- * instead of compiling and being silently ignored the way it was before this file existed.
+ * `pypackpack`'s `ResourceBundler` (`bundle/resource/ResourceBundler.kt`, its `SUPPORTED_BUILD_LEVELS`)
+ * implements `instant` and `bytecode` (Issue #15), so both pass through. `native` and `mixed` need
+ * the compile stage's output, whose interface is pypackpack#19, so they are still refused -- per
+ * variant, inside that variant's task action (AGENTS.md §14), with a message naming that slot.
+ *
+ * Blank resolves to `"instant"`: both `DebugBuildType` and `ReleaseBuildType` default `compileLevel`
+ * to `""`, and `usage-example` never sets it.
  */
 class PythonPluginBuildLevelTest {
     @Test
@@ -34,18 +28,24 @@ class PythonPluginBuildLevelTest {
     }
 
     @Test
-    fun `bytecode is rejected loudly because ppp's ResourceBundler cannot bundle it yet`() {
-        val error = assertFailsWith<IllegalArgumentException> { resolveBuildLevel("bytecode") }
-        assertEquals(
-            "Python compileLevel 'bytecode' is not implemented by pypackpack's resource bundler " +
-                "yet; only 'instant' is available today.",
-            error.message,
-        )
+    fun `bytecode passes through, because pypackpack's ResourceBundler implements it`() {
+        assertEquals("bytecode", resolveBuildLevel("bytecode"))
     }
 
     @Test
-    fun `native and mixed are rejected the same way`() {
-        assertFailsWith<IllegalArgumentException> { resolveBuildLevel("native") }
-        assertFailsWith<IllegalArgumentException> { resolveBuildLevel("mixed") }
+    fun `native and mixed are rejected with a message naming the planned compile slot`() {
+        listOf("native", "mixed").forEach { level ->
+            val error = assertFailsWith<IllegalArgumentException> { resolveBuildLevel(level) }
+            val message = error.message.orEmpty()
+            assertTrue(message.contains("'$level'"), message)
+            assertTrue(message.contains("pypackpack#19"), message)
+            assertTrue(message.contains("'instant'") && message.contains("'bytecode'"), message)
+        }
+    }
+
+    @Test
+    fun `an unknown compileLevel is rejected too, not passed to pypackpack`() {
+        val error = assertFailsWith<IllegalArgumentException> { resolveBuildLevel("bytcode") }
+        assertTrue(error.message.orEmpty().contains("'bytcode'"), error.message)
     }
 }

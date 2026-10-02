@@ -126,7 +126,8 @@ flowchart LR
 | `debug` / `release` 와 변형별 태스크 그래프 | ✅ 구현됨 |
 | `uv` 를 통한 `implementation` / `integration` 의존성 | ✅ 구현됨 — 소스셋별 구분은 아직 |
 | `instant` 레벨의 `pypackpack` 번들링 | ✅ 구현됨 |
-| `bytecode` / `native` / `mixed` 컴파일 레벨 | ⏳ 계획 — 현재는 명시적으로 거부 |
+| `bytecode` 컴파일 레벨 (`.pyc`, `compileSdk` 와 맞는 `.venv` 필요) | ✅ 구현됨 |
+| `native` / `mixed` 컴파일 레벨 | ⏳ 계획 — 현재는 명시적으로 거부 |
 | 데스크톱 jar 와 APK 로의 스테이징 | 🟡 부분 — iOS 는 스테이징만 되고 연결되지 않음 |
 | 핫 리로드 | 🟡 부분 — Android 전용, `adb` 경유 |
 | 코드 푸시 | 🟡 부분 — 검증만, 업로드 없음 |
