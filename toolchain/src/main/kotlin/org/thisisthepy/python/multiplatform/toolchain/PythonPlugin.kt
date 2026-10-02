@@ -126,9 +126,11 @@ class PythonPlugin : Plugin<Project> {
             // resolved once here and threaded into whichever build task(s) actually run below.
             val resolvedMetaDirs = resolveMetaDirs(project.projectDir, extension.sourceSets.allSourceSets())
             val resolvedLibDirs = resolveLibDirs(project.projectDir, extension.sourceSets.allSourceSets())
+            // `metaDirs` is set per bundle task below, once its build type is known:
+            // `buildFeatures { metaclass }` and that build type's `excludeMetaclass` decide whether
+            // they are forwarded (`resolveBundledMetaDirs`).
             buildTask.configure {
                 packageDir = resolvedPackageDir
-                metaDirs = resolvedMetaDirs
                 libDirs = resolvedLibDirs
             }
             installTask.configure {
@@ -180,12 +182,39 @@ class PythonPlugin : Plugin<Project> {
             // resource step) is a separate, not-yet-designed follow-up, not a like-for-like
             // replacement of this naive copy.
 
+            // `buildFeatures { compose = true }`, Python half: `pythonx-compose` joins the install
+            // list, a wheel directory joins pip's `find-links`, a missing property fails this task's
+            // action only (`resolveComposePythonInstall`).
+            val composePython = resolveComposePythonInstall(
+                extension.buildFeatures.compose,
+                project.findProperty(COMPOSE_PYTHON_PROPERTY)?.toString(),
+                project.projectDir,
+            )
             installTask.configure {
-                dependenciesList = collectInstallDependencies(extension.sourceSets.allSourceSets())
+                dependenciesList = collectInstallDependencies(extension.sourceSets.allSourceSets()) +
+                    composePython.requirements
                 integrationsList = collectIntegrationDependencies(extension.sourceSets.allSourceSets())
                 val pip = resolvePipSettings(extension.defaultConfig.pip)
-                pipArguments = pip.arguments.orEmpty()
+                pipArguments = mergeComposeFindLinks(pip.arguments.orEmpty(), composePython.findLinks)
                 pipRejection = pip.rejection
+                composeRejection = composePython.rejection
+            }
+
+            // Kotlin half: see `resolveComposeKotlinDependency` for why a missing coordinate fails
+            // configuration here and why a project without Kotlin Multiplatform only gets a warning.
+            when (
+                val composeKotlin = resolveComposeKotlinDependency(
+                    extension.buildFeatures.compose,
+                    kotlinExtension != null,
+                    project.findProperty(COMPOSE_KOTLIN_PROPERTY)?.toString(),
+                )
+            ) {
+                is ComposeKotlinDependency.Add ->
+                    kotlinExtension!!.sourceSets.getByName("commonMain").dependencies {
+                        implementation(composeKotlin.coordinate)
+                    }
+                is ComposeKotlinDependency.Skipped -> project.logger.warn(composeKotlin.reason)
+                ComposeKotlinDependency.None -> Unit
             }
 
             // ---------------------------------------------------------------------------------
@@ -269,6 +298,11 @@ class PythonPlugin : Plugin<Project> {
                 buildTask.configure {
                     buildType = activeBuildTypeName
                     compileLevel = activeBuildType?.compileLevel ?: ""
+                    metaDirs = resolveBundledMetaDirs(
+                        resolvedMetaDirs,
+                        extension.buildFeatures.metaclass,
+                        activeBuildType?.excludeMetaclass ?: false,
+                    )
                 }
 
                 // Every destination gets the one host bundle, because that is the only bundle that
@@ -305,7 +339,12 @@ class PythonPlugin : Plugin<Project> {
                             versionName = payloadVersionName
                             versionCode = payloadVersionCode
                             packageDir = resolvedPackageDir
-                            metaDirs = resolvedMetaDirs
+                            metaDirs = resolveBundledMetaDirs(
+                                resolvedMetaDirs,
+                                extension.buildFeatures.metaclass,
+                                extension.buildTypes.all()
+                                    .firstOrNull { it.name == variant.buildTypeName }?.excludeMetaclass ?: false,
+                            )
                             libDirs = resolvedLibDirs
                             target = variant.target
                             buildType = variant.buildTypeName

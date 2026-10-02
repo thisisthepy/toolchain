@@ -37,7 +37,7 @@
         }
     }
 }</code></pre>
-<div class="table-wrap"><table><thead><tr><th><span data-lang="en">Rule</span><span data-lang="ko">규칙</span></th><th><span data-lang="en">Detail</span><span data-lang="ko">내용</span></th></tr></thead><tbody><tr><td><span data-lang="en">Package directory</span><span data-lang="ko">패키지 디렉터리</span></td><td><span data-lang="en"><code>localLibraryPath</code> if set, otherwise the <strong>first</strong> <code>commonMain.srcDirs</code> entry, otherwise none (install and bundle skip).</span><span data-lang="ko"><code>localLibraryPath</code> 가 있으면 그것, 없으면 <code>commonMain.srcDirs</code> 의 <strong>첫</strong> 항목, 그것도 없으면 없음 (설치와 번들 건너뜀).</span></td></tr><tr><td><span data-lang="en"><code>metaDirs</code>, <code>libDirs</code></span><span data-lang="ko"><code>metaDirs</code>, <code>libDirs</code></span></td><td><span data-lang="en">Every entry is forwarded to pypackpack's <code>BundleRequest</code>.</span><span data-lang="ko">모든 항목이 pypackpack 의 <code>BundleRequest</code> 로 전달됩니다.</span></td></tr><tr><td><span data-lang="en">Only on <code>commonMain</code></span><span data-lang="ko"><code>commonMain</code> 에서만</span></td><td><span data-lang="en">The three directory functions throw in any other source set.</span><span data-lang="ko">세 디렉터리 함수는 다른 소스셋에서 호출하면 예외가 납니다.</span></td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th><span data-lang="en">Rule</span><span data-lang="ko">규칙</span></th><th><span data-lang="en">Detail</span><span data-lang="ko">내용</span></th></tr></thead><tbody><tr><td><span data-lang="en">Package directory</span><span data-lang="ko">패키지 디렉터리</span></td><td><span data-lang="en"><code>localLibraryPath</code> if set, otherwise the <strong>first</strong> <code>commonMain.srcDirs</code> entry, otherwise none (install and bundle skip).</span><span data-lang="ko"><code>localLibraryPath</code> 가 있으면 그것, 없으면 <code>commonMain.srcDirs</code> 의 <strong>첫</strong> 항목, 그것도 없으면 없음 (설치와 번들 건너뜀).</span></td></tr><tr><td><span data-lang="en"><code>metaDirs</code>, <code>libDirs</code></span><span data-lang="ko"><code>metaDirs</code>, <code>libDirs</code></span></td><td><span data-lang="en">Every entry is forwarded to pypackpack's <code>BundleRequest</code>. <code>metaDirs</code> are left out when <code>buildFeatures { metaclass = false }</code> (default <code>true</code>), and from the bundles of a build type that sets <code>excludeMetaclass = true</code>.</span><span data-lang="ko">모든 항목이 pypackpack 의 <code>BundleRequest</code> 로 전달됩니다. <code>metaDirs</code> 는 <code>buildFeatures { metaclass = false }</code>(기본값 <code>true</code>)이면 빠지고, <code>excludeMetaclass = true</code> 인 빌드 타입의 번들에서도 빠집니다.</span></td></tr><tr><td><span data-lang="en">Only on <code>commonMain</code></span><span data-lang="ko"><code>commonMain</code> 에서만</span></td><td><span data-lang="en">The three directory functions throw in any other source set.</span><span data-lang="ko">세 디렉터리 함수는 다른 소스셋에서 호출하면 예외가 납니다.</span></td></tr></tbody></table></div>
 </section>
 
 <section>
@@ -75,6 +75,19 @@
     }
 }</code></pre>
 <p data-lang="en"><code>central</code>'s first URL replaces PyPI; any further URLs are added as extra indexes. <code>local</code> is a directory of wheels. <code>jit { }</code> (building packages from recipes) is not supported yet: declaring it fails <code>installPythonDependencies</code> with the reason, and only when there is something to install.</p><p data-lang="ko"><code>central</code> 의 첫 URL 이 PyPI 를 대신하고, 나머지 URL 은 추가 인덱스가 됩니다. <code>local</code> 은 wheel 이 든 디렉터리입니다. <code>jit { }</code>(레시피로 패키지 빌드)는 아직 지원하지 않습니다. 선언하면 설치할 것이 있을 때만 <code>installPythonDependencies</code> 가 이유와 함께 실패합니다.</p>
+</section>
+
+<section>
+<h2><span data-lang="en">Compose</span><span data-lang="ko">Compose</span></h2>
+<pre><code class="language-kotlin">python {
+    buildFeatures {
+        compose = true
+    }
+}</code></pre>
+<pre><code class="language-text"># gradle.properties (or -P on the command line)
+python.compose.pythonxCompose=pythonx-compose==0.1.0      # or a directory of wheels
+python.compose.kotlinModule=group:python-multiplatform-compose:version</code></pre>
+<p data-lang="en"><code>compose = true</code> installs <code>pythonx-compose</code> with the other dependencies and adds <code>python-multiplatform-compose</code> to Kotlin Multiplatform <code>commonMain</code>'s <code>implementation</code>. Neither is published yet, so both locations come from these two Gradle properties and have no default. <code>pythonxCompose</code> is a pip requirement, or a directory of wheels, which is added to <code>--find-links</code> after any <code>local</code> repository. A missing <code>pythonxCompose</code> fails <code>installPythonDependencies</code> only; a missing <code>kotlinModule</code> fails configuration, because the dependency belongs to every Kotlin compilation. Without the Kotlin Multiplatform plugin only <code>pythonx-compose</code> is installed, with a warning.</p><p data-lang="ko"><code>compose = true</code> 는 다른 의존성과 함께 <code>pythonx-compose</code> 를 설치하고, Kotlin Multiplatform <code>commonMain</code> 의 <code>implementation</code> 에 <code>python-multiplatform-compose</code> 를 추가합니다. 둘 다 아직 배포되지 않았으므로 위치는 이 두 Gradle 속성으로 정하며 기본값이 없습니다. <code>pythonxCompose</code> 는 pip 요구사항이거나 wheel 디렉터리이고, 디렉터리는 <code>local</code> 저장소 뒤에 <code>--find-links</code> 로 추가됩니다. <code>pythonxCompose</code> 가 없으면 <code>installPythonDependencies</code> 만 실패하고, <code>kotlinModule</code> 이 없으면 구성 단계가 실패합니다. 그 의존성은 모든 Kotlin 컴파일에 속하기 때문입니다. Kotlin Multiplatform 플러그인이 없으면 경고와 함께 <code>pythonx-compose</code> 만 설치됩니다.</p>
 </section>
 </article></div>
 </main>

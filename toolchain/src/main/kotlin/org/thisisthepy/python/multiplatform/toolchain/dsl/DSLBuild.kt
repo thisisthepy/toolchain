@@ -49,8 +49,22 @@ class ReleaseBuildType(name: String) : BuildType(name) {
     override var enableCodePush: Boolean = false
 }
 
+/**
+ * `buildFeatures { metaclass; compose }`; decided by `resolveBundledMetaDirs`,
+ * `resolveComposePythonInstall` and `resolveComposeKotlinDependency` (`BuildFeatures.kt`).
+ */
 open class BuildFeaturesExtension {
-    var metaclass: Boolean = false
+    /**
+     * Forward `commonMain`'s `metaDirs` to the bundle. `true` by default: `metaDirs` were forwarded
+     * before this flag was read, and the example build file writes `metaclass = true`.
+     */
+    var metaclass: Boolean = true
+
+    /**
+     * Install `pythonx-compose` and add `python-multiplatform-compose` to Kotlin `commonMain`; both
+     * locations come from the Gradle properties `python.compose.pythonxCompose` and
+     * `python.compose.kotlinModule`.
+     */
     var compose: Boolean = false
 }
 

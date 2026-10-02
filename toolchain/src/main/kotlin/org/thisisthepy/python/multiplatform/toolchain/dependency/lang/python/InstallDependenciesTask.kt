@@ -67,11 +67,22 @@ open class InstallDependenciesTask : DefaultTask() {
     @get:Optional
     var pipRejection: String? = null
 
+    /**
+     * Why `buildFeatures { compose = true }` cannot add `pythonx-compose` (a missing or unusable
+     * `python.compose.pythonxCompose`; `resolveComposePythonInstall`). Thrown from this task's action,
+     * not at configuration, so builds that never install still run.
+     */
+    @get:Input
+    @get:Optional
+    var composeRejection: String? = null
+
     @TaskAction
     fun installDependencies() {
         logger.lifecycle("Installing Python dependencies using uv...")
 
-        if (dependenciesList.isEmpty()) {
+        // A compose rejection means `pythonx-compose` should have been in the list: there is
+        // something to install, so an otherwise empty list is not a skip.
+        if (dependenciesList.isEmpty() && composeRejection == null) {
             logger.lifecycle("No dependencies specified, skipping.")
             return
         }
@@ -84,6 +95,7 @@ open class InstallDependenciesTask : DefaultTask() {
             return
         }
 
+        composeRejection?.let { throw GradleException(it) }
         pipRejection?.let { throw GradleException(it) }
 
         val output = installWithPackpack(dir, dependenciesList, pipArguments)
