@@ -1,0 +1,85 @@
+name: Test
+
+# Every pull request and every push to develop runs the plugin's and tcl's tests,
+# each in its own job (AGENTS.md section 8). Results are counted from the JUnit
+# XML, not from the log.
+#
+# Both modules depend on org.thisisthepy.python.multiplatform:packpack:0.1.0 from
+# mavenLocal, so each job first publishes it from pypackpack's develop branch.
+# --configure-on-demand keeps Gradle from configuring :usage-example, which
+# resolves this plugin from mavenLocal and so cannot configure before it is
+# published.
+on:
+  pull_request:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [toolchain, tcl]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: thisisthepy/pypackpack
+          ref: develop
+          path: .ci/pypackpack
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Publish packpack to mavenLocal
+        working-directory: .ci/pypackpack
+        run: ./gradlew :packpack:publishToMavenLocal --console=plain
+
+      - name: Test ${{ matrix.module }}
+        run: ./gradlew :${{ matrix.module }}:test --rerun --configure-on-demand --console=plain
+
+      - name: Count results
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, re
+          t = f = e = s = 0
+          for x in glob.glob("${{ matrix.module }}/build/test-results/test/*.xml"):
+              m = re.search(r'tests="(\d+)" skipped="(\d+)" failures="(\d+)" errors="(\d+)"', open(x).read(4000))
+              t += int(m[1]); s += int(m[2]); f += int(m[3]); e += int(m[4])
+          print(f"tests={t} skipped={s} failures={f} errors={e}")
+          PY
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.module }}-test-reports
+          path: ${{ matrix.module }}/build/reports/tests/test/
+
+  guide:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 docs/guide/check_guide.py
