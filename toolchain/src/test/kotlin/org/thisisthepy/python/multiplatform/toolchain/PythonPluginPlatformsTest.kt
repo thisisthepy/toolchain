@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /**
- * Wires `python { platforms { ... } }` (`DSLPlatforms.kt`) into two real checks -- until now the
+ * Wires `python { }` platform (`DSLPlatforms.kt`) into two real checks -- until now the
  * block was read by nothing at all (`docs/ecosystem.md`'s gap list, and this round's own prior
  * report, both name `platforms` as unwired). [validateDeclaredPlatforms] and
  * [findPlatformsWithoutEnabledKotlinTarget] are the pure functions factored out of
@@ -31,8 +31,8 @@ class PythonPluginPlatformsTest {
     @Test
     fun `declared android and ios variants resolve to their canonical triples`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64(), platforms.androidX64()) }
-        platforms.ios { variants(platforms.iosArm64(), platforms.iosSimulatorArm64()) }
+        platforms.android(); platforms.androidArm64(); platforms.androidX64()
+        platforms.ios(); platforms.iosArm64(); platforms.iosSimulatorArm64()
 
         val resolved = validateDeclaredPlatforms(platforms)
 
@@ -48,17 +48,46 @@ class PythonPluginPlatformsTest {
     }
 
     @Test
-    fun `declaring an unsupported android variant fails the build loudly`() {
+    fun `a variant declared without its platform block registers that platform with defaults`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm32()) }
+        platforms.androidArm64()
 
-        assertFailsWith<IllegalArgumentException> { validateDeclaredPlatforms(platforms) }
+        assertEquals(listOf("aarch64-linux-android"), validateDeclaredPlatforms(platforms))
+        assertEquals(0, platforms.android?.androidSdk)
+    }
+
+    @Test
+    fun `a platform block written after its variants keeps them and applies its settings`() {
+        val platforms = PlatformsExtension()
+        listOf(platforms.androidArm64(), platforms.androidX64())
+        platforms.android("droid") { androidSdk = 24 }
+
+        assertEquals(listOf("androidArm64", "androidX64"), platforms.android?.variants?.map { it.name })
+        assertEquals("droid", platforms.android?.name)
+        assertEquals(24, platforms.android?.androidSdk)
+    }
+
+    @Test
+    fun `declaring the same variant twice registers it once`() {
+        val platforms = PlatformsExtension()
+        platforms.iosArm64()
+        platforms.iosArm64()
+
+        assertEquals(listOf("arm64-apple-ios"), validateDeclaredPlatforms(platforms))
+    }
+
+    @Test
+    fun `desktop with no arguments declares the platform without variants`() {
+        val platforms = PlatformsExtension()
+        platforms.desktop()
+
+        assertEquals(emptyList(), platforms.desktop?.variants?.map { it.name })
     }
 
     @Test
     fun `every declared variant with a matching enabled Kotlin target reports no mismatch`() {
         val platforms = PlatformsExtension()
-        platforms.ios { variants(platforms.iosArm64(), platforms.iosSimulatorArm64()) }
+        platforms.ios(); platforms.iosArm64(); platforms.iosSimulatorArm64()
 
         val mismatches =
             findPlatformsWithoutEnabledKotlinTarget(
@@ -72,8 +101,8 @@ class PythonPluginPlatformsTest {
     @Test
     fun `a declared variant with no enabled Kotlin target is reported by name`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64()) }
-        platforms.ios { variants(platforms.iosArm64()) }
+        platforms.android(); platforms.androidArm64()
+        platforms.ios(); platforms.iosArm64()
 
         val mismatches =
             findPlatformsWithoutEnabledKotlinTarget(

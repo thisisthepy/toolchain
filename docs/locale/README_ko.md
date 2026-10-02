@@ -33,7 +33,7 @@ Python 을 내장한 Kotlin Multiplatform 앱에는 맞물려 돌아가야 하�
 
 ## ✨ 기능
 
-- 🧩 **DSL 블록 하나** — `compileSdk`, `platforms`, `buildTypes`, `sourceSets`, `packaging` 을 모두
+- 🧩 **DSL 블록 하나** — `compileSdk`, 플랫폼, `buildTypes`, `sourceSets`, `packaging` 을 모두
   `python { }` 안에.
 - 📦 **실제 의존성 설치** — `implementation("pkg")` 와 `integration("pkg")` 가 `pypackpack` 을 거쳐
   실제 `uv add` 가 됩니다.
@@ -83,10 +83,10 @@ python {
 
 ```kotlin
 python {
-    platforms {
-        android { androidSdk = 24; variants(androidArm64(), androidX64()) }
-        desktop { variants(macosArm64(), linuxX64()) }
-    }
+    android("android") { androidSdk = 24 }
+    listOf(androidArm64(), androidX64())
+    desktop()
+    listOf(macosArm64(), linuxX64())
     buildTypes {
         getByName("debug") { compileLevel = "instant" }
     }

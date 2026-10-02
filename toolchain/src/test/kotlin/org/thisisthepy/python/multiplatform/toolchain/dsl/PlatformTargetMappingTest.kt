@@ -6,7 +6,7 @@ import kotlin.test.assertFailsWith
 
 /**
  * [PlatformTargetMapping] implements Issue #2's "Build target platform setup" checklist item: a
- * `python { platforms { ... } }` variant name (`DSLPlatforms.kt`'s `androidArm64()`, `iosX64()`,
+ * `python { }` platform variant name (`DSLPlatforms.kt`'s `androidArm64()`, `iosX64()`,
  * etc.) needs a canonical target triple before it can reach `pypackpack`'s
  * `BundleRequest.target`/`Platforms.normalizeTarget`, and a Kotlin Multiplatform target name before
  * it can be cross-checked against what the consumer's own `kotlin { }` block actually enables.

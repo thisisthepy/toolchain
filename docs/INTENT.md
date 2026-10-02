@@ -82,14 +82,13 @@ And, for people with no Gradle project at all:
 
 ## 4. Open questions for the maintainer
 
-1. **Automatic build of an unknown `compileSdk` version.** The example build file says
-   "서버에 없는 버전인 경우 자동으로 빌드 시도" (try to build a version the server does not have),
-   while issue #2 says "do not support automatic build for new python release". These disagree;
-   until decided, SPEC treats automatic building as out of scope.
-2. **The DSL shape for platforms.** The example declares platforms at the top of `python { }`
-   (`android("android") { … }`, `listOf(androidArm64(), …)`); the code nests them under
-   `platforms { android { …; variants(androidArm64(), …) } }`. Which shape is the contract?
-3. **`pip { repositories { central / local / jit } }`.** The example names them `central`, `local`
-   and `jit` (with `localRecipes`); the code names them `pipCentral`, `pipLocal`, `pipJit` and reads
-   none of them. Is the example spelling the contract?
+1. ~~**Automatic build of an unknown `compileSdk` version.**~~ *Decided 2026-10-03:* a version
+   given as a string (`"3.11.9-alpha"`) is built automatically when the server does not have it; a
+   version given as a named constant (`PY3_11_9_ALPHA`) is restricted to versions the server has.
+2. ~~**The DSL shape for platforms.**~~ *Decided 2026-10-03:* the example's shape — platform blocks
+   and variant calls directly inside `python { }`. Android variants follow CPython's official
+   Android support (PEP 738: arm64 and x86_64); the example's `androidArm32()` / `androidX86()`
+   predate that decision and are compile errors.
+3. ~~**`pip { repositories { central / local / jit } }`.**~~ *Decided 2026-10-03:* the example's
+   spelling (`central`, `local`, `jit` with `localRecipes`, and `autoUpdate`).
 4. **Is `tcl` meant to grow beyond `install`?** Issue #1 shows only `install`.

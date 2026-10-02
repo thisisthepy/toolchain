@@ -47,7 +47,7 @@ import kotlin.test.assertTrue
  *
  * ## Why the graph is opt-in
  *
- * [resolveVariants] returns an empty list when `python { platforms { ... } }` declares nothing, and
+ * [resolveVariants] returns an empty list when `python { }` platform declares nothing, and
  * `PythonPlugin` then leaves `buildPython`/`packagePython` doing exactly what they do today: one
  * host-target bundle, one `<fileName>.zip`. `usage-example` declares no platforms, so the only
  * chain that currently runs end to end is unaffected by any of this. The platform block is what
@@ -65,7 +65,7 @@ class PythonPluginVariantGraphTest {
     @Test
     fun `declared platforms with no declared build types default to one debug variant each`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64(), platforms.androidX64()) }
+        platforms.android(); platforms.androidArm64(); platforms.androidX64()
 
         val variants = resolveVariants(platforms, BuildTypesContainer())
 
@@ -78,8 +78,8 @@ class PythonPluginVariantGraphTest {
     @Test
     fun `every platform variant is crossed with every declared build type`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64()) }
-        platforms.ios { variants(platforms.iosSimulatorArm64()) }
+        platforms.android(); platforms.androidArm64()
+        platforms.ios(); platforms.iosSimulatorArm64()
         val buildTypes = BuildTypesContainer()
         buildTypes.getByName("debug")
         buildTypes.getByName("release")
@@ -100,9 +100,9 @@ class PythonPluginVariantGraphTest {
     @Test
     fun `each variant carries the canonical target triple its platform maps to`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64()) }
-        platforms.ios { variants(platforms.iosArm64()) }
-        platforms.desktop { variants(platforms.macosArm64()) }
+        platforms.android(); platforms.androidArm64()
+        platforms.ios(); platforms.iosArm64()
+        platforms.desktop(); platforms.macosArm64()
 
         val variants = resolveVariants(platforms, BuildTypesContainer())
 
@@ -115,8 +115,8 @@ class PythonPluginVariantGraphTest {
     @Test
     fun `task names follow the verb plus capitalized dimensions convention`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64()) }
-        platforms.ios { variants(platforms.iosSimulatorArm64()) }
+        platforms.android(); platforms.androidArm64()
+        platforms.ios(); platforms.iosSimulatorArm64()
         val buildTypes = BuildTypesContainer()
         buildTypes.getByName("release")
 
@@ -135,7 +135,7 @@ class PythonPluginVariantGraphTest {
     @Test
     fun `each variant gets its own output directory and archive name`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64(), platforms.androidX64()) }
+        platforms.android(); platforms.androidArm64(); platforms.androidX64()
         val buildTypes = BuildTypesContainer()
         buildTypes.getByName("debug")
         buildTypes.getByName("release")
@@ -157,7 +157,7 @@ class PythonPluginVariantGraphTest {
     @Test
     fun `a variant carries its own build type's compile level, so levels can differ per variant`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64()) }
+        platforms.android(); platforms.androidArm64()
         val buildTypes = BuildTypesContainer()
         buildTypes.getByName("debug") { compileLevel = "instant" }
         buildTypes.getByName("release") { compileLevel = "native" }
@@ -173,7 +173,7 @@ class PythonPluginVariantGraphTest {
     @Test
     fun `an unsupported compile level rejects only its own variant, leaving the rest resolvable`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64()) }
+        platforms.android(); platforms.androidArm64()
         val buildTypes = BuildTypesContainer()
         buildTypes.getByName("debug")
         buildTypes.getByName("release") { compileLevel = "native" }
@@ -192,10 +192,8 @@ class PythonPluginVariantGraphTest {
     @Test
     fun `an android variant carries the android platform's declared min sdk`() {
         val platforms = PlatformsExtension()
-        platforms.android {
-            androidSdk = 24
-            variants(platforms.androidArm64())
-        }
+        platforms.android { androidSdk = 24 }
+        platforms.androidArm64()
 
         assertEquals(listOf(24), resolveVariants(platforms, BuildTypesContainer()).map { it.minSdk })
     }
@@ -203,11 +201,9 @@ class PythonPluginVariantGraphTest {
     @Test
     fun `an ios variant carries the ios platform's declared min sdk and a desktop variant carries none`() {
         val platforms = PlatformsExtension()
-        platforms.ios {
-            iosSdk = 14
-            variants(platforms.iosArm64())
-        }
-        platforms.desktop { variants(platforms.linuxX64()) }
+        platforms.ios { iosSdk = 14 }
+        platforms.iosArm64()
+        platforms.desktop(); platforms.linuxX64()
 
         val variants = resolveVariants(platforms, BuildTypesContainer())
 
@@ -218,7 +214,7 @@ class PythonPluginVariantGraphTest {
     @Test
     fun `an undeclared min sdk is null rather than the DSL's zero default`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64()) }
+        platforms.android(); platforms.androidArm64()
 
         assertNull(resolveVariants(platforms, BuildTypesContainer()).single().minSdk)
     }
@@ -226,10 +222,8 @@ class PythonPluginVariantGraphTest {
     @Test
     fun `a negative min sdk is rejected instead of being carried into a task`() {
         val platforms = PlatformsExtension()
-        platforms.android {
-            androidSdk = -1
-            variants(platforms.androidArm64())
-        }
+        platforms.android { androidSdk = -1 }
+        platforms.androidArm64()
 
         val error = assertFailsWith<IllegalArgumentException> {
             resolveVariants(platforms, BuildTypesContainer())
@@ -238,13 +232,5 @@ class PythonPluginVariantGraphTest {
             error.message.orEmpty().contains("androidSdk"),
             "rejection should name the DSL property that is wrong, was: ${error.message}",
         )
-    }
-
-    @Test
-    fun `an unsupported platform variant is still rejected once it reaches the graph`() {
-        val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm32()) }
-
-        assertFailsWith<IllegalArgumentException> { resolveVariants(platforms, BuildTypesContainer()) }
     }
 }

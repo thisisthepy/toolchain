@@ -19,7 +19,7 @@ open class AssemblePythonPackageTask : Zip() {
     /**
      * Which bundle directory to zip. `null` means `build/pythonBundle` -- the single hard-coded
      * location this task used before the per-variant graph existed, and still what the aggregate
-     * `packagePython` uses when no `python { platforms { ... } }` block is declared. A variant task
+     * `packagePython` uses when no `python { }` platform block is declared. A variant task
      * points at that variant's own `build/pythonBundle/<platformVariant>-<buildType>`.
      */
     @get:Internal

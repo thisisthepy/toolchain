@@ -77,7 +77,7 @@ class PythonPluginStagingTest {
     @Test
     fun `only variants of the active build type are eligible to be staged`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64()) }
+        platforms.android(); platforms.androidArm64()
         val buildTypes = BuildTypesContainer()
         buildTypes.getByName("debug")
         buildTypes.getByName("release")
@@ -92,7 +92,7 @@ class PythonPluginStagingTest {
     @Test
     fun `desktop stages the host's own target when several desktop variants are declared`() {
         val platforms = PlatformsExtension()
-        platforms.desktop { variants(platforms.linuxX64(), platforms.macosArm64(), platforms.mingwX64()) }
+        platforms.desktop(); platforms.linuxX64(); platforms.macosArm64(); platforms.mingwX64()
         val variants = resolveVariants(platforms, BuildTypesContainer())
 
         val selected = selectStagingVariants(variants, activeBuildType = "debug",
@@ -106,7 +106,7 @@ class PythonPluginStagingTest {
         // Cross-staging: a macOS machine building only `linuxX64` still has to put *something* in
         // the resource root, or `desktopJar` silently ships no Python at all.
         val platforms = PlatformsExtension()
-        platforms.desktop { variants(platforms.linuxX64(), platforms.mingwX64()) }
+        platforms.desktop(); platforms.linuxX64(); platforms.mingwX64()
         val variants = resolveVariants(platforms, BuildTypesContainer())
 
         val selected = selectStagingVariants(variants, activeBuildType = "debug",
@@ -118,7 +118,7 @@ class PythonPluginStagingTest {
     @Test
     fun `android collapses its ABIs to one staged payload, because the resource bundle has none`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64(), platforms.androidX64()) }
+        platforms.android(); platforms.androidArm64(); platforms.androidX64()
         val variants = resolveVariants(platforms, BuildTypesContainer())
 
         val selected = selectStagingVariants(variants, activeBuildType = "debug",
@@ -131,7 +131,7 @@ class PythonPluginStagingTest {
     @Test
     fun `a platform with no declared variant gets no staging destination rather than a guessed one`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64()) }
+        platforms.android(); platforms.androidArm64()
         val variants = resolveVariants(platforms, BuildTypesContainer())
 
         val selected = selectStagingVariants(variants, activeBuildType = "debug",
@@ -144,7 +144,7 @@ class PythonPluginStagingTest {
     @Test
     fun `no variant of the active build type leaves that platform unstaged`() {
         val platforms = PlatformsExtension()
-        platforms.android { variants(platforms.androidArm64()) }
+        platforms.android(); platforms.androidArm64()
         val buildTypes = BuildTypesContainer()
         buildTypes.getByName("debug")
         val variants = resolveVariants(platforms, buildTypes)

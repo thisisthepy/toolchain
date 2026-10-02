@@ -42,7 +42,8 @@ form `pypackpack` accepts. A blank value is a silent skip; a malformed one fails
 The parsed version is logged and handed to `buildPython` as `pythonVersion`, which only logs it: it
 does **not** choose which interpreter is bundled. Named version constants such as
 `PY3_11_9_ALPHA` (example build file) do not exist. → *Interpreter selection by `compileSdk` and
-version constants: **planned**.* Automatic build of an unknown version: see INTENT §4.1.
+version constants: **planned**.* → *A string version the server lacks is built automatically; a
+named constant is restricted to server versions (INTENT §4.1, decided): **planned**.*
 
 ### 1.3 `defaultConfig { versionCode, versionName, pip { … } }`
 The DSL classes exist (`plugin/dsl/DSLCore.kt`) with different names from the example
@@ -52,8 +53,12 @@ The DSL classes exist (`plugin/dsl/DSLCore.kt`) with different names from the ex
 **Status: planned.**
 
 ### 1.4 Platforms
-Declared as
-`platforms { android { androidSdk = 24; variants(androidArm64(), androidX64()) }; ios { iosSdk = 14; variants(…) }; desktop { variants(…) } }`.
+Declared directly inside `python { }`, as the example build file writes them:
+`android("android") { androidSdk = 24 }`, `listOf(androidArm64(), androidX64())`, `ios { iosSdk = 14 }`,
+`listOf(iosArm64(), …)`, `desktop()`, `listOf(macosX64(), …)`. Calling a variant function declares
+that variant (the `listOf` only groups); a variant called without its platform block creates the
+block with its defaults; a platform block may come before or after its variants; a variant
+called twice is declared once. There is no `platforms { }` block.
 Each variant maps to a `pypackpack` target triple and a Kotlin target name:
 
 | Variant | Target triple | Kotlin target |
@@ -67,24 +72,25 @@ Each variant maps to a `pypackpack` target triple and a Kotlin target name:
 | `linuxX64` / `linuxArm64` | `x86_64-unknown-linux-gnu` / `aarch64-unknown-linux-gnu` | same name |
 | `mingwX64` | `x86_64-pc-windows-msvc` | `mingwX64` |
 
-`androidArm32` and `androidX86` are **rejected** at configuration with a message saying why
-(`pypackpack` defines no such triple). An unknown name is rejected with the supported list. A
+Android follows CPython's official Android support (PEP 738): `androidArm32()` and `androidX86()`
+are **compile errors** (`@Deprecated(level = ERROR)`) whose message names the two supported
+triples. An unknown name reaching the mapping is rejected with the supported list. A
 declared variant whose Kotlin target is not enabled in the consumer's `kotlin { }` block produces a
 **warning**, not a failure. `androidSdk`/`iosSdk` of `0` mean "undeclared"; negative values are
 rejected; a declared value is forwarded to `pypackpack` as `BundleRequest.minSdk`.
 
-**Status: implemented** — `plugin/dsl/DSLPlatforms.kt`, `plugin/PythonPlugin.kt`;
+**Status: implemented** — `plugin/dsl/DSLPlatforms.kt`, `plugin/dsl/DSLCore.kt`, `plugin/PythonPlugin.kt`;
+`ptest/dsl/PythonExtensionPlatformDslTest.kt` (the example's declarations through `PythonExtension`),
 `ptest/dsl/PlatformTargetMappingTest.kt`, `ptest/PythonPluginPlatformsTest.kt`,
 `ptest/PythonPluginVariantGraphTest.kt`, `ptest/bundle/BuildPythonArtifactTaskTest.kt` (minSdk).
 
-The DSL *shape* differs from the example build file, which writes `android("android") { … }` and
-`listOf(androidArm64(), …)` directly inside `python { }` — see INTENT §4.2. The example's
-32-bit/x86 Android variants are rejected rather than built.
+The shape is the example build file's (INTENT §4.2, decided). The example's 32-bit/x86 Android
+variants predate the decision to follow CPython's Android support and are not built.
 
 ### 1.5 Build types
 `buildTypes { getByName("debug") { … }; getByName("release") { … } }`. Only `debug` and `release`
 exist; any other name throws. `debug` forbids setting `useCodeMinifier`, `excludeMetaclass` and
-`enableCodePush` (setting them throws). Without a `platforms` block the active build type is chosen
+`enableCodePush` (setting them throws). Without a declared platform variant the active build type is chosen
 by `-Ppython.buildType=<name>` (default `debug`); an undeclared name fails loudly.
 
 **Status: implemented** — `plugin/dsl/DSLBuild.kt`, `resolveActiveBuildType` in `plugin/PythonPlugin.kt`;
@@ -103,12 +109,12 @@ Blank resolves to `instant`; `instant` passes. `bytecode`, `native` and `mixed` 
 Declared on `ReleaseBuildType`; nothing reads them. **Status: planned.**
 
 ### 1.8 Per-variant task graph
-When `platforms` declares at least one variant, every variant is crossed with every declared build
+When at least one platform variant is declared, every variant is crossed with every declared build
 type (or `debug` alone if none is declared). Each pair gets
 `buildPython<Variant><BuildType>` and `packagePython<Variant><BuildType>`, writes to
 `build/pythonBundle/<variant>-<buildType>/`, and zips to
 `build/distributions/<fileName>-<variant>-<buildType>.zip`. `buildPython` and `packagePython` become
-lifecycle tasks (their own action is skipped). Without a `platforms` block there is exactly one
+lifecycle tasks (their own action is skipped). Without a declared variant there is exactly one
 host-target chain, as before.
 
 **Status: implemented** (resolution and naming) — `resolveVariants`, `PythonVariant`;
@@ -226,7 +232,7 @@ These exist in the code but are not asked for by the example build file or the i
    `sourceSets { commonMain { srcDirs(…) } }`. It overrides `srcDirs` and is the only source root
    hot reload reads. `usage-example` depends on it.
 2. **`-Ppython.buildType=<name>`** — a project property choosing the active build type when no
-   `platforms` block exists. The example build file says nothing about selecting a build type.
+   platform variant is declared. The example build file says nothing about selecting a build type.
 3. **Hot reload over `adb push` + broadcast.** The example describes an HTTPS `serverHost` with a
    certificate; the implemented transport is Android-only `adb`.
 4. **Unreferenced code**: `PythonMultiplatformPlugin.kt` (a second `Plugin` that is not registered

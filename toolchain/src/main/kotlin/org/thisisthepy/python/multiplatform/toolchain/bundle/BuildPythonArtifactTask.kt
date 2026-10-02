@@ -80,7 +80,7 @@ open class BuildPythonArtifactTask : DefaultTask() {
     /**
      * Where this variant's bundle is written. `null` means `build/pythonBundle` -- the single
      * hard-coded location used before the variant graph existed, and still what the aggregate
-     * `buildPython` uses when no `python { platforms { ... } }` block is declared. A variant task
+     * `buildPython` uses when no `python { }` platform block is declared. A variant task
      * sets `build/pythonBundle/<platformVariant>-<buildType>` instead, so two variants cannot
      * overwrite each other's payload.
      */
@@ -88,7 +88,7 @@ open class BuildPythonArtifactTask : DefaultTask() {
     var bundleDir: File? = null
 
     /**
-     * The declared platform min SDK for this variant (`platforms { android { androidSdk = 24 } }` or
+     * The declared platform min SDK for this variant (`android { androidSdk = 24 }` or
      * `ios { iosSdk = 14 }`), `null` when that platform declares none.
      *
      * Forwarded to `pypackpack` as `BundleRequest.minSdk` (added in `pypackpack`'s `6e36d3d`, after

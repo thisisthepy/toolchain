@@ -20,7 +20,31 @@ open class PythonExtension @Inject constructor(objects: ObjectFactory) {
     fun buildTypes(action: BuildTypesContainer.() -> Unit) = buildTypes.apply(action)
     fun buildFeatures(action: BuildFeaturesExtension.() -> Unit) = buildFeatures.apply(action)
     fun sourceSets(action: SourceSetsExtension.() -> Unit) = sourceSets.apply(action)
-    fun platforms(action: PlatformsExtension.() -> Unit) = platforms.apply(action)
+
+    // Platforms are declared directly inside `python { }`, as the example build file writes them
+    // (see [PlatformsExtension]); there is no `platforms { }` block.
+    fun android(name: String = "android", action: AndroidPlatformExtension.() -> Unit = {}) = platforms.android(name, action)
+    fun ios(action: IosPlatformExtension.() -> Unit = {}) = platforms.ios(action)
+    fun desktop(action: DesktopPlatformExtension.() -> Unit = {}) = platforms.desktop(action)
+
+    fun androidArm64() = platforms.androidArm64()
+    fun androidX64() = platforms.androidX64()
+
+    @Deprecated(PlatformsExtension.UNSUPPORTED_ANDROID_VARIANT, level = DeprecationLevel.ERROR)
+    fun androidArm32(): AndroidVariant = @Suppress("DEPRECATION_ERROR") platforms.androidArm32()
+
+    @Deprecated(PlatformsExtension.UNSUPPORTED_ANDROID_VARIANT, level = DeprecationLevel.ERROR)
+    fun androidX86(): AndroidVariant = @Suppress("DEPRECATION_ERROR") platforms.androidX86()
+
+    fun iosArm64() = platforms.iosArm64()
+    fun iosX64() = platforms.iosX64()
+    fun iosSimulatorArm64() = platforms.iosSimulatorArm64()
+
+    fun macosX64() = platforms.macosX64()
+    fun macosArm64() = platforms.macosArm64()
+    fun linuxX64() = platforms.linuxX64()
+    fun linuxArm64() = platforms.linuxArm64()
+    fun mingwX64() = platforms.mingwX64()
 }
 
 open class DefaultConfig {
