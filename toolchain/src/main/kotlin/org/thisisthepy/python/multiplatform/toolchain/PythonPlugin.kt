@@ -7,6 +7,7 @@ import org.thisisthepy.python.multiplatform.toolchain.dsl.PlatformsExtension
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonVersion
 import org.thisisthepy.python.multiplatform.toolchain.dsl.SourceSetConfig
 import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.InstallDependenciesTask
+import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.resolvePipSettings
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.tasks.TaskProvider
@@ -168,6 +169,9 @@ class PythonPlugin : Plugin<Project> {
 
             installTask.configure {
                 dependenciesList = collectInstallDependencies(extension.sourceSets.allSourceSets())
+                val pip = resolvePipSettings(extension.defaultConfig.pip)
+                pipArguments = pip.arguments.orEmpty()
+                pipRejection = pip.rejection
             }
 
             // ---------------------------------------------------------------------------------

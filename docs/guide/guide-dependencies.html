@@ -60,6 +60,22 @@
 <p data-lang="en"><code>installPythonDependencies</code> runs a real <code>uv add</code> in the package directory through pypackpack's <code>uv</code> backend, so the result is recorded in your <code>pyproject.toml</code>.</p><p data-lang="ko"><code>installPythonDependencies</code> 는 pypackpack 의 <code>uv</code> 백엔드를 통해 패키지 디렉터리에서 실제 <code>uv add</code> 를 실행하므로, 결과가 <code>pyproject.toml</code> 에 기록됩니다.</p>
 <div class="note"><p data-lang="en">Two limits today. Every source set's dependencies are installed into one list, so an <code>androidMain</code> dependency is installed for every target. And <code>integration()</code> installs exactly like <code>implementation()</code>: the <code>KLIBDEPENS</code> wheel check the DSL describes is not implemented yet.</p><p data-lang="ko">지금의 한계 두 가지. 모든 소스셋의 의존성이 하나의 목록으로 설치되므로 <code>androidMain</code> 의존성도 모든 타깃에 설치됩니다. 그리고 <code>integration()</code> 은 <code>implementation()</code> 과 똑같이 설치됩니다. DSL 이 설명하는 <code>KLIBDEPENS</code> 휠 검사는 아직 없습니다.</p></div>
 </section>
+
+<section>
+<h2><span data-lang="en">Package repositories</span><span data-lang="ko">패키지 저장소</span></h2>
+<pre><code class="language-kotlin">python {
+    defaultConfig {
+        pip {
+            autoUpdate = true                                  // uv add --upgrade
+            repositories {
+                central { setUrl(&quot;https://mirror.example/simple&quot;) }  // --default-index
+                local { url = Paths.get(&quot;wheels&quot;).toUri().toString() } // --find-links
+            }
+        }
+    }
+}</code></pre>
+<p data-lang="en"><code>central</code>'s first URL replaces PyPI; any further URLs are added as extra indexes. <code>local</code> is a directory of wheels. <code>jit { }</code> (building packages from recipes) is not supported yet: declaring it fails <code>installPythonDependencies</code> with the reason, and only when there is something to install.</p><p data-lang="ko"><code>central</code> 의 첫 URL 이 PyPI 를 대신하고, 나머지 URL 은 추가 인덱스가 됩니다. <code>local</code> 은 wheel 이 든 디렉터리입니다. <code>jit { }</code>(레시피로 패키지 빌드)는 아직 지원하지 않습니다. 선언하면 설치할 것이 있을 때만 <code>installPythonDependencies</code> 가 이유와 함께 실패합니다.</p>
+</section>
 </article></div>
 </main>
 <footer class="site-footer"><div class="wrap">
