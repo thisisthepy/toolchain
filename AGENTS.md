@@ -149,8 +149,7 @@ GitHub issues `thisisthepy/toolchain#2` (plugin checklist) and `#1` (`tcl`), it 
 `docs/INTENT.md`.
 
 - Never edit, move, rename or `git add` it.
-- When the code's DSL disagrees with it (it does today: `pip` repository
-  names, `projectFlavors`), the file wins, and the disagreement is recorded in `docs/SPEC.md` and
+- When the code's DSL disagrees with it, the file wins, and the disagreement is recorded in `docs/SPEC.md` and
   `docs/INTENT.md` §4 until the maintainer decides. Do not "fix" either side on your own.
 - `usage-example/` is the **executable subset** of that file: the part the plugin actually reads.
   When a DSL property becomes live, add it to `usage-example/build.gradle.kts`, so there is a build

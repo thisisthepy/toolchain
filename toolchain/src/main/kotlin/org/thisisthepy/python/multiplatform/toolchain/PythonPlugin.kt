@@ -4,6 +4,7 @@ import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonExtension
 import org.thisisthepy.python.multiplatform.toolchain.dsl.BuildTypesContainer
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PlatformTargetMapping
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PlatformsExtension
+import org.thisisthepy.python.multiplatform.toolchain.dsl.ProjectFlavorsContainer
 import org.thisisthepy.python.multiplatform.toolchain.dsl.resolvePythonSdk
 import org.thisisthepy.python.multiplatform.toolchain.dsl.SourceSetConfig
 import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.InstallDependenciesTask
@@ -243,13 +244,15 @@ class PythonPlugin : Plugin<Project> {
             // not one task looping variants; `<verb><PlatformVariant><BuildType>` naming; opt-in via
             // a declared platform variant so the existing chain is untouched).
             // ---------------------------------------------------------------------------------
-            val variants = resolveVariants(extension.platforms, extension.buildTypes)
+            val variants = resolveVariants(extension.platforms, extension.buildTypes, extension.projectFlavors)
             val bundleRoot = File(project.layout.buildDirectory.get().asFile, "pythonBundle")
             // Hoisted out of the `variants.isEmpty()` branch it used to live in: staging has to know
             // which build type is active in *both* cases -- to pick a variant's bundle in one, and
             // to name the one it staged in the other.
             val requestedBuildType = (project.findProperty("python.buildType") as? String) ?: DEFAULT_BUILD_TYPE
             val activeBuildTypeName = resolveActiveBuildType(extension.buildTypes, requestedBuildType)
+            val activeFlavorName = resolveActiveFlavor(extension.projectFlavors, project.findProperty("python.flavor") as? String)
+            buildTask.configure { flavorRejection = flavorsWithoutVariantsRejection(extension.projectFlavors, variants) }
 
             if (variants.isEmpty()) {
                 // No declared platform variant: exactly the pre-graph behavior, unchanged. One host
@@ -345,7 +348,7 @@ class PythonPlugin : Plugin<Project> {
                 // see `selectStagingVariants` and `PythonPluginStagingTest` for the two rules and
                 // what they are grounded in. A destination with no eligible variant is left staging
                 // nothing rather than being handed a bundle built for a different platform.
-                val selected = selectStagingVariants(variants, activeBuildTypeName, Platforms.detectHostTarget())
+                val selected = selectStagingVariants(variants, activeBuildTypeName, Platforms.detectHostTarget(), activeFlavorName)
                 stageTasks.forEach { (platform, stageTask) ->
                     val variant = selected[platform]
                     if (variant == null) {
@@ -538,8 +541,9 @@ fun selectStagingVariants(
     variants: List<PythonVariant>,
     activeBuildType: String,
     hostTarget: String,
+    activeFlavor: String? = null,
 ): Map<PythonStagingPlatform, PythonVariant> {
-    val eligible = variants.filter { it.buildTypeName == activeBuildType }
+    val eligible = variants.filter { it.buildTypeName == activeBuildType && (activeFlavor == null || it.flavorName == activeFlavor) }
     return PythonStagingPlatform.values().mapNotNull { platform ->
         val candidates = eligible.filter { PythonStagingPlatform.forTarget(it.target) == platform }
         val chosen = when (platform) {
@@ -571,6 +575,8 @@ data class PythonVariant(
     val compileLevel: String,
     /** Declared platform min SDK, or `null` when the platform declares none. */
     val minSdk: Int?,
+    /** The `projectFlavors` flavor, or `null` when none are declared. */
+    val flavorName: String? = null,
 ) {
     /**
      * Appended to `buildPython`/`packagePython` to name this variant's tasks:
@@ -583,7 +589,7 @@ data class PythonVariant(
      * cross-references.
      */
     val taskSuffix: String
-        get() = platformVariantName.capitalizeFirst() + buildTypeName.capitalizeFirst()
+        get() = platformVariantName.capitalizeFirst() + flavorName.orEmpty().capitalizeFirst() + buildTypeName.capitalizeFirst()
 
     /**
      * This variant's output directory name under `build/pythonBundle/`, and the suffix on its zip.
@@ -591,7 +597,7 @@ data class PythonVariant(
      * `build/pythonBundle/androidArm64-release/`, `build/distributions/app-androidArm64-release.zip`.
      */
     val dirName: String
-        get() = "$platformVariantName-$buildTypeName"
+        get() = listOfNotNull(platformVariantName, flavorName, buildTypeName).joinToString("-")
 }
 
 /**
@@ -615,6 +621,7 @@ data class PythonVariant(
 fun resolveVariants(
     platforms: PlatformsExtension,
     buildTypes: BuildTypesContainer,
+    flavors: ProjectFlavorsContainer = ProjectFlavorsContainer(),
 ): List<PythonVariant> {
     val platformVariants = declaredPlatformVariantsWithMinSdk(platforms)
     if (platformVariants.isEmpty()) return emptyList()
@@ -623,19 +630,54 @@ fun resolveVariants(
     val buildTypeNames =
         if (declaredBuildTypes.isEmpty()) listOf(DEFAULT_BUILD_TYPE) else declaredBuildTypes.map { it.name }
     val compileLevels = declaredBuildTypes.associate { it.name to it.compileLevel }
+    // No flavors is one `null` flavor, so the names stay exactly what they were before flavors.
+    val flavorNames: List<String?> = flavors.all().map { it.name }.ifEmpty { listOf(null) }
 
     return platformVariants.flatMap { (variantName, minSdk) ->
-        buildTypeNames.map { buildTypeName ->
-            PythonVariant(
-                platformVariantName = variantName,
-                buildTypeName = buildTypeName,
-                target = PlatformTargetMapping.canonicalTarget(variantName),
-                compileLevel = compileLevels[buildTypeName].orEmpty(),
-                minSdk = minSdk,
-            )
+        flavorNames.flatMap { flavorName ->
+            buildTypeNames.map { buildTypeName ->
+                PythonVariant(
+                    platformVariantName = variantName,
+                    buildTypeName = buildTypeName,
+                    target = PlatformTargetMapping.canonicalTarget(variantName),
+                    compileLevel = compileLevels[buildTypeName].orEmpty(),
+                    minSdk = minSdk,
+                    flavorName = flavorName,
+                )
+            }
         }
     }
 }
+
+/**
+ * The flavor staging uses: `-Ppython.flavor=<name>`, else the first declared, else `null` (no
+ * flavors). An undeclared name fails loudly, as [resolveActiveBuildType] does for build types.
+ */
+fun resolveActiveFlavor(
+    flavors: ProjectFlavorsContainer,
+    requestedName: String?,
+): String? {
+    val declared = flavors.all()
+    if (declared.isEmpty()) return null
+    if (requestedName == null) return declared.first().name
+    return flavors.getByName(requestedName).name
+}
+
+/**
+ * Flavors only name and select variants, so without a platform variant they can change nothing.
+ * That is refused rather than ignored (AGENTS.md §14), as a reason the host `buildPython` fails with.
+ */
+fun flavorsWithoutVariantsRejection(
+    flavors: ProjectFlavorsContainer,
+    variants: List<PythonVariant>,
+): String? =
+    if (flavors.all().isNotEmpty() && variants.isEmpty()) {
+        "python { projectFlavors { ${flavors.all().joinToString { it.name }} } } declares flavors but no " +
+            "platform variant (androidArm64(), iosArm64(), macosArm64(), ...), so there is nothing for " +
+            "a flavor to apply to."
+    } else {
+        null
+    }
 
 /**
  * Pairs each declared platform variant with the min SDK its platform block declares
