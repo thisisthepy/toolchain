@@ -78,6 +78,59 @@ jobs:
           name: ${{ matrix.module }}-test-reports
           path: ${{ matrix.module }}/build/reports/tests/test/
 
+  # Unit tests run on Kotlin 2.x's stdlib, but a consumer runs the plugin on the kotlin-stdlib Gradle
+  # embeds (1.9.23 for Gradle 8.9). pypackpack#31 broke every suspend call that way and no unit test
+  # could see it. This job is a real consumer: it publishes packpack and the plugin, gives
+  # usage-example one real pip dependency (CI only), then installs, bundles and zips.
+  consumer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: thisisthepy/pypackpack
+          ref: develop
+          path: .ci/pypackpack
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Publish packpack and the plugin to mavenLocal
+        run: |
+          (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)
+          ./gradlew :toolchain:publishToMavenLocal --configure-on-demand --console=plain
+
+      - name: Give usage-example one real dependency
+        run: |
+          python3 - <<'PY'
+          f = "usage-example/build.gradle.kts"
+          s = open(f).read()
+          anchor = '    localLibraryPath = "python"\n'
+          assert anchor in s, "usage-example no longer sets localLibraryPath; update this step"
+          s = s.replace(anchor, anchor + '    sourceSets { getByName("commonMain").dependencies { implementation("iniconfig") } }\n', 1)
+          open(f, "w").write(s)
+          PY
+
+      - name: Install, bundle and zip as a consumer
+        run: |
+          ./gradlew :usage-example:installPythonDependencies :usage-example:buildPython :usage-example:packagePython \
+            --console=plain > consumer.log 2>&1 || { cat consumer.log; exit 1; }
+          cat consumer.log
+          grep -q "iniconfig" consumer.log || { echo "the dependency was not installed"; exit 1; }
+          ls -la usage-example/build/distributions/
+
   guide:
     runs-on: ubuntu-latest
     steps:
