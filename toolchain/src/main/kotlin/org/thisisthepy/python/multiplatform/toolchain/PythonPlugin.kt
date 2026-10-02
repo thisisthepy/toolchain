@@ -121,7 +121,7 @@ class PythonPlugin : Plugin<Project> {
                 packageDir = resolvedPackageDir
             }
 
-            // `python { platforms { ... } }` (`DSLPlatforms.kt`) was read by nothing at all until now
+            // `python { }` platform (`DSLPlatforms.kt`) was read by nothing at all until now
             // -- `docs/ecosystem.md`'s gap list and this round's own prior report both name it
             // unwired. `validateDeclaredPlatforms` closes the mapping gap the prior round stopped at
             // ("declared Android variants ... have no entry in Platforms.SUPPORTED_TARGETS"): every
@@ -146,7 +146,7 @@ class PythonPlugin : Plugin<Project> {
                 val mismatches = findPlatformsWithoutEnabledKotlinTarget(extension.platforms, enabledTargetNames)
                 mismatches.forEach { variantName ->
                     project.logger.warn(
-                        "python { platforms { ... } } declares '$variantName', but Kotlin target " +
+                        "python { } declares '$variantName', but Kotlin target " +
                             "'${PlatformTargetMapping.kotlinTargetName(variantName)}' is not enabled " +
                             "in this project's kotlin { } block.",
                     )
@@ -229,7 +229,7 @@ class PythonPlugin : Plugin<Project> {
             // value or rejects it; this is what finally *routes* one. See `resolveVariants` and
             // `PythonPluginVariantGraphTest` for the design and its grounds (one task per variant,
             // not one task looping variants; `<verb><PlatformVariant><BuildType>` naming; opt-in via
-            // the `platforms` block so the existing chain is untouched).
+            // a declared platform variant so the existing chain is untouched).
             // ---------------------------------------------------------------------------------
             val variants = resolveVariants(extension.platforms, extension.buildTypes)
             val bundleRoot = File(project.layout.buildDirectory.get().asFile, "pythonBundle")
@@ -240,7 +240,7 @@ class PythonPlugin : Plugin<Project> {
             val activeBuildTypeName = resolveActiveBuildType(extension.buildTypes, requestedBuildType)
 
             if (variants.isEmpty()) {
-                // No `platforms { }` block: exactly the pre-graph behavior, unchanged. One host
+                // No declared platform variant: exactly the pre-graph behavior, unchanged. One host
                 // target, and the build type picked by a project property because there is no
                 // variant task name to ask for -- `-Ppython.buildType=release`, defaulting to
                 // `"debug"`. `resolveActiveBuildType` fails loudly on an undeclared name rather than
@@ -253,7 +253,7 @@ class PythonPlugin : Plugin<Project> {
 
                 // Every destination gets the one host bundle, because that is the only bundle that
                 // exists. It carries the *host* family's `src/<family>` overlay, which is wrong for
-                // Android and iOS -- so it is a warning, not silence: declaring `platforms { }` is
+                // Android and iOS -- so it is a warning, not silence: declaring a platform variant is
                 // what makes each destination get a bundle built for it.
                 val hostTarget = Platforms.detectHostTarget()
                 stageTasks.forEach { (platform, stageTask) ->
@@ -265,7 +265,7 @@ class PythonPlugin : Plugin<Project> {
                     if (PythonStagingPlatform.forTarget(hostTarget) != platform) {
                         project.logger.info(
                             "Staging the host bundle ($hostTarget) into ${platform.name.lowercase()}'s " +
-                                "packaging step: no python { platforms { ... } } block is declared, so " +
+                                "packaging step: no platform variant is declared in python { }, so " +
                                 "there is no ${platform.name.lowercase()} bundle to stage instead.",
                         )
                     }
@@ -337,7 +337,7 @@ class PythonPlugin : Plugin<Project> {
                     val variant = selected[platform]
                     if (variant == null) {
                         project.logger.info(
-                            "No python { platforms { ... } } variant of build type " +
+                            "No python { } platform variant of build type " +
                                 "'$activeBuildTypeName' maps to ${platform.name.lowercase()}, so " +
                                 "${STAGE_TASK + platform.taskSuffix} stages nothing.",
                         )
@@ -541,7 +541,7 @@ fun selectStagingVariants(
 const val DEFAULT_BUILD_TYPE = "debug"
 
 /**
- * One node of the per-variant task graph: a declared `python { platforms { ... } }` variant crossed
+ * One node of the per-variant task graph: a declared `python { }` platform variant crossed
  * with a declared `python { buildTypes { ... } }` entry.
  *
  * Both dimensions are needed. The platform variant decides the `pypackpack` target triple and the
@@ -587,7 +587,7 @@ data class PythonVariant(
  * `PythonPluginVariantGraphTest` for the design record, and `PythonPlugin.apply` for the wiring.
  *
  * Empty when no platform variant is declared, which is deliberately the case for every consumer
- * that exists today (`usage-example` declares no `platforms` block). The graph is opt-in: the
+ * that exists today (`usage-example` declares no platform variant). The graph is opt-in: the
  * platform block is what creates more than one target, and without it there is exactly one -- the
  * host -- built by the single `buildPython` task exactly as before.
  *
@@ -651,7 +651,7 @@ private fun normalizeMinSdk(
     propertyName: String,
 ): Int? {
     require(declared >= 0) {
-        "python { platforms { ... } } declares a negative $propertyName ($declared); " +
+        "python { } declares a negative $propertyName ($declared); " +
             "a min SDK must be zero (undeclared) or positive."
     }
     return declared.takeIf { it > 0 }
@@ -805,7 +805,7 @@ fun resolveBuildLevel(compileLevel: String): String {
 }
 
 /**
- * Validates every variant declared under `python { platforms { ... } }` maps to a real `pypackpack`
+ * Validates every variant declared under `python { }` platform maps to a real `pypackpack`
  * target triple (via [org.thisisthepy.python.multiplatform.toolchain.dsl.PlatformTargetMapping]),
  * factored out of [PythonPlugin.apply] the same way [resolveActiveBuildType] and
  * [collectInstallDependencies] were -- see `PythonPluginPlatformsTest`.
@@ -828,7 +828,7 @@ fun validateDeclaredPlatforms(platforms: PlatformsExtension): List<String> {
 }
 
 /**
- * Cross-references declared `python { platforms { ... } }` variants against a project's actually
+ * Cross-references declared `python { }` platform variants against a project's actually
  * enabled Kotlin Multiplatform targets ("Check Kotlin-side enabled build target", Issue #2's other
  * `platforms` sub-item), factored out of [PythonPlugin.apply] so it can run without a Gradle
  * [org.gradle.api.Project] -- see `PythonPluginPlatformsTest`.

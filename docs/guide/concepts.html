@@ -49,7 +49,7 @@ codePushPython              validation only; reports that upload is not implemen
 
 <section>
 <h2><span data-lang="en">Variants</span><span data-lang="ko">변형</span></h2>
-<p data-lang="en">Without a <code>platforms { }</code> block there is one chain, built for the host. With one, every declared platform variant is crossed with every build type, and each pair gets its own task and its own output directory:</p><p data-lang="ko"><code>platforms { }</code> 블록이 없으면 호스트용 사슬 하나뿐입니다. 있으면 선언된 플랫폼 변형마다 빌드 타입이 곱해지고, 각 쌍이 자기 태스크와 출력 디렉터리를 가집니다.</p>
+<p data-lang="en">Without a declared platform variant there is one chain, built for the host. With one, every declared platform variant is crossed with every build type, and each pair gets its own task and its own output directory:</p><p data-lang="ko">선언된 플랫폼 변형이 없으면 호스트용 사슬 하나뿐입니다. 있으면 선언된 플랫폼 변형마다 빌드 타입이 곱해지고, 각 쌍이 자기 태스크와 출력 디렉터리를 가집니다.</p>
 <pre><code class="language-text">buildPythonAndroidArm64Debug     → build/pythonBundle/androidArm64-debug/
 packagePythonAndroidArm64Debug   → build/distributions/app-androidArm64-debug.zip
 buildPythonMacosArm64Release     → build/pythonBundle/macosArm64-release/</code></pre>

@@ -33,7 +33,7 @@ owns the Gradle vocabulary in between.
 
 ## ✨ Features
 
-- 🧩 **One DSL block** — `compileSdk`, `platforms`, `buildTypes`, `sourceSets` and `packaging`, all
+- 🧩 **One DSL block** — `compileSdk`, platforms, `buildTypes`, `sourceSets` and `packaging`, all
   inside `python { }`.
 - 📦 **Real dependency installs** — `implementation("pkg")` and `integration("pkg")` become a real
   `uv add` through `pypackpack`.
@@ -84,10 +84,10 @@ Want one bundle per target? Declare platforms and build types:
 
 ```kotlin
 python {
-    platforms {
-        android { androidSdk = 24; variants(androidArm64(), androidX64()) }
-        desktop { variants(macosArm64(), linuxX64()) }
-    }
+    android("android") { androidSdk = 24 }
+    listOf(androidArm64(), androidX64())
+    desktop()
+    listOf(macosArm64(), linuxX64())
     buildTypes {
         getByName("debug") { compileLevel = "instant" }
     }

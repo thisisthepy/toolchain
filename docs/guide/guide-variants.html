@@ -29,22 +29,22 @@
 <section>
 <h2><span data-lang="en">Declare platforms</span><span data-lang="ko">플랫폼 선언</span></h2>
 <pre><code class="language-kotlin">python {
-    platforms {
-        android {
-            androidSdk = 24                       // forwarded to pypackpack as minSdk
-            variants(androidArm64(), androidX64())
-        }
-        ios {
-            iosSdk = 14
-            variants(iosArm64(), iosSimulatorArm64())
-        }
-        desktop {
-            variants(macosArm64(), linuxX64(), mingwX64())
-        }
+    android(&quot;android&quot;) {
+        androidSdk = 24                           // forwarded to pypackpack as minSdk
     }
+    listOf(androidArm64(), androidX64())
+
+    ios {
+        iosSdk = 14
+    }
+    listOf(iosArm64(), iosSimulatorArm64())
+
+    desktop()
+    listOf(macosArm64(), linuxX64(), mingwX64())
 }</code></pre>
+<p data-lang="en">Calling a variant function declares that variant; <code>listOf(...)</code> only groups the calls. A variant called without its platform block gets that platform with its defaults.</p><p data-lang="ko">변형 함수를 부르는 것이 곧 그 변형을 선언하는 것이고, <code>listOf(...)</code> 는 호출을 묶어 보여 줄 뿐입니다. 플랫폼 블록 없이 부른 변형은 그 플랫폼의 기본값을 씁니다.</p>
 <div class="table-wrap"><table><thead><tr><th><span data-lang="en">Variant</span><span data-lang="ko">변형</span></th><th><span data-lang="en">pypackpack triple</span><span data-lang="ko">pypackpack 트리플</span></th><th><span data-lang="en">Kotlin target</span><span data-lang="ko">Kotlin 타깃</span></th></tr></thead><tbody><tr><td><code>androidArm64</code></td><td><code>aarch64-linux-android</code></td><td><code>androidNativeArm64</code></td></tr><tr><td><code>androidX64</code></td><td><code>x86_64-linux-android</code></td><td><code>androidNativeX64</code></td></tr><tr><td><code>iosArm64</code></td><td><code>arm64-apple-ios</code></td><td><code>iosArm64</code></td></tr><tr><td><code>iosX64</code></td><td><code>x86_64-apple-ios-simulator</code></td><td><code>iosX64</code></td></tr><tr><td><code>iosSimulatorArm64</code></td><td><code>arm64-apple-ios-simulator</code></td><td><code>iosSimulatorArm64</code></td></tr><tr><td><code>macosX64</code> · <code>macosArm64</code></td><td><code>x86_64-apple-darwin</code> · <code>aarch64-apple-darwin</code></td><td><span data-lang="en">same name</span><span data-lang="ko">같은 이름</span></td></tr><tr><td><code>linuxX64</code> · <code>linuxArm64</code></td><td><code>x86_64-unknown-linux-gnu</code> · <code>aarch64-unknown-linux-gnu</code></td><td><span data-lang="en">same name</span><span data-lang="ko">같은 이름</span></td></tr><tr><td><code>mingwX64</code></td><td><code>x86_64-pc-windows-msvc</code></td><td><code>mingwX64</code></td></tr></tbody></table></div>
-<div class="note"><p data-lang="en"><code>androidArm32()</code> and <code>androidX86()</code> exist in the DSL but are rejected: pypackpack defines no triple for them. A declared variant whose Kotlin target your <code>kotlin { }</code> block does not enable produces a warning.</p><p data-lang="ko"><code>androidArm32()</code> 와 <code>androidX86()</code> 은 DSL 에 있지만 거부됩니다. pypackpack 에 해당 트리플이 없기 때문입니다. <code>kotlin { }</code> 블록에서 켜지 않은 Kotlin 타깃의 변형을 선언하면 경고가 납니다.</p></div>
+<div class="note"><p data-lang="en"><code>androidArm32()</code> and <code>androidX86()</code> do not compile: Android follows CPython's official support (PEP 738), which is arm64 and x86_64 only. A declared variant whose Kotlin target your <code>kotlin { }</code> block does not enable produces a warning.</p><p data-lang="ko"><code>androidArm32()</code> 와 <code>androidX86()</code> 은 컴파일되지 않습니다. 안드로이드는 CPython 공식 지원(PEP 738)을 따르며, 그 범위는 arm64 와 x86_64 뿐입니다. <code>kotlin { }</code> 블록에서 켜지 않은 Kotlin 타깃의 변형을 선언하면 경고가 납니다.</p></div>
 </section>
 
 <section>

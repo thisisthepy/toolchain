@@ -17,8 +17,10 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 
 **구현됨 (테스트 있음)**
 - `compileSdk` 버전 문자열 파싱 (alpha / rc / normal 채널)
-- `platforms { }` → `pypackpack` 타깃 트리플 매핑, Kotlin 타깃 대조 경고, 최소 SDK 전달.
-  `androidArm32`, `androidX86` 은 명시적으로 거부
+- `python { }` 최상위의 `android("android") { }` / `ios { }` / `desktop()` 과 변형 호출
+  (`androidArm64()` 등) → `pypackpack` 타깃 트리플 매핑, Kotlin 타깃 대조 경고, 최소 SDK 전달.
+  안드로이드는 CPython 공식 지원(PEP 738)대로 arm64·x86_64 만 — `androidArm32()`/`androidX86()` 은
+  이유를 밝히는 컴파일 오류
 - `debug` / `release` 빌드 타입, `-Ppython.buildType`, 변형 × 빌드 타입 태스크 그래프
 - `compileLevel`: `instant` 만 지원, 나머지는 해당 변형의 태스크에서만 실패
 - `commonMain` 의 `srcDirs` / `metaDirs` / `libDirs` 전달
@@ -72,11 +74,11 @@ Python 테스트는 없다. 루트 `pyproject.toml` 이 가리키는 Python 패�
 
 ## 열린 질문
 
-1. 서버에 없는 `compileSdk` 버전을 자동 빌드할 것인가 — 예시 파일은 "자동으로 빌드 시도",
-   이슈 #2 는 "do not support automatic build for new python release". 서로 어긋난다.
-2. 플랫폼 DSL 모양 — 예시 파일의 최상위 `android("android") { }` + `listOf(...)` 인가, 코드의
-   `platforms { android { variants(...) } }` 인가.
-3. `pip { repositories { central / local / jit } }` 이름 — 예시 파일 철자를 따를 것인가.
+1. ~~서버에 없는 `compileSdk` 버전 자동 빌드~~ — **결정(2026-10-03)**: 문자열로 주면 서버에 없을 때
+   자동 빌드, `PY3_11_9_ALPHA` 같은 Enum 으로 주면 서버에 있는 버전만. (구현은 계획)
+2. ~~플랫폼 DSL 모양~~ — **결정(2026-10-03)**: 예시 파일 모양(최상위 `android("android") { }` +
+   `listOf(...)`). 안드로이드 변형은 CPython 공식 지원(arm64·x86_64)만. #7
+3. ~~`pip { repositories { central / local / jit } }` 이름~~ — **결정(2026-10-03)**: 예시 파일 철자.
 4. 예시 파일에 없는 `localLibraryPath`, `-Ppython.buildType`, `adb` 기반 핫 리로드를 유지할 것인가.
 5. 참조되지 않는 코드(`PythonMultiplatformPlugin.kt`, `reslover.kt`, `decompileKotlinMeta.kt`,
    `PythonLocalLoader.kt`, `DependencyType.kt`, `FrozenPackConfig` 등)와 빈 `pyproject.toml` 을
