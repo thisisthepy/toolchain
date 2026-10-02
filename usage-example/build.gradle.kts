@@ -39,6 +39,8 @@ python {
     // The example build file's pip block, minus `jit` (rejected until pypackpack builds recipes).
     // PyPI repeated as the default index changes nothing, but it makes the wiring part of a real build.
     defaultConfig {
+        versionCode = 1
+        versionName = "1.0.0"
         pip {
             autoUpdate = false
             repositories {

@@ -53,8 +53,9 @@ open class PythonExtension @Inject constructor(objects: ObjectFactory) {
 }
 
 open class DefaultConfig {
-    var versionCode: Int = 1
-    var versionName: String = "1.0.0"
+    /** The Python payload's version, written to the bundle manifest; `null` when undeclared. */
+    var versionCode: Int? = null
+    var versionName: String? = null
     val pip: PipExtension = PipExtension()
 
     fun pip(action: PipExtension.() -> Unit) = pip.apply(action)

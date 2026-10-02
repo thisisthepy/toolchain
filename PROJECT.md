@@ -30,6 +30,7 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 - `implementation` / `integration` 의존성 → `uv add` (`pypackpack` 백엔드)
 - `defaultConfig { pip { autoUpdate; repositories { central / local } } }` → `uv add` 옵션
   (`--default-index`·`--index` / `--find-links` / `--upgrade`). `jit` 는 설치 태스크에서만 이유와 함께 거부
+- `defaultConfig { versionCode, versionName }` → 페이로드 버전으로 번들 manifest 에 기록(`"versionName"`/`"versionCode"`)
 - `pypackpack` `ResourceBundler` 로 번들링
 - 플러그인 적용: `python` 확장과 모든 태스크 등록 (`PythonPluginApplyTest`)
 - `packagePython` zip: 파일명·위치·항목, 번들 디렉터리가 없으면 실패 (`AssemblePythonPackageTaskTest`)
@@ -48,7 +49,7 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 **계획 (선언만 있거나 없음)**
 - `bytecode` / `native` / `mixed` 컴파일 레벨 (`pypackpack` 쪽 선행 필요)
 - `embedLevel` 의미, `useCodeMinifier`, `excludeMetaclass`, `buildFeatures`,
-  `versionCode`/`versionName`, `pip { jit }`, `integration()` 의 `KLIBDEPENS` 검사,
+  `pip { jit }`, `integration()` 의 `KLIBDEPENS` 검사,
   `compileSdk` 로 인터프리터 선택
 
 ## 마일스톤 (2026-10-03 확정, GitHub 마일스톤과 연결)

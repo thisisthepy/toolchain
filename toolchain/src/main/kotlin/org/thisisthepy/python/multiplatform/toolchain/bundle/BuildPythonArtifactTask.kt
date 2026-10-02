@@ -49,6 +49,15 @@ open class BuildPythonArtifactTask : DefaultTask() {
     @get:Optional
     var pythonSdkRejection: String? = null
 
+    /** `defaultConfig { versionName; versionCode }`, the payload's version; forwarded to the manifest. */
+    @get:Input
+    @get:Optional
+    var versionName: String? = null
+
+    @get:Input
+    @get:Optional
+    var versionCode: Int? = null
+
     /** Why declared `projectFlavors` cannot apply (no platform variant); fails like [pythonSdkRejection]. */
     @get:Input
     @get:Optional
@@ -158,7 +167,7 @@ open class BuildPythonArtifactTask : DefaultTask() {
         // during configuration -- see `compileLevel`'s kdoc.
         val resolvedBuildLevel = resolveBuildLevel(compileLevel)
 
-        val result = bundleWithPackpack(source, target, buildType, bundleDir, resolvedBuildLevel, minSdk, metaDirs, libDirs)
+        val result = bundleWithPackpack(source, target, buildType, bundleDir, resolvedBuildLevel, minSdk, metaDirs, libDirs, versionName, versionCode)
         logger.lifecycle(
             "Bundled ${result.fileCount} file(s) for Python '$pythonVersion' via packpack's " +
                 "'${result.bundleType.id}' bundler into ${result.outputDir} " +
@@ -194,6 +203,8 @@ fun bundleWithPackpack(
     minSdk: Int? = null,
     metaDirs: List<File> = emptyList(),
     libDirs: List<File> = emptyList(),
+    versionName: String? = null,
+    versionCode: Int? = null,
 ): BundleResult {
     val request =
         BundleRequest(
@@ -206,6 +217,8 @@ fun bundleWithPackpack(
             minSdk = minSdk,
             metaDirs = metaDirs,
             libDirs = libDirs,
+            versionName = versionName,
+            versionCode = versionCode,
         )
     return BundlerInterface.create(BundleType.RESOURCE)
         .bundle(request)

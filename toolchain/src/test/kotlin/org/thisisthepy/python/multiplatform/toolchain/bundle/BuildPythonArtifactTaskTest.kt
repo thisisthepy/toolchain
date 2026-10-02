@@ -85,6 +85,29 @@ class BuildPythonArtifactTaskTest {
     }
 
     /**
+     * `defaultConfig { versionName; versionCode }` is the Python payload's version (#11), recorded
+     * by pypackpack's `ResourceBundler` as `"versionName"` / `"versionCode"` beside the package's own
+     * `"version"`.
+     */
+    @Test
+    fun `bundleWithPackpack forwards the payload version to packpack's manifest`() {
+        val outputDir = kotlin.io.path.createTempDirectory("packpack-bundle-out-version").toFile()
+
+        val result = bundleWithPackpack(
+            packageDir = fixturePackageDir(),
+            target = "aarch64-apple-darwin",
+            buildType = "debug",
+            outputDir = outputDir,
+            versionName = "1.0.0",
+            versionCode = 1,
+        )
+
+        val manifest = result.manifestFile.readText()
+        assertTrue(manifest.contains("\"versionName\": \"1.0.0\""), manifest)
+        assertTrue(manifest.contains("\"versionCode\": 1"), manifest)
+    }
+
+    /**
      * `python { sourceSets { commonMain { metaDirs(...) } } }` had nowhere to go until `pypackpack`'s
      * `BundleRequest.metaDirs` existed for it to reach (see `PythonPluginSourceSetTest`'s
      * `resolveMetaDirs`, the pure function that reads the DSL). This proves the value does not just

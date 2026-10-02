@@ -76,7 +76,12 @@ spelled as the example build file spells it (INTENT §4.3), becomes options of t
 `plugin/dependency/lang/python/PipRepositories.kt`; `ptest/dependency/lang/python/PipRepositoriesTest.kt`
 (including a real `uv add` sent to the declared index).
 → *`jit` / `localRecipes`: **planned**, needs a recipe build in pypackpack.*
-→ *`versionCode`, `versionName`: **planned** — nothing reads them (#11).*
+`versionCode` / `versionName` are the Python payload's version (decided 2026-10-03): handed to every
+`buildPython…` task and forwarded to pypackpack's `BundleRequest`, which records them in
+`resource-manifest.json` as `"versionName"` / `"versionCode"` beside the package's own `"version"`.
+Undeclared stays `null`: nothing is written, and no default is invented. Code push reads them later.
+**Status: implemented** — `ptest/PythonPluginPayloadVersionTest.kt` (host and variant tasks),
+`ptest/bundle/BuildPythonArtifactTaskTest.kt` (the real manifest).
 
 ### 1.4 Platforms
 Declared directly inside `python { }`, as the example build file writes them:
