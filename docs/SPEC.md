@@ -189,6 +189,9 @@ installation are skipped). Every `metaDirs` and `libDirs` entry is forwarded to 
 `BundleRequest.metaDirs` / `libDirs` — `metaDirs` subject to `buildFeatures { metaclass }` and
 `excludeMetaclass` (§1.16, §1.7).
 
+The `by getting { … }` block is applied at declaration (`provideDelegate`), so it takes effect even if
+the property is never read (issue #35); see `SourceSetGettingDelegateTest`.
+
 **Status: implemented** — `resolvePackageDir`, `resolveMetaDirs`, `resolveLibDirs`;
 `ptest/PythonPluginSourceSetTest.kt`, `ptest/bundle/BuildPythonArtifactTaskTest.kt`.
 
@@ -244,7 +247,21 @@ finds. `installPythonDependencies` still `uv add`s every source set for the host
 no host wheel fails it even if only `androidMain` declares it. `pypackpack`'s `ResourceBundler` drops
 `.pyd` files and directories named `build`/`dist`, so a Windows extension module does not reach a
 `mingwX64` bundle.*
-→ *`integration()` checking the wheel for `KLIBDEPENS` and warning when absent: **planned**.*
+
+**`KLIBDEPENS` check.** `installPythonDependencies` also carries the `integration` entries on their own (`integrationsList`). After the install it
+looks in the package directory's venv (`<package dir>/.venv`: `lib/python3.X/site-packages`, or
+`Lib/site-packages` on Windows) for each integration's `<name>-<version>.dist-info/` directory, matching
+the name under PEP 503 normalization (case-insensitive; runs of `-`, `_`, `.` equal; version specifiers,
+extras and markers in the spec are ignored). A package whose dist-info has no `KLIBDEPENS` file (or that
+is not found) gets a warning naming it and suggesting `implementation(...)`; it is never a failure. If no
+`site-packages` exists the task warns that it cannot check.
+*Assumption:* no repository defines `KLIBDEPENS`; it is taken to be a file of that name inside the
+wheel's `*.dist-info/` directory, and only its presence is checked, not its content.
+
+KLIBDEPENS check — **Status: implemented** — `plugin/dependency/lang/python/InstallDependenciesTask.kt`;
+`plugin/dependency/lang/python/KlibDepens.kt`; `ptest/PythonPluginDependencyTest.kt`,
+`ptest/PythonPluginIntegrationListTest.kt`, `ptest/dependency/lang/python/KlibDepensTest.kt` (fake
+site-packages trees), `ptest/dependency/lang/python/InstallDependenciesTaskTest.kt` (needs `uv` and network).
 
 ### 1.11 Bundling — `buildPython`
 Builds a `pypackpack` `BundleRequest` (package dir, target triple, build type, build level, output
