@@ -52,11 +52,14 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 - iOS: 스테이징만 되고 Xcode 프로젝트에 연결되지 않음
 - 핫 리로드: Android 전용 `adb push` + 브로드캐스트. `serverHost`, `cert` 는 검증만
 - 코드 푸시: 검증과 안내 태스크만, 업로드 없음
+- `embedLevel`: 플랫폼별 0/1/2 결정(Android·iOS 는 경고와 함께 2 로 상향), `python.embedLevel` 속성 재정의,
+  `<zip>.embed.json` 기록까지 구현 (`EmbedLevelTest`, `PythonPluginEmbedLevelTest`). 인터프리터를 넣거나 빼는 일은
+  인터프리터 확보(#18, pypackpack#21) 가 없어 아직 안 함 — 레벨 1·2 는 페이로드를 바꾸지 않음
 - 의존성이 소스셋별로 구분되지 않음 (전부 하나의 목록으로 설치)
 
 **계획 (선언만 있거나 없음)**
 - `native` / `mixed` 컴파일 레벨 (pypackpack#19 선행 필요)
-- `embedLevel` 의미, `useCodeMinifier`,
+- `useCodeMinifier`,
   `pip { jit }`, `integration()` 의 `KLIBDEPENS` 검사,
   `compileSdk` 로 인터프리터 선택
 

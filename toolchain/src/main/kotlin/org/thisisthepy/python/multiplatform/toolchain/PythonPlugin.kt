@@ -61,7 +61,6 @@ class PythonPlugin : Plugin<Project> {
         val packageTask = project.tasks.register<AssemblePythonPackageTask>(PACKAGE_TASK) {
             group = TASK_GROUP
             description = "Packages the Python application"
-            embedLevel = extension.packaging.embedLevel
             fileName = extension.packaging.fileName
         }
 
@@ -93,6 +92,17 @@ class PythonPlugin : Plugin<Project> {
             // A version python-multiplatform does not provide is not a configuration failure: it is
             // carried to the bundling tasks as `pythonSdkRejection` and fails them there (§14).
             val pythonSdk = resolvePythonSdk(extension.compileSdk)
+            val embedOverride = project.findProperty(EMBED_LEVEL_PROPERTY)?.toString()
+            // A bad value is a configuration mistake with no valid task to register: fail here.
+            val hostEmbedFamily = Platforms.getPlatformFamily(Platforms.detectHostTarget())
+            val (hostEmbedLevel, hostEmbedWarning) =
+                resolveEmbedLevel(extension.packaging.embedLevel, embedOverride, hostEmbedFamily)
+            hostEmbedWarning?.let { project.logger.warn(it) }
+            packageTask.configure {
+                embedLevel = hostEmbedLevel
+                embedFamily = hostEmbedFamily
+                embedWarning = hostEmbedWarning
+            }
             if (pythonSdk != null) {
                 project.logger.lifecycle(
                     "Configured Python compileSdk: ${extension.compileSdk} " +
@@ -359,13 +369,20 @@ class PythonPlugin : Plugin<Project> {
                             dependsOn(installTask)
                         }
 
+                    val variantFamily = Platforms.getPlatformFamily(variant.target)
+                    val (variantEmbedLevel, variantEmbedWarning) =
+                        resolveEmbedLevel(extension.packaging.embedLevel, embedOverride, variantFamily)
+                    variantEmbedWarning?.let { project.logger.warn("${variant.dirName}: $it") }
+
                     val variantPackageTask =
                         project.tasks.register<AssemblePythonPackageTask>(PACKAGE_TASK + variant.taskSuffix) {
                             group = TASK_GROUP
                             description =
                                 "Packages the Python bundle for ${variant.platformVariantName} " +
                                     "(${variant.buildTypeName})"
-                            embedLevel = extension.packaging.embedLevel
+                            embedLevel = variantEmbedLevel
+                            embedFamily = variantFamily
+                            embedWarning = variantEmbedWarning
                             fileName = extension.packaging.fileName
                             bundleDir = variantBundleDir
                             variantName = variant.dirName

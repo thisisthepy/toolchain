@@ -1,7 +1,9 @@
 package org.thisisthepy.python.multiplatform.toolchain.bundle
 
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.bundling.Zip
+import org.thisisthepy.python.multiplatform.toolchain.embedRecordJson
 import java.io.File
 
 
@@ -10,8 +12,21 @@ open class AssemblePythonPackageTask : Zip() {
     // properties: Gradle 8's task property validation (execution-time) rejects an unannotated
     // public task property, and `Zip`'s own annotated properties (`archiveFileName`, etc.) do not
     // cover these two custom ones. `@Internal` since neither participates in up-to-date checking.
-    @get:Internal
+    /**
+     * The *resolved* level (`resolveEmbedLevel`), not the declared one: an `@Input`, so changing it
+     * re-packages. Levels 1 and 2 do not yet change the payload (interpreter acquisition is #18 and
+     * pypackpack#21); the level is logged and recorded in `<archive>.embed.json` beside the zip.
+     */
+    @get:Input
     var embedLevel: Int = 0
+
+    /** The platform family the level was resolved for (`macos`, `android`, ...). */
+    @get:Input
+    var embedFamily: String = "unknown"
+
+    /** Why the level was raised, or `null`. Logged and recorded; not an up-to-date input. */
+    @get:Internal
+    var embedWarning: String? = null
 
     @get:Internal
     var fileName: String = "app"
@@ -49,6 +64,12 @@ open class AssemblePythonPackageTask : Zip() {
         from(project.provider { resolvedBundleDir() })
         archiveFileName.set(project.provider { variantName?.let { "$fileName-$it.zip" } ?: "$fileName.zip" })
         destinationDirectory.set(File(project.layout.buildDirectory.get().asFile, "distributions"))
+        outputs.file(project.provider { embedRecordFile() })
+    }
+
+    private fun embedRecordFile(): File {
+        val archive = archiveFileName.get().removeSuffix(".zip")
+        return File(destinationDirectory.get().asFile, "$archive.embed.json")
     }
 
     /** `null` [bundleDir] means the pre-variant-graph default, `build/pythonBundle`. */
@@ -56,7 +77,7 @@ open class AssemblePythonPackageTask : Zip() {
         bundleDir ?: File(project.layout.buildDirectory.get().asFile, "pythonBundle")
 
     override fun copy() {
-        logger.lifecycle("Packaging Python application with embedLevel: $embedLevel and fileName: $fileName")
+        logger.lifecycle("Packaging Python application with embedLevel: $embedLevel ($embedFamily) and fileName: $fileName")
 
         val bundleDir = resolvedBundleDir()
         if (!bundleDir.exists()) {
@@ -65,5 +86,8 @@ open class AssemblePythonPackageTask : Zip() {
         }
 
         super.copy()
+
+        embedWarning?.let { logger.warn(it) }
+        embedRecordFile().writeText(embedRecordJson(embedLevel, embedFamily, embedWarning))
     }
 }
