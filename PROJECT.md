@@ -63,10 +63,13 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 - `installPythonDependencies`(`uv add`)는 여전히 모든 소스셋을 호스트용으로 설치하므로, 호스트 wheel 이 없는
   `androidMain` 전용 패키지는 이 태스크에서 실패할 수 있음. `ResourceBundler` 가 `.pyd` 를 빼므로 Windows
   확장 모듈은 `mingwX64` 번들에 들어가지 않음
+- `embedLevel`: 플랫폼별 0/1/2 결정(Android·iOS 는 경고와 함께 2 로 상향), `python.embedLevel` 속성 재정의,
+  `<zip>.embed.json` 기록까지 구현 (`EmbedLevelTest`, `PythonPluginEmbedLevelTest`). 인터프리터를 넣거나 빼는 일은
+  인터프리터 확보(#18, pypackpack#21) 가 없어 아직 안 함 — 레벨 1·2 는 페이로드를 바꾸지 않음
 
 **계획 (선언만 있거나 없음)**
 - `native` / `mixed` 컴파일 레벨 (pypackpack#19 선행 필요)
-- `embedLevel` 의미, `useCodeMinifier`,
+- `useCodeMinifier`,
   `pip { jit }`,
   `compileSdk` 로 인터프리터 선택
 
