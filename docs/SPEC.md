@@ -189,6 +189,9 @@ installation are skipped). Every `metaDirs` and `libDirs` entry is forwarded to 
 `BundleRequest.metaDirs` / `libDirs` — `metaDirs` subject to `buildFeatures { metaclass }` and
 `excludeMetaclass` (§1.16, §1.7).
 
+The `by getting { … }` block is applied at declaration (`provideDelegate`), so it takes effect even if
+the property is never read (issue #35); see `SourceSetGettingDelegateTest`.
+
 **Status: implemented** — `resolvePackageDir`, `resolveMetaDirs`, `resolveLibDirs`;
 `ptest/PythonPluginSourceSetTest.kt`, `ptest/bundle/BuildPythonArtifactTaskTest.kt`.
 
