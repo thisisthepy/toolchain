@@ -5,7 +5,10 @@ import javax.inject.Inject
 
 
 open class PythonExtension @Inject constructor(objects: ObjectFactory) {
-    var compileSdk: String = ""
+    /** `compileSdk = "3.14.7"` or `compileSdk = PY3_14_7`; see [PythonSdk]. */
+    val compileSdk: PythonSdk = PythonSdk()
+    val PY3_14_7: PythonSdkVersion = PythonSdkVersion.PY3_14_7
+    val PY3_13_0: PythonSdkVersion = PythonSdkVersion.PY3_13_0
     var localLibraryPath: String? = null
 
     val defaultConfig: DefaultConfig = DefaultConfig()
