@@ -105,9 +105,11 @@ class PythonPlugin : Plugin<Project> {
             val pythonVersionLabel = pythonSdk?.version?.toString() ?: "default"
             val payloadVersionName = extension.defaultConfig.versionName
             val payloadVersionCode = extension.defaultConfig.versionCode
+            val compileSdkLabel = pythonSdk?.version?.toString()
             buildTask.configure {
                 pythonVersion = pythonVersionLabel
                 pythonSdkRejection = pythonSdk?.rejection
+                compileSdkVersion = compileSdkLabel
                 versionName = payloadVersionName
                 versionCode = payloadVersionCode
             }
@@ -335,6 +337,7 @@ class PythonPlugin : Plugin<Project> {
                                     "(${variant.target}, ${variant.buildTypeName})"
                             pythonVersion = pythonVersionLabel
                             pythonSdkRejection = pythonSdk?.rejection
+                            compileSdkVersion = compileSdkLabel
                             versionName = payloadVersionName
                             versionCode = payloadVersionCode
                             packageDir = resolvedPackageDir
@@ -883,25 +886,31 @@ fun collectInstallDependencies(sourceSets: List<SourceSetConfig>): List<String> 
  * configuration-time throw fails every variant, and Issue #2 asks for the unsupported variant alone
  * to be refused. See that task's `compileLevel` kdoc.
  *
- * `pypackpack`'s `ResourceBundler` (`bundle/resource/ResourceBundler.kt`) implements exactly one
- * build level: `require(request.buildLevel == "instant")` rejects everything else, because
- * `bytecode`/`native`/`mixed` all need the compile stage's output, which `build` does not yet hand to
- * `bundle`. `BuildType.compileLevel` defaults to `""` for both `DebugBuildType` and
- * `ReleaseBuildType`, which is why blank resolves to `"instant"` here -- that keeps `usage-example`
- * (which never sets `compileLevel`) building exactly as it did when this value was hard-coded. A
- * `compileLevel` naming anything else -- `(플러그인예시)build.gradle.kts`'s own reference DSL writes
- * `compileLevel = "bytecode"` -- now fails loudly instead of compiling and being silently ignored,
- * the same explicit-rejection shape [org.thisisthepy.python.multiplatform.toolchain.dsl.PlatformTargetMapping]
- * uses for target variants `pypackpack` cannot build for.
+ * `pypackpack`'s `ResourceBundler` (`bundle/resource/ResourceBundler.kt`, its `SUPPORTED_BUILD_LEVELS`)
+ * implements `instant` and `bytecode`, so both pass through (Issue #15). `bytecode` runs `compileall -b`
+ * with the interpreter at `<project>/.venv`; the task checks that interpreter first
+ * ([org.thisisthepy.python.multiplatform.toolchain.bundle.bytecodeInterpreterRejection]). `native`
+ * and `mixed` need the compile stage's output, whose interface is planned as pypackpack#19, so they
+ * are refused here -- per variant, because this runs in the task action (AGENTS.md §14). Anything
+ * else is refused as well rather than handed to `ResourceBundler` to refuse in its own words.
+ *
+ * `BuildType.compileLevel` defaults to `""` for both `DebugBuildType` and `ReleaseBuildType`, which
+ * is why blank resolves to `"instant"` -- that keeps `usage-example` (which never sets
+ * `compileLevel`) building exactly as it did when this value was hard-coded.
  */
 fun resolveBuildLevel(compileLevel: String): String {
     val normalized = compileLevel.ifBlank { "instant" }
-    if (normalized == "instant") return normalized
-
-    throw IllegalArgumentException(
-        "Python compileLevel '$normalized' is not implemented by pypackpack's resource bundler yet; " +
-            "only 'instant' is available today.",
-    )
+    return when (normalized) {
+        "instant", "bytecode" -> normalized
+        "native", "mixed" -> throw IllegalArgumentException(
+            "Python compileLevel '$normalized' needs pypackpack's native/mixed compile slot, which is " +
+                "planned (pypackpack#19) and not implemented yet; use 'instant' or 'bytecode'.",
+        )
+        else -> throw IllegalArgumentException(
+            "Python compileLevel '$normalized' is not a build level; use 'instant' or 'bytecode' " +
+                "('native' and 'mixed' are planned, pypackpack#19).",
+        )
+    }
 }
 
 /**

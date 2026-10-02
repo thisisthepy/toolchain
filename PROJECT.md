@@ -25,7 +25,9 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 - `debug` / `release` 빌드 타입, `-Ppython.buildType`, 변형 × 빌드 타입 태스크 그래프
 - `projectFlavors { create("free") }` → 변형 × 플레이버 × 빌드 타입(`buildPythonAndroidArm64FreeDebug`),
   스테이징은 `-Ppython.flavor`(기본: 첫 플레이버). 플랫폼 변형 없이 선언하면 `buildPython` 이 이유와 함께 실패
-- `compileLevel`: `instant` 만 지원, 나머지는 해당 변형의 태스크에서만 실패
+- `compileLevel`: `instant`, `bytecode`(debug 는 `.py`+`.pyc`, release 는 `.pyc` 만) 지원. `bytecode` 는
+  패키지 위쪽의 `.venv` 가 없거나 그 마이너 버전이 `compileSdk` 와 다르면 해당 변형에서 실패.
+  `native`/`mixed` 는 해당 변형의 태스크에서만 실패 (pypackpack#19)
 - `commonMain` 의 `srcDirs` / `metaDirs` / `libDirs` 전달
 - `implementation` / `integration` 의존성 → `uv add` (`pypackpack` 백엔드)
 - `defaultConfig { pip { autoUpdate; repositories { central / local } } }` → `uv add` 옵션
@@ -53,7 +55,7 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 - 의존성이 소스셋별로 구분되지 않음 (전부 하나의 목록으로 설치)
 
 **계획 (선언만 있거나 없음)**
-- `bytecode` / `native` / `mixed` 컴파일 레벨 (`pypackpack` 쪽 선행 필요)
+- `native` / `mixed` 컴파일 레벨 (pypackpack#19 선행 필요)
 - `embedLevel` 의미, `useCodeMinifier`,
   `pip { jit }`, `integration()` 의 `KLIBDEPENS` 검사,
   `compileSdk` 로 인터프리터 선택
@@ -103,6 +105,12 @@ Python 테스트는 없다. 루트 `pyproject.toml` 이 가리키는 Python 패�
 - **조용한 무시 금지**: 아무것도 읽지 않는 DSL 값은 거부하거나 SPEC 에 `planned` 로 남긴다.
 - **변형별 실패**: 지원되지 않는 `compileLevel` 은 그 변형의 태스크만 실패시킨다.
 - **스테이징은 `build/` 아래**: `src/` 에 생성물을 만들지 않는다.
+- **`bytecode` 의 인터프리터는 toolchain 이 만들지 않는다** (#15): `pypackpack` `ResourceBundler` 는 패키지
+  디렉터리에서 위로 올라가며 찾은 `.venv/bin/python3` 로 컴파일하고, 의존성을 선언하면
+  `installPythonDependencies` 의 `uv add` 가 바로 그 `<package>/.venv` 를 만든다. 없으면 이유와 만드는 법을
+  밝히고 실패한다. 인터프리터를 고르고 받아 오는 일은 `pypackpack` 몫(AGENTS.md §13)이고, `uv venv` 는
+  `uv add` 가 만든 `.venv` 를 덮어쓴다. `.pyc` 매직 넘버 때문에 `pyvenv.cfg` 의 마이너 버전을 `compileSdk`
+  와 비교해 다르면 거부한다(`compileSdk` 미선언이거나 `pyvenv.cfg` 가 없으면 비교하지 않음).
 
 ## 열린 질문
 
