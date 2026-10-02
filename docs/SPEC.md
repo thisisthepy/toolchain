@@ -168,12 +168,22 @@ package directory through `pypackpack`:
 `BackendInterface.create(BackendType.UV)` → `addDependencies(…, workingDir = packageDir)` (a real
 `uv add`). An empty list or no package directory is a skip, not a failure.
 
+The task also carries the `integration` entries on their own (`integrationsList`). After the install it
+looks in the package directory's venv (`<package dir>/.venv`: `lib/python3.X/site-packages`, or
+`Lib/site-packages` on Windows) for each integration's `<name>-<version>.dist-info/` directory, matching
+the name under PEP 503 normalization (case-insensitive; runs of `-`, `_`, `.` equal; version specifiers,
+extras and markers in the spec are ignored). A package whose dist-info has no `KLIBDEPENS` file (or that
+is not found) gets a warning naming it and suggesting `implementation(...)`; it is never a failure. If no
+`site-packages` exists the task warns that it cannot check.
+*Assumption:* no repository defines `KLIBDEPENS`; it is taken to be a file of that name inside the
+wheel's `*.dist-info/` directory, and only its presence is checked, not its content.
+
 **Status: implemented** — `plugin/dependency/lang/python/InstallDependenciesTask.kt`;
-`ptest/PythonPluginDependencyTest.kt`, `ptest/dependency/lang/python/InstallDependenciesTaskTest.kt`
-(needs `uv` and network).
+`plugin/dependency/lang/python/KlibDepens.kt`; `ptest/PythonPluginDependencyTest.kt`,
+`ptest/PythonPluginIntegrationListTest.kt`, `ptest/dependency/lang/python/KlibDepensTest.kt` (fake
+site-packages trees), `ptest/dependency/lang/python/InstallDependenciesTaskTest.kt` (needs `uv` and network).
 → *Per-source-set targeting (an `androidMain` dependency only for Android): **planned** — today
 every dependency is installed for every target.*
-→ *`integration()` checking the wheel for `KLIBDEPENS` and warning when absent: **planned**.*
 
 ### 1.11 Bundling — `buildPython`
 Builds a `pypackpack` `BundleRequest` (package dir, target triple, build type, build level, output

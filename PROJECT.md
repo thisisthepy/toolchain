@@ -27,7 +27,7 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
   스테이징은 `-Ppython.flavor`(기본: 첫 플레이버). 플랫폼 변형 없이 선언하면 `buildPython` 이 이유와 함께 실패
 - `compileLevel`: `instant` 만 지원, 나머지는 해당 변형의 태스크에서만 실패
 - `commonMain` 의 `srcDirs` / `metaDirs` / `libDirs` 전달
-- `implementation` / `integration` 의존성 → `uv add` (`pypackpack` 백엔드)
+- `implementation` / `integration` 의존성 → `uv add` (`pypackpack` 백엔드). 설치 후 `integration` 패키지의 `.venv` site-packages `*.dist-info/KLIBDEPENS` 를 확인하고 없으면 `implementation` 을 쓰라고 경고 (실패 아님; KLIBDEPENS 위치는 가정 — 어디에도 정의 없음)
 - `defaultConfig { pip { autoUpdate; repositories { central / local } } }` → `uv add` 옵션
   (`--default-index`·`--index` / `--find-links` / `--upgrade`). `jit` 는 설치 태스크에서만 이유와 함께 거부
 - `defaultConfig { versionCode, versionName }` → 페이로드 버전으로 번들 manifest 에 기록(`"versionName"`/`"versionCode"`)
@@ -49,7 +49,7 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 **계획 (선언만 있거나 없음)**
 - `bytecode` / `native` / `mixed` 컴파일 레벨 (`pypackpack` 쪽 선행 필요)
 - `embedLevel` 의미, `useCodeMinifier`, `excludeMetaclass`, `buildFeatures`,
-  `pip { jit }`, `integration()` 의 `KLIBDEPENS` 검사,
+  `pip { jit }`,
   `compileSdk` 로 인터프리터 선택
 
 ## 마일스톤 (2026-10-03 확정, GitHub 마일스톤과 연결)
