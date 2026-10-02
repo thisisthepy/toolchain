@@ -5,6 +5,7 @@ import org.thisisthepy.python.multiplatform.toolchain.bundle.venvPythonVersion
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertNotNull
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -69,7 +70,9 @@ class InstallDependenciesTaskTest {
         installWithPackpack(packageDir, listOf("iniconfig"))
 
         val interpreter = assertNotNull(locateVenvInterpreter(packageDir), "uv add should create <package>/.venv")
-        assertTrue(interpreter.canonicalPath.startsWith(File(packageDir, ".venv").canonicalPath), interpreter.path)
+        // The venv directory, not the interpreter, is canonicalised: on Linux `.venv/bin/python3` is a
+        // symlink to the system interpreter, which canonicalPath would follow out of the venv.
+        assertEquals(File(packageDir, ".venv").canonicalFile, interpreter.absoluteFile.parentFile.parentFile.canonicalFile, interpreter.path)
         val (major, minor) = assertNotNull(venvPythonVersion(interpreter), "uv's pyvenv.cfg should carry version_info")
         assertTrue(major == 3 && minor >= 13, "requires-python >=3.13, got $major.$minor")
     }
