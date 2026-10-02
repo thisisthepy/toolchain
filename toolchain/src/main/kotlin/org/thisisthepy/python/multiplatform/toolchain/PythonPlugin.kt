@@ -103,9 +103,13 @@ class PythonPlugin : Plugin<Project> {
                 project.logger.lifecycle("Configured Python compileSdk: ${extension.compileSdk}")
             }
             val pythonVersionLabel = pythonSdk?.version?.toString() ?: "default"
+            val payloadVersionName = extension.defaultConfig.versionName
+            val payloadVersionCode = extension.defaultConfig.versionCode
             buildTask.configure {
                 pythonVersion = pythonVersionLabel
                 pythonSdkRejection = pythonSdk?.rejection
+                versionName = payloadVersionName
+                versionCode = payloadVersionCode
             }
 
             // Only wires the directory through today; it must already be a `pypackpack` package
@@ -297,6 +301,8 @@ class PythonPlugin : Plugin<Project> {
                                     "(${variant.target}, ${variant.buildTypeName})"
                             pythonVersion = pythonVersionLabel
                             pythonSdkRejection = pythonSdk?.rejection
+                            versionName = payloadVersionName
+                            versionCode = payloadVersionCode
                             packageDir = resolvedPackageDir
                             metaDirs = resolvedMetaDirs
                             libDirs = resolvedLibDirs
