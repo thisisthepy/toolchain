@@ -138,8 +138,9 @@ jobs:
   # python-multiplatform's stdlib from python-multiplatform-home/ (its SPEC L-9, #60) plus this
   # plugin's python/ payload (example_py and the bundled iniconfig). `--python-smoke` exits before
   # the window opens, so this runs headless.
-  # python-multiplatform#60 (packaged stdlib) landed in its PR #76; #74 (0-byte linux libpython in the
-  # jar) is pending. continue-on-error comes off once this job is seen green.
+  # python-multiplatform#60 (packaged stdlib) landed in its PR #76: the app now finds
+  # python-multiplatform-home/, but its lib/libpython3.14.so is a 0-byte entry too (the symlink
+  # packing of #74). continue-on-error comes off once #74 lands and this job is seen green.
   desktop-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -203,12 +204,11 @@ jobs:
   # toolchain#22, Android: the debug APK on an x86_64 emulator runs Python with the stdlib
   # python-multiplatform ships and unpacks (PythonBootstrap) plus this plugin's assets/python/
   # (example_py and iniconfig installed for x86_64-linux-android). The smoke result goes to logcat.
-  # python-multiplatform#72 (the Android publication's generatePythonProperties dependency) landed in
-  # its PR #75; continue-on-error comes off once this job is seen green.
+  # Green since python-multiplatform#72 (PR #75): the emulator logs PYTHON_SMOKE_OK with the stdlib
+  # unpacked under /data/data/<app>/files/lib/python3.14/.
   android-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 75
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
