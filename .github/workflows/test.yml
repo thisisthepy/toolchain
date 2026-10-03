@@ -187,10 +187,17 @@ jobs:
           set -euo pipefail
           app=$(find build/compose/binaries/main/app -maxdepth 3 -type f -path '*/bin/*' | head -n 1)
           [ -n "$app" ] || { echo "no packaged launcher under build/compose/binaries/main/app"; exit 1; }
-          unset PYTHONHOME
-          out=$("$app" --python-smoke 2>&1) || { echo "$out"; exit 1; }
+          appdir=$(cd "$(dirname "$app")/.." && pwd -P)
+          # A scrubbed environment: no PYTHONHOME, and no LD_LIBRARY_PATH / PATH leading to the runner's
+          # own CPython (setup-python installs one), so only what the app carries can be used.
+          out=$(env -i HOME="$HOME" PATH=/usr/bin:/bin "$app" --python-smoke 2>&1) || { echo "$out"; exit 1; }
           echo "$out"
           printf '%s\n' "$out" | grep -q '^PYTHON_SMOKE_OK ' || { echo "no PYTHON_SMOKE_OK line"; exit 1; }
+          stdlib=$(printf '%s\n' "$out" | sed -n 's/^PYTHON_SMOKE_STDLIB //p')
+          case "$stdlib" in
+            "$appdir"/*) echo "stdlib from the packaged app: $stdlib" ;;
+            *) echo "stdlib not from the packaged app ($appdir): '$stdlib'"; exit 1 ;;
+          esac
 
   guide:
     runs-on: ubuntu-latest

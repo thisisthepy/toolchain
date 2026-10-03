@@ -18,12 +18,18 @@ const val PYTHON_SMOKE_FLAG = "--python-smoke"
 /** The line the CI job looks for. Anything else, or a non-zero exit, is a failure. */
 const val PYTHON_SMOKE_MARKER = "PYTHON_SMOKE_OK"
 
+/** Followed by the real path of `os.py`, i.e. the stdlib CPython is using. */
+const val PYTHON_SMOKE_STDLIB = "PYTHON_SMOKE_STDLIB"
+
 private val SMOKE_SCRIPT =
     """
-    import sys
+    import os, sys
     import example_py
     import iniconfig
     print("$PYTHON_SMOKE_MARKER", example_py.VERSION, iniconfig.__name__, sys.version.split()[0], flush=True)
+    # Where the stdlib actually came from: CI requires it to be inside the packaged app, so a Python
+    # found on the machine (PATH, LD_LIBRARY_PATH) cannot make this pass.
+    print("$PYTHON_SMOKE_STDLIB", os.path.realpath(os.__file__), flush=True)
     """.trimIndent()
 
 /** 0 when the script ran; 1, with the cause on stderr, otherwise. */
