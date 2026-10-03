@@ -38,7 +38,7 @@ there. Work belongs inside an existing module or directory: sources under `src/<
 CI-only scripts under `.github/scripts/`, temporary files under the git-ignored `.tmp/`. If you think
 a new top-level entry is needed, propose it (what, why, which alternatives inside existing
 directories you ruled out) and wait for approval. This was added after unapproved root folders
-(`ksp-fixtures/`, `tools/`, `kotlin-js-store/`, `iosApp/`, `sample/python`) had to be dismantled.
+(`ksp-fixtures/`, `tools/`, `kotlin-js-store/`, `iosApp/`, `usage-example/python`) had to be dismantled.
 
 ## 3. Worktrees link large artefacts instead of copying them
 
@@ -170,8 +170,8 @@ GitHub issues `thisisthepy/toolchain#2` (plugin checklist) and `#1` (`tcl`), it 
 - Never edit, move, rename or `git add` it.
 - When the code's DSL disagrees with it, the file wins, and the disagreement is recorded in `docs/SPEC.md` and
   `docs/INTENT.md` §4 until the maintainer decides. Do not "fix" either side on your own.
-- `sample/` is the **executable subset** of that file: the part the plugin actually reads.
-  When a DSL property becomes live, add it to `sample/build.gradle.kts`, so there is a build
+- `usage-example/` is the **executable subset** of that file: the part the plugin actually reads.
+  When a DSL property becomes live, add it to `usage-example/build.gradle.kts`, so there is a build
   that fails if the wiring breaks.
 
 ## 12. Layout
@@ -179,7 +179,7 @@ GitHub issues `thisisthepy/toolchain#2` (plugin checklist) and `#1` (`tcl`), it 
 | Module | What it is |
 |---|---|
 | `toolchain/` (`:toolchain`) | The Gradle plugin (id `org.thisisthepy.python.multiplatform`, class `PythonPlugin`; source set `main`). DSL in `dsl/`, tasks in `bundle/`, `dependency/`, `hotreload/`. The same module holds toolchain-lite, the `tcl install <package>` CLI, in its own source sets (`src/cliMain`, `src/cliTest`; #78): they depend on packpack and coroutines only, never on `main`, and the plugin's publication carries none of them. |
-| `sample/` | **Its own Gradle build** (own settings and catalog; toolchain#22): a Compose Multiplatform app applying this plugin and python-multiplatform, on python-multiplatform's Kotlin/Compose/AGP. Run it with this repository's wrapper: `./gradlew -p sample …`. Its Python package is `sample/src/commonMain/python/`. |
+| `usage-example/` | **Its own Gradle build** (own settings and catalog; toolchain#22): a Compose Multiplatform app applying this plugin and python-multiplatform, on python-multiplatform's Kotlin/Compose/AGP. Run it with this repository's wrapper: `./gradlew -p usage-example …`. Its Python package is `usage-example/src/commonMain/python/`. |
 | `.github/scripts/release/` | The develop → release → main sync (rule 4). |
 
 `pyproject.toml` at the root is toolchain-lite, the PyPI distribution of `tcl` (#69): one platform
@@ -188,8 +188,8 @@ wheel per OS carrying the native `tcl` binary, plus the launcher package `toolch
 wheels; its version must equal `toolchain/build.gradle.kts`'s `tclVersion`, and `docs/pypi/README.md` is its PyPI page.
 Keep the launcher a launcher: the work stays in Kotlin.
 
-Nothing else belongs at the root (#62): no IDE directories, no lock-file directories (the sample's wasm
-yarn lock is `sample/gradle/wasm-yarn.lock`), no copied wrappers. The pre-#62 layout is the tag
+Nothing else belongs at the root (#62): no IDE directories, no lock-file directories (usage-example's wasm
+yarn lock is `usage-example/gradle/wasm-yarn.lock`), no copied wrappers. The pre-#62 layout is the tag
 `archive/pre-restructure`.
 
 ## 13. pypackpack owns the work; toolchain owns the vocabulary
@@ -233,10 +233,10 @@ history removing.
   classpath broke every consumer's wasm target once.
 - `-Xskip-metadata-version-check` exists because `packpack` is built with a newer Kotlin than this
   build. Bumping Kotlin build-wide is a decision for the maintainer, not a fix.
-- `sample` resolves the plugin **by Maven coordinate from `mavenLocal()`**, not through
+- `usage-example` resolves the plugin **by Maven coordinate from `mavenLocal()`**, not through
   `includeBuild`. After changing `:toolchain`, run `:toolchain:publishToMavenLocal` before building
-  `sample`, or you are testing the previous plugin.
-- `sample` is a separate build on python-multiplatform's toolchain (Kotlin 2.4.20-Beta2, Compose
+  `usage-example`, or you are testing the previous plugin.
+- `usage-example` is a separate build on python-multiplatform's toolchain (Kotlin 2.4.20-Beta2, Compose
   1.11.1, AGP 8.10.1, Gradle 8.11.1), because a Kotlin 2.1 compiler cannot read python-multiplatform's
   klibs. The plugin itself stays on this build's Kotlin for its consumers; do not bump it to match.
 
@@ -244,7 +244,7 @@ history removing.
 
 Prerequisites: `org.thisisthepy.python.multiplatform:packpack:0.1.0` in `~/.m2` (published from the
 `pypackpack` repository), `uv` on `PATH`, and network access: `InstallDependenciesTaskTest` and
-`InstallerTest` run a real `uv add` against PyPI. `sample` additionally needs an Android SDK
+`InstallerTest` run a real `uv add` against PyPI. `usage-example` additionally needs an Android SDK
 (`ANDROID_HOME`) and python-multiplatform in `~/.m2`: from a python-multiplatform checkout,
 `./gradlew publishAllToMavenLocal` (library `3.14.7-alpha01`, bindings plugin `3.13.0` until its #70).
 

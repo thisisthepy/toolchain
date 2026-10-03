@@ -62,7 +62,7 @@ Python 을 내장한 Kotlin Multiplatform 앱에는 맞물려 돌아가야 하�
 | PyPI `toolchain-lite` | Python 사용자를 위한 명령줄 도구 `tcl` (`uv tool install toolchain-lite`) |
 
 Kotlin Multiplatform 옆에 플러그인을 적용하고 `pypackpack` 패키지를 가리키게 합니다. 아래는
-`sample/build.gradle.kts` 를 줄인 것입니다.
+`usage-example/build.gradle.kts` 를 줄인 것입니다.
 
 ```kotlin
 plugins {
@@ -75,17 +75,17 @@ python {
     compileSdk = "3.13"
     localLibraryPath = "src/commonMain/python"  // pypackpack 패키지: pyproject.toml + src/main/<pkg>
     packaging {
-        fileName = "sample"
+        fileName = "usage-example"
     }
 }
 ```
 
 ```shell
-./gradlew -p sample packagePython             # 설치 → 번들 → zip (sample/ 은 별도 빌드)
-./gradlew -p sample stagePythonBundle         # android, ios, desktop 용 python/ 스테이징
+./gradlew -p usage-example packagePython             # 설치 → 번들 → zip (usage-example/ 은 별도 빌드)
+./gradlew -p usage-example stagePythonBundle         # android, ios, desktop 용 python/ 스테이징
 ```
 
-> **iOS, 임시:** sample 의 Xcode 단계(`sample/src/iosMain/install-python-phase.sh`)는
+> **iOS, 임시:** usage-example 의 Xcode 단계(`usage-example/src/iosMain/install-python-phase.sh`)는
 > python-multiplatform#90 이 published 플러그인으로 그 배선을 제공할 때까지 `Python.xcframework` 와 stdlib 을 위해
 > python-multiplatform 체크아웃을 가리키는 `PYTHON_MULTIPLATFORM_DIR` 가 필요합니다.
 
