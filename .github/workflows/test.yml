@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [toolchain-gradle-plugin, toolchain-cli]
+        module: [toolchain-gradle-plugin, tcl]
     steps:
       - uses: actions/checkout@v4
 

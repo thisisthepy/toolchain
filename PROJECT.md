@@ -98,7 +98,7 @@ Python 코드와 의존성이 실려 빌드·실행되는 상태. 기한을 맞�
 
 ```
 toolchain/       Gradle 플러그인  (dsl/, bundle/, dependency/, hotreload/)
-toolchain-cli/   toolchain-lite CLI (`:toolchain-cli`)
+tcl/   toolchain-lite CLI (`:tcl`)
 sample/   별도 Gradle 빌드: 플러그인과 python-multiplatform 을 적용한 Compose Multiplatform 앱 + python/
                  (python-multiplatform 의 Kotlin 2.4.20-Beta2 / Compose 1.11.1 / AGP 8.10.1, 자체 wrapper)
 docs/            INTENT.md, SPEC.md, locale/, guide/ (GitHub Pages)
@@ -110,7 +110,7 @@ docs/            INTENT.md, SPEC.md, locale/, guide/ (GitHub Pages)
 
 ```bash
 ./gradlew :toolchain-gradle-plugin:test --rerun --console=plain > .tmp/toolchain-test.log 2>&1; echo "EXIT=$?"
-./gradlew :toolchain-cli:test --rerun --console=plain > .tmp/tcl-test.log 2>&1; echo "EXIT=$?"
+./gradlew :tcl:test --rerun --console=plain > .tmp/tcl-test.log 2>&1; echo "EXIT=$?"
 ./gradlew :toolchain-gradle-plugin:publishToMavenLocal     # sample 빌드 전에 반드시
 python3 docs/guide/check_guide.py            # 가이드 검사
 # sample 은 별도 빌드: python-multiplatform 체크아웃에서 ./gradlew publishAllToMavenLocal 후

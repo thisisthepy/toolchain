@@ -60,7 +60,7 @@ owns the Gradle vocabulary in between.
 |---|---|
 | plugin id `org.thisisthepy.python.multiplatform` | the Gradle plugin; apply it by id (unchanged) |
 | `org.thisisthepy.python.multiplatform:toolchain-gradle-plugin` | the plugin's implementation artifact (was `…:toolchain` before #62) |
-| `org.thisisthepy.python.multiplatform:toolchain-cli` | the CLI, toolchain-lite (was `…:tcl` before #62) |
+| `org.thisisthepy.python.multiplatform:tcl` | the CLI, toolchain-lite (tcl) |
 
 Apply the plugin next to Kotlin Multiplatform and point it at a `pypackpack` package. This is
 `sample/build.gradle.kts`, trimmed:
@@ -108,7 +108,7 @@ python {
 Python only? Skip Gradle builds entirely:
 
 ```shell
-./gradlew :toolchain-cli:run --args="install pythonx-compose"
+./gradlew :tcl:run --args="install pythonx-compose"
 ```
 
 ## 🧭 Architecture at a glance

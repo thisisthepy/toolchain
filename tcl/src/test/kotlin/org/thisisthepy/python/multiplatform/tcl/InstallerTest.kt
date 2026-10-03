@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
  *
  * Pre-implementation state: this file fails to compile (no `Installer`, no `installBlocking`, no
  * `findProjectRoot` on the classpath) until `Installer.kt` exists -- that is the "red" this
- * repository's TDD rule asks for, confirmed by running `:toolchain-cli:test` against a `tcl` module that
+ * repository's TDD rule asks for, confirmed by running `:tcl:test` against a `tcl` module that
  * has this test file and a `build.gradle.kts` but no `src/main` yet.
  */
 class InstallerTest {

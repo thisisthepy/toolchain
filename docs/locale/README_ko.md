@@ -59,7 +59,7 @@ Python 을 내장한 Kotlin Multiplatform 앱에는 맞물려 돌아가야 하�
 |---|---|
 | 플러그인 id `org.thisisthepy.python.multiplatform` | Gradle 플러그인; id 로 적용 (변경 없음) |
 | `org.thisisthepy.python.multiplatform:toolchain-gradle-plugin` | 플러그인 구현 아티팩트 (#62 이전에는 `…:toolchain`) |
-| `org.thisisthepy.python.multiplatform:toolchain-cli` | CLI, toolchain-lite (#62 이전에는 `…:tcl`) |
+| `org.thisisthepy.python.multiplatform:tcl` | CLI, toolchain-lite (tcl) |
 
 Kotlin Multiplatform 옆에 플러그인을 적용하고 `pypackpack` 패키지를 가리키게 합니다. 아래는
 `sample/build.gradle.kts` 를 줄인 것입니다.
@@ -107,7 +107,7 @@ python {
 Python 만 쓰나요? Gradle 빌드 없이:
 
 ```shell
-./gradlew :toolchain-cli:run --args="install pythonx-compose"
+./gradlew :tcl:run --args="install pythonx-compose"
 ```
 
 ## 🧭 한눈에 보는 구조

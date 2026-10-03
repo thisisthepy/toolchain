@@ -12,11 +12,11 @@ Each item carries a status:
 - **planned** — the example build file or an issue asks for it; the code does not do it (or only
   declares a DSL property that nothing reads).
 
-Status was assigned on 2026-10-02 by reading the plugin's and the CLI's sources and their tests (now `toolchain-gradle-plugin/src`, `toolchain-cli/src`). No status
+Status was assigned on 2026-10-02 by reading `toolchain-gradle-plugin/src` (then `toolchain/src`), `tcl/src` and their tests. No status
 here comes from a roadmap, a commit message or an issue checkbox.
 
 Paths below are abbreviated: `plugin/` = `toolchain-gradle-plugin/src/main/kotlin/org/thisisthepy/python/multiplatform/toolchain/`,
-`ptest/` = the matching `toolchain-gradle-plugin/src/test/kotlin/...` directory, `cli/` = `toolchain-cli/src/{main,test}/kotlin/org/thisisthepy/python/multiplatform/tcl/`.
+`ptest/` = the matching `toolchain-gradle-plugin/src/test/kotlin/...` directory, `tcl/` = `tcl/src/{main,test}/kotlin/org/thisisthepy/python/multiplatform/tcl/`.
 
 ---
 
@@ -534,8 +534,8 @@ Finds the nearest `pyproject.toml` at or above the working directory. If there i
 message on stderr for a missing argument, an unknown command or a failed install. No arguments
 prints `Usage: tcl install <package>`.
 
-**Status: implemented** — `cli/Cli.kt`, `cli/Installer.kt`; `cli/CliArgsTest.kt`,
-`cli/InstallerTest.kt` (needs `uv` and network). Run with `./gradlew :toolchain-cli:run --args="install <pkg>"`.
+**Status: implemented** — `tcl/Cli.kt`, `tcl/Installer.kt`; `tcl/CliArgsTest.kt`,
+`tcl/InstallerTest.kt` (needs `uv` and network). Run with `./gradlew :tcl:run --args="install <pkg>"`.
 
 ---
 
@@ -556,5 +556,6 @@ These exist in the code but are not asked for by the example build file or the i
    wired), `bundle/PythonLocalLoader.kt`, `dependency/DependencyType.kt`, and
    `BinariesExtension` / `FrozenPackConfig` / `BuildTypeEnum` in `dsl/DSLPlatforms.kt`. Nothing calls
    any of them.
-5. ~~**`pyproject.toml`**~~ — deleted in #62 (a flit stub for a Python package that never existed;
-   nothing built it). It survives in the tag `archive/pre-restructure`.
+5. **`pyproject.toml`** is toolchain-lite's PyPI build (`toolchain-lite` 0.0.1, 2025-06-12). It
+   still declares a flit-built package named `toolchain` (Python 3.9–3.13) whose module is not in
+   the repository, and no CI builds or publishes it yet.
