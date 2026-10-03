@@ -113,7 +113,13 @@ jobs:
         run: |
           (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)
           ./gradlew :toolchain:publishToMavenLocal --console=plain
-          (cd .ci/python-multiplatform && ./gradlew publishAllToMavenLocal --console=plain)
+          # Targeted, not publishAllToMavenLocal: that currently fails on the Android release Java
+          # resources (generatePythonProperties has no declared consumer; reported to the lead).
+          (cd .ci/python-multiplatform && ./gradlew \
+            :python-multiplatform:publishDesktopPublicationToMavenLocal \
+            :python-multiplatform:publishKotlinMultiplatformPublicationToMavenLocal \
+            :python-multiplatform-ksp:publishToMavenLocal --console=plain)
+          (cd .ci/python-multiplatform && ./gradlew -p python-multiplatform-gradle-plugin publishToMavenLocal --console=plain)
 
       - name: Install, bundle and zip as a consumer
         working-directory: usage-example
@@ -163,7 +169,13 @@ jobs:
         run: |
           (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)
           ./gradlew :toolchain:publishToMavenLocal --console=plain
-          (cd .ci/python-multiplatform && ./gradlew publishAllToMavenLocal --console=plain)
+          # Targeted, not publishAllToMavenLocal: that currently fails on the Android release Java
+          # resources (generatePythonProperties has no declared consumer; reported to the lead).
+          (cd .ci/python-multiplatform && ./gradlew \
+            :python-multiplatform:publishDesktopPublicationToMavenLocal \
+            :python-multiplatform:publishKotlinMultiplatformPublicationToMavenLocal \
+            :python-multiplatform-ksp:publishToMavenLocal --console=plain)
+          (cd .ci/python-multiplatform && ./gradlew -p python-multiplatform-gradle-plugin publishToMavenLocal --console=plain)
 
       - name: Package the desktop app
         working-directory: usage-example
