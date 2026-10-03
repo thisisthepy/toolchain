@@ -178,14 +178,4 @@ class TargetDependenciesTest {
         assertEquals(File("/project/build/pythonDeps/androidArm64-free"), targetDependenciesDir(buildDir, "androidArm64-free"))
         assertEquals(File("/project/build/pythonDeps/host"), targetDependenciesDir(buildDir, HOST_DEPENDENCY_SET))
     }
-
-    @Test
-    fun `the requirements pyproject lists every requirement as a TOML string`() {
-        val toml = renderRequirementsPyproject(listOf("six==1.17.0", "pywin32; sys_platform == \"win32\""))
-
-        assertTrue(toml.startsWith("[project]\n"), toml)
-        assertTrue("name = \"toolchain-target-requirements\"" in toml, toml)
-        assertTrue("    \"six==1.17.0\",\n" in toml, toml)
-        assertTrue("    \"pywin32; sys_platform == \\\"win32\\\"\",\n" in toml, toml)
-    }
 }

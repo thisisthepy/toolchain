@@ -121,25 +121,3 @@ fun targetDependenciesDir(
     buildDir: File,
     dependencySet: String,
 ): File = File(File(buildDir, TARGET_DEPENDENCIES_DIRECTORY), dependencySet)
-
-/**
- * The `pyproject.toml` a per-target install reads its requirements from.
- *
- * `pypackpack`'s `UVBackend.installDependenciesToTarget` always runs `uv pip install -r pyproject.toml`
- * in its `workingDir`; it takes no requirement list. The package's own `pyproject.toml` is the wrong
- * source -- it holds whatever `uv add` recorded for *every* source set -- so the task writes this
- * file into its own temporary directory and passes that directory as `workingDir`. The name and
- * version are placeholders `uv` requires; nothing builds this project.
- */
-fun renderRequirementsPyproject(requirements: List<String>): String =
-    buildString {
-        appendLine("[project]")
-        appendLine("name = \"toolchain-target-requirements\"")
-        appendLine("version = \"0\"")
-        appendLine("dependencies = [")
-        requirements.forEach { appendLine("    ${tomlString(it)},") }
-        appendLine("]")
-    }
-
-private fun tomlString(value: String): String =
-    "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
