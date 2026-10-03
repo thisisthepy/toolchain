@@ -1,6 +1,6 @@
 name: iOS e2e
 
-# toolchain#22, iOS: sample's app on an arm64 iOS simulator runs Python with the stdlib and
+# toolchain#22, iOS: usage-example's app on an arm64 iOS simulator runs Python with the stdlib and
 # Python.framework python-multiplatform puts into the .app, plus this plugin's python/ payload.
 # macOS minutes cost ~10x, so this runs only for iOS wiring changes, on develop and by hand, and is
 # informational (not a required check). Lead decision, 2026-10-03.
@@ -9,9 +9,9 @@ on:
     branches: [develop]
   pull_request:
     paths:
-      - "sample/src/iosMain/**"
-      - "sample/build.gradle.kts"
-      - "sample/gradle/**"
+      - "usage-example/src/iosMain/**"
+      - "usage-example/build.gradle.kts"
+      - "usage-example/gradle/**"
       - "toolchain/src/main/kotlin/org/thisisthepy/python/multiplatform/toolchain/bundle/**"
       - ".github/workflows/test-ios.yml"
   workflow_dispatch:
@@ -48,7 +48,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.konan
-          key: konan-${{ runner.os }}-${{ hashFiles('sample/gradle/libs.versions.toml') }}
+          key: konan-${{ runner.os }}-${{ hashFiles('usage-example/gradle/libs.versions.toml') }}
 
       - name: Publish packpack, the toolchain plugin and python-multiplatform (iOS simulator)
         run: |
@@ -68,7 +68,7 @@ jobs:
           slice="$pmd/python-multiplatform/build/python-standalone/extracted/3.14.7/ios/Python.xcframework/ios-arm64_x86_64-simulator"
           # TODO(python-multiplatform#90): PYTHON_MULTIPLATFORM_DIR and the -framework Python link flags
           # are interim; the published plugin will stage Python.xcframework and its link options.
-          xcodebuild -project sample/src/iosMain/app.xcodeproj -target iosApp \
+          xcodebuild -project usage-example/src/iosMain/app.xcodeproj -target iosApp \
             -sdk iphonesimulator -configuration Debug \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
             SYMROOT="$GITHUB_WORKSPACE/build-ios" \

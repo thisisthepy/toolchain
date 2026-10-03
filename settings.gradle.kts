@@ -32,5 +32,5 @@ dependencyResolutionManagement {
 rootProject.name = "ToolchainProject"
 
 include(":toolchain")
-// sample/ is its own build, run with this wrapper: ./gradlew -p sample …. It uses python-multiplatform's
+// usage-example/ is its own build, run with this wrapper: ./gradlew -p usage-example …. It uses python-multiplatform's
 // Kotlin; the plugin here stays on its own for its consumers (toolchain#22, #62).

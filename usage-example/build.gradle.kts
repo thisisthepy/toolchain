@@ -13,14 +13,14 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
-    // sample is its own build (settings.gradle.kts here). The toolchain plugin is resolved by
+    // usage-example is its own build (settings.gradle.kts here). The toolchain plugin is resolved by
     // coordinate from mavenLocal (`./gradlew :toolchain:publishToMavenLocal` in ../), as is
     // python-multiplatform's bindings plugin, which stages and packages the CPython stdlib (#22).
     alias(libs.plugins.toolchain)
     alias(libs.plugins.python.multiplatform.bindings)
 }
 
-// Exercises the target DSL surface end to end -- until now `sample` did not apply the
+// Exercises the target DSL surface end to end -- until now `usage-example` did not apply the
 // plugin at all, so the DSL in `dsl/` had no executable definition (`docs/ecosystem.md` §2, §4
 // item 7). This is deliberately the subset of `(플러그인예시)build.gradle.kts` that today's tasks
 // (`PythonPlugin.kt`) actually read: `compileSdk`, `packaging`, `buildTypes`, `platforms`, and
@@ -56,7 +56,7 @@ python {
         }
     }
     packaging {
-        fileName = "sample"
+        fileName = "usage-example"
     }
     // `compose = true` is left out: it needs `python.compose.pythonxCompose` and
     // `python.compose.kotlinModule`, and neither artifact is published yet (docs/SPEC.md §1.16).
