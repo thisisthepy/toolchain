@@ -110,6 +110,8 @@ kotlin {
         val desktopMain by getting
         
         androidMain.dependencies {
+            // CPython for Android; `--ez python-smoke true` (PythonSmoke.android.kt) runs it headless.
+            implementation(libs.python.multiplatform)
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
         }

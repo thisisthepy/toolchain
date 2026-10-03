@@ -199,6 +199,64 @@ jobs:
             *) echo "stdlib not from the packaged app ($appdir): '$stdlib'"; exit 1 ;;
           esac
 
+  # toolchain#22, Android: the debug APK on an x86_64 emulator runs Python with the stdlib
+  # python-multiplatform ships and unpacks (PythonBootstrap) plus this plugin's assets/python/
+  # (example_py and iniconfig installed for x86_64-linux-android). The smoke result goes to logcat.
+  # TODO: drop continue-on-error once python-multiplatform's Android publication works (its
+  # generatePythonProperties task has no declared consumer on the release Java resources).
+  android-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: thisisthepy/pypackpack
+          ref: develop
+          path: .ci/pypackpack
+      - uses: actions/checkout@v4
+        with:
+          repository: thisisthepy/python-multiplatform
+          ref: develop
+          path: .ci/python-multiplatform
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Publish packpack, the toolchain plugin and python-multiplatform (Android too)
+        run: |
+          (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)
+          ./gradlew :toolchain:publishToMavenLocal --console=plain
+          (cd .ci/python-multiplatform && ./gradlew \
+            :python-multiplatform:publishAndroidReleasePublicationToMavenLocal \
+            :python-multiplatform:publishKotlinMultiplatformPublicationToMavenLocal \
+            :python-multiplatform-ksp:publishToMavenLocal --console=plain)
+          (cd .ci/python-multiplatform && ./gradlew -p python-multiplatform-gradle-plugin publishToMavenLocal --console=plain)
+
+      - name: Build the debug APK
+        working-directory: usage-example
+        run: ./gradlew assembleDebug --console=plain
+
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run the installed APK's Python on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            set -eu; apk=$(find usage-example/build/outputs/apk/debug -name '*.apk' | head -n 1); [ -n "$apk" ]; adb install -r "$apk"; adb logcat -c; adb shell am start -W -n org.thisisthepy.python.multiplatform.toolchain.example/.MainActivity --ez python-smoke true; sleep 20; adb logcat -d -s PythonSmoke:V > smoke.log; cat smoke.log; grep -q 'PYTHON_SMOKE_OK ' smoke.log; grep 'PYTHON_SMOKE_OK ' smoke.log | grep -q '/data/'
+
   guide:
     runs-on: ubuntu-latest
     steps:

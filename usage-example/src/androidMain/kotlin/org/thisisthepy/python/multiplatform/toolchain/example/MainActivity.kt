@@ -11,6 +11,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Headless check of the installed APK's Python (toolchain#22); see PythonSmoke.android.kt.
+        if (intent?.getBooleanExtra(PYTHON_SMOKE_EXTRA, false) == true) {
+            runPythonSmoke(this)
+            finish()
+            return
+        }
+
         setContent {
             App()
         }
