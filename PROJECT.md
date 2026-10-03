@@ -64,14 +64,20 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
   `androidMain` 전용 패키지는 이 태스크에서 실패할 수 있음. `ResourceBundler` 가 `.pyd` 를 빼므로 Windows
   확장 모듈은 `mingwX64` 번들에 들어가지 않음
 - `embedLevel`: 플랫폼별 0/1/2 결정(Android·iOS 는 경고와 함께 2 로 상향), `python.embedLevel` 속성 재정의,
-  `<zip>.embed.json` 기록까지 구현 (`EmbedLevelTest`, `PythonPluginEmbedLevelTest`). 인터프리터를 넣거나 빼는 일은
-  인터프리터 확보(#18, pypackpack#21) 가 없어 아직 안 함 — 레벨 1·2 는 페이로드를 바꾸지 않음
+  `<zip>.embed.json` 기록(`interpreterVersion`, `interpreterBundled` 포함)까지 구현 (`EmbedLevelTest`,
+  `PythonPluginEmbedLevelTest`). 레벨 1 은 기대 버전만 기록, 레벨 2 는 번들의 `python/` 옆 `runtime/` 에 인터프리터를
+  복사하고 `runtime-manifest.json` 을 씀 (`PythonPluginInterpreterTest`). 스테이징은 여전히 `python/` 만 옮김
+- `compileSdk` 로 인터프리터 선택(#18): `planInterpreter` 가 변형별 계획을 정하고, (버전, 트리플) 마다 공유되는
+  `acquirePythonInterpreter<Triple>Py<X_Y_Z>` 태스크가 `build/pythonRuntime/<triple>/<version>/` 을 출력으로 가짐
+  (`InterpreterPlanTest`, `PythonPluginInterpreterTest`). 지원되지 않는 조합(예: Android 3.13.0)은 pypackpack 의
+  메시지로 그 확보 태스크만 실패. **실제 다운로드는 없음**: pypackpack `installPython(version, target)` 은 `user.dir`
+  로 찾은 프로젝트에 설치하고 디렉터리를 받는 형태가 없어서(AGENTS.md §13), 지원되는 조합도 그 API 부재를 밝히고
+  실패한다. 그래서 패키지가 있는 레벨 2 변형(모든 Android·iOS 변형)의 `buildPython…` 은 그 API 가 생길 때까지 실패
 
 **계획 (선언만 있거나 없음)**
 - `native` / `mixed` 컴파일 레벨 (pypackpack#19 선행 필요)
 - `useCodeMinifier`,
-  `pip { jit }`,
-  `compileSdk` 로 인터프리터 선택
+  `pip { jit }`
 
 ## 마일스톤 (2026-10-03 확정, GitHub 마일스톤과 연결)
 
@@ -142,3 +148,6 @@ Python 테스트는 없다. 루트 `pyproject.toml` 이 가리키는 Python 패�
 5. 참조되지 않는 코드(`PythonMultiplatformPlugin.kt`, `reslover.kt`, `decompileKotlinMeta.kt`,
    `PythonLocalLoader.kt`, `DependencyType.kt`, `FrozenPackConfig` 등)와 빈 `pyproject.toml` 을
    지울 것인가.
+6. 레벨 2 인터프리터 확보에 필요한 pypackpack API (#18): `BackendInterface.installPython` 에 명시적 설치
+   디렉터리를 받는 형태(예: `installDir: File? = null`, 주어지면 `projectRoot()`·`.venv` 규칙 없이 그 디렉터리에
+   그대로 풀기)를 추가할 것인가. 다른 저장소이므로 결정 전까지 toolchain 은 확보 태스크에서 거부한다.

@@ -37,17 +37,26 @@ fun resolveEmbedLevel(declared: Int, override: String?, platformFamily: String):
 }
 
 /**
- * The record written beside a packaged zip (`<archive>.embed.json`). It states the level and, plainly,
- * that the interpreter is not part of the payload yet: acquiring it is #18 and pypackpack#21.
+ * The record written beside a packaged zip (`<archive>.embed.json`): the level, the family, the
+ * warning, the interpreter version the level implies ([interpreterVersion]: the compileSdk release at
+ * levels 1 and 2, `null` at 0 or when none is declared) and whether that interpreter is inside the
+ * bundle ([interpreterBundled]: true only at level 2, whose bundling task carries `runtime/`).
  */
-fun embedRecordJson(level: Int, platformFamily: String, warning: String?): String {
+fun embedRecordJson(
+    level: Int,
+    platformFamily: String,
+    warning: String?,
+    interpreterVersion: String? = null,
+    interpreterBundled: Boolean = false,
+): String {
     fun quote(text: String) = "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
     return """
         {
           "embedLevel": $level,
           "platformFamily": ${quote(platformFamily)},
           "warning": ${warning?.let(::quote) ?: "null"},
-          "interpreterBundled": false
+          "interpreterVersion": ${interpreterVersion?.let(::quote) ?: "null"},
+          "interpreterBundled": $interpreterBundled
         }
     """.trimIndent() + "\n"
 }
