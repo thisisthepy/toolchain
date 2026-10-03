@@ -25,6 +25,13 @@ import org.thisisthepy.python.multiplatform.toolchain.hotreload.CodePushPendingT
 import org.thisisthepy.python.multiplatform.toolchain.hotreload.HotReloadPushTask
 import org.thisisthepy.python.multiplatform.toolchain.hotreload.validateCodePushConfig
 import org.thisisthepy.python.multiplatform.toolchain.hotreload.validateHotReloadConfig
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.DEFAULT_PYREFLY_VERSION
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.DEFAULT_TYPEDPYTHON_MODE
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.DEFAULT_TYPEDPYTHON_VERSION
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.TYPEDPYTHON_WHEEL_DIR_PROPERTY
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.TypedpythonCheckTask
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.typedpythonCheckedDirs
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.typedpythonSourceExcluded
 import java.io.File
 
 
@@ -44,6 +51,12 @@ class PythonPlugin : Plugin<Project> {
         const val STAGE_TASK = "stagePythonBundle"
         const val HOT_RELOAD_TASK = "hotReloadPython"
         const val CODE_PUSH_TASK = "codePushPython"
+
+        /** `docs/SPEC.md` §1.18: one check per project, before every `buildPython*`. */
+        const val TYPEDPYTHON_CHECK_TASK = "typedpythonCheck"
+
+        /** Stub directories handed to the check explicitly, each as `--search-path`. */
+        const val TYPEDPYTHON_STUBS_CONFIGURATION = "typedpythonStubs"
     }
 
     override fun apply(project: Project) {
@@ -65,7 +78,28 @@ class PythonPlugin : Plugin<Project> {
             fileName = extension.packaging.fileName
         }
 
-        buildTask.configure { dependsOn(installTask) }
+        // TypedPython (issue #23). The stubs arrive explicitly through this configuration --
+        // python-multiplatform's plugin adds its stub task's output to it -- not by a path convention.
+        val typedpythonStubs = project.configurations.create(TYPEDPYTHON_STUBS_CONFIGURATION) {
+            isCanBeConsumed = false
+            isCanBeResolved = true
+            description = "Stub directories passed to typedpythonCheck as --search-path"
+        }
+        val typedpythonCheckTask = project.tasks.register<TypedpythonCheckTask>(TYPEDPYTHON_CHECK_TASK) {
+            group = TASK_GROUP
+            description = "Type-checks the project's Python with the TypedPython gate"
+            mode.convention(DEFAULT_TYPEDPYTHON_MODE)
+            gateVersion.convention(DEFAULT_TYPEDPYTHON_VERSION)
+            pyreflyVersion.convention(DEFAULT_PYREFLY_VERSION)
+            wheelDir.set(
+                project.providers.gradleProperty(TYPEDPYTHON_WHEEL_DIR_PROPERTY).map { project.file(it).absolutePath },
+            )
+            stubDirs.from(typedpythonStubs)
+            venvDir.set(project.layout.buildDirectory.dir("typedpython/venv"))
+            report.set(project.layout.buildDirectory.file("typedpython/report.txt"))
+        }
+
+        buildTask.configure { dependsOn(installTask, typedpythonCheckTask) }
         packageTask.configure { dependsOn(buildTask) }
 
         // ---------------------------------------------------------------------------------------
@@ -176,6 +210,21 @@ class PythonPlugin : Plugin<Project> {
             }
             installTask.configure {
                 packageDir = resolvedPackageDir
+            }
+            // Exactly the directory that gets bundled is what gets checked.
+            typedpythonCheckTask.configure {
+                packageDir = resolvedPackageDir
+                // metaDirs/libDirs are bundled but deliberately not checked: typedpythonCheckedDirs.
+                resolvedPackageDir?.let {
+                    typedpythonCheckedDirs(it, resolvedMetaDirs, resolvedLibDirs)
+                }.orEmpty().forEach { dir ->
+                    sources.from(
+                        project.fileTree(dir) {
+                            include("**/*.py", "**/*.pyi")
+                            exclude { it.isDirectory && typedpythonSourceExcluded(it.name) }
+                        },
+                    )
+                }
             }
 
             // `python { }` platform (`DSLPlatforms.kt`) was read by nothing at all until now
@@ -459,7 +508,7 @@ class PythonPlugin : Plugin<Project> {
                             minSdk = variant.minSdk
                             bundleDir = variantBundleDir
                             pythonVersionRejection = pythonVersionRejectionFor(variantEmbedLevel)
-                            dependsOn(installTask, targetInstall)
+                            dependsOn(installTask, targetInstall, typedpythonCheckTask)
                         }
 
                     val variantPackageTask =
