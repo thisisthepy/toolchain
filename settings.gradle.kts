@@ -31,7 +31,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "ToolchainProject"
 
-include(":toolchain-gradle-plugin")
+include(":toolchain")
 // sample/ is its own build, run with this wrapper: ./gradlew -p sample …. It uses python-multiplatform's
 // Kotlin; the plugin here stays on its own for its consumers (toolchain#22, #62).
-include(":tcl")

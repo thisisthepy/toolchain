@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Assemble the platform wheel that carries the native `tcl` binary (publish-pypi.yml).
 
-    python3 .github/scripts/pypi/build_wheel.py --binary tcl/build/native/nativeCompile/tcl --out dist
+    python3 .github/scripts/pypi/build_wheel.py --binary toolchain/build/native/nativeCompile/tcl --out dist
 
 Adapted from pypackpack's .github/scripts/pypi/build_wheel.py (pypackpack #53). The wheel holds:
-  toolchain_lite/__init__.py, __main__.py    tcl/src/main/python/ (`python -m toolchain_lite`)
+  toolchain_lite/__init__.py, __main__.py    toolchain/src/cliMain/python/ (`python -m toolchain_lite`)
   toolchain_lite-<v>.data/scripts/tcl        the native binary (tcl.exe on Windows)
   dist-info: METADATA from pyproject.toml's [project], LICENSE, WHEEL, RECORD
 
@@ -26,7 +26,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-PACKAGE_SRC = ROOT / "tcl/src/main/python"
+PACKAGE_SRC = ROOT / "toolchain/src/cliMain/python"
 IMPORT_NAME = "toolchain_lite"
 BINARY = "tcl"
 # glibc's own libraries plus libz, which every glibc distribution ships and Native Image links.

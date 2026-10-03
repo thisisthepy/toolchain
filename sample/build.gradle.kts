@@ -14,7 +14,7 @@ plugins {
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
     // sample is its own build (settings.gradle.kts here). The toolchain plugin is resolved by
-    // coordinate from mavenLocal (`./gradlew :toolchain-gradle-plugin:publishToMavenLocal` in ../), as is
+    // coordinate from mavenLocal (`./gradlew :toolchain:publishToMavenLocal` in ../), as is
     // python-multiplatform's bindings plugin, which stages and packages the CPython stdlib (#22).
     alias(libs.plugins.toolchain)
     alias(libs.plugins.python.multiplatform.bindings)

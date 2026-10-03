@@ -53,14 +53,14 @@ owns the Gradle vocabulary in between.
 
 ```shell
 # in pypackpack:  ./gradlew :packpack:publishToMavenLocal
-./gradlew :toolchain-gradle-plugin:publishToMavenLocal
+./gradlew :toolchain:publishToMavenLocal
 ```
 
 | Coordinates | What |
 |---|---|
 | plugin id `org.thisisthepy.python.multiplatform` | the Gradle plugin; apply it by id (unchanged) |
-| `org.thisisthepy.python.multiplatform:toolchain-gradle-plugin` | the plugin's implementation artifact (was `…:toolchain` before #62) |
-| `org.thisisthepy.python.multiplatform:tcl` | the CLI, toolchain-lite (tcl) |
+| `org.thisisthepy.python.multiplatform:toolchain` | the plugin's implementation artifact |
+| PyPI `toolchain-lite` | `tcl`, the command line for Python users (`uv tool install toolchain-lite`) |
 
 Apply the plugin next to Kotlin Multiplatform and point it at a `pypackpack` package. This is
 `sample/build.gradle.kts`, trimmed:
@@ -108,7 +108,7 @@ python {
 Python only? Skip Gradle builds entirely:
 
 ```shell
-./gradlew :tcl:run --args="install pythonx-compose"
+./gradlew :toolchain:runTcl --args="install pythonx-compose"
 ```
 
 ## 🧭 Architecture at a glance

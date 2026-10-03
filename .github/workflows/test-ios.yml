@@ -12,7 +12,7 @@ on:
       - "sample/src/iosMain/**"
       - "sample/build.gradle.kts"
       - "sample/gradle/**"
-      - "toolchain-gradle-plugin/src/main/kotlin/org/thisisthepy/python/multiplatform/toolchain/bundle/**"
+      - "toolchain/src/main/kotlin/org/thisisthepy/python/multiplatform/toolchain/bundle/**"
       - ".github/workflows/test-ios.yml"
   workflow_dispatch:
 
@@ -53,7 +53,7 @@ jobs:
       - name: Publish packpack, the toolchain plugin and python-multiplatform (iOS simulator)
         run: |
           (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)
-          ./gradlew :toolchain-gradle-plugin:publishToMavenLocal --console=plain
+          ./gradlew :toolchain:publishToMavenLocal --console=plain
           (cd .ci/python-multiplatform && ./gradlew \
             :python-multiplatform:publishIosSimulatorArm64PublicationToMavenLocal \
             :python-multiplatform:publishKotlinMultiplatformPublicationToMavenLocal \

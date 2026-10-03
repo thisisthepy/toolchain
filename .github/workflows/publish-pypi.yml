@@ -23,8 +23,8 @@ on:
       - .github/scripts/pypi/**
       - pyproject.toml
       - docs/pypi/**
-      - tcl/src/main/python/**
-      - tcl/build.gradle.kts
+      - toolchain/src/cliMain/**
+      - toolchain/build.gradle.kts
   workflow_dispatch:
 
 permissions:
@@ -48,10 +48,10 @@ jobs:
           IS_RELEASE: ${{ github.event_name == 'release' }}
         run: |
           py=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
-          cli=$(sed -n 's/^version = "\(.*\)"$/\1/p' tcl/build.gradle.kts)
-          echo "pyproject.toml: $py   tcl/build.gradle.kts: $cli   tag: ${TAG:-none (dry run)}"
-          if [ "$py" != "$cli" ]; then
-            echo "::error::pyproject.toml ($py) and tcl/build.gradle.kts ($cli) must carry the same version"; exit 1
+          cli=$(sed -n 's/^val tclVersion = "\(.*\)"$/\1/p' toolchain/build.gradle.kts)
+          echo "pyproject.toml: $py   toolchain/build.gradle.kts tclVersion: $cli   tag: ${TAG:-none (dry run)}"
+          if [ -z "$cli" ] || [ "$py" != "$cli" ]; then
+            echo "::error::pyproject.toml ($py) and toolchain/build.gradle.kts tclVersion ($cli) must carry the same version"; exit 1
           fi
           if [ "$IS_RELEASE" = true ] && [ "$TAG" != "toolchain-lite-v$py" ]; then
             echo "::error::release tag '$TAG' is not 'toolchain-lite-v$py'"; exit 1
@@ -100,11 +100,11 @@ jobs:
         run: ./gradlew --no-daemon :packpack:publishToMavenLocal
 
       - name: Native image
-        run: ./gradlew --no-daemon :tcl:nativeCompile
+        run: ./gradlew --no-daemon :toolchain:nativeCompile
 
       - name: Wheel
         run: |
-          exe=tcl/build/native/nativeCompile/tcl
+          exe=toolchain/build/native/nativeCompile/tcl
           [ "$RUNNER_OS" = Windows ] && exe="$exe.exe"
           python .github/scripts/pypi/build_wheel.py --binary "$exe" --out dist
 

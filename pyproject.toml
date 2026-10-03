@@ -1,6 +1,6 @@
 # toolchain-lite, the PyPI distribution of `tcl`. The wheel carries the native `tcl` command line
 # (GraalVM Native Image) and is assembled per platform by .github/scripts/pypi/build_wheel.py in
-# publish-pypi.yml, which reads [project] below. Its version must equal tcl/build.gradle.kts's: the
+# publish-pypi.yml, which reads [project] below. Its version must equal toolchain/build.gradle.kts's tclVersion: the
 # workflow refuses to publish unless the installed binary prints it.
 #
 # Installing from source (`uv pip install .`) gives only the Python package, without the binary;
@@ -40,5 +40,5 @@ Repository = "https://github.com/thisisthepy/toolchain"
 Issues = "https://github.com/thisisthepy/toolchain/issues"
 
 [tool.setuptools]
-package-dir = { toolchain_lite = "tcl/src/main/python" }
+package-dir = { toolchain_lite = "toolchain/src/cliMain/python" }
 packages = ["toolchain_lite"]
