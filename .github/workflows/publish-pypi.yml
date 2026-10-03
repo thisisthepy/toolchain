@@ -1,7 +1,8 @@
 name: Publish to PyPI
 
 # toolchain-lite (the PyPI distribution of tcl). Adapted from pypackpack's publish-pypi.yml
-# (pypackpack #53), with the same gates. Publishing a GitHub Release `v<version>` builds the native
+# (pypackpack #53), with the same gates. Publishing a GitHub Release `toolchain-lite-v<version>`
+# (#71: bare `v*` tags belong to the Gradle plugin, which this repository also releases) builds the native
 # tcl on each platform, wraps each binary in a wheel (.github/scripts/pypi/build_wheel.py), installs
 # and smoke-tests every wheel (smoke_wheel.py), and only then uploads them all through trusted
 # publishing (environment `pypi`, no token). A pull request that touches the publishing files, or a
@@ -36,6 +37,8 @@ concurrency:
 
 jobs:
   version:
+    # Another product's Release (the Gradle plugin's `v*`) skips this workflow; skipped jobs skip their dependants.
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'toolchain-lite-v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,8 +53,8 @@ jobs:
           if [ "$py" != "$cli" ]; then
             echo "::error::pyproject.toml ($py) and tcl/build.gradle.kts ($cli) must carry the same version"; exit 1
           fi
-          if [ "$IS_RELEASE" = true ] && [ "$TAG" != "v$py" ]; then
-            echo "::error::release tag '$TAG' is not 'v$py'"; exit 1
+          if [ "$IS_RELEASE" = true ] && [ "$TAG" != "toolchain-lite-v$py" ]; then
+            echo "::error::release tag '$TAG' is not 'toolchain-lite-v$py'"; exit 1
           fi
           if curl -fsS -o /dev/null "https://pypi.org/pypi/toolchain-lite/$py/json"; then
             if [ "$IS_RELEASE" = true ]; then echo "::error::toolchain-lite $py is already on PyPI"; exit 1; fi
