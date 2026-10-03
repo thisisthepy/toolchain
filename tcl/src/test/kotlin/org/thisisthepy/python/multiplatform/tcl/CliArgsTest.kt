@@ -72,4 +72,33 @@ class CliArgsTest {
         assertEquals(1, code)
         assertTrue(errors.any { it.contains("network down") })
     }
+
+    @Test
+    fun `--help prints usage on stdout and exits zero`() {
+        val out = mutableListOf<String>()
+
+        val code = execute(arrayOf("--help"), anyDir, install = mustNotInstall, out = out::add)
+
+        assertEquals(0, code)
+        assertTrue(out.any { it.contains("Usage: tcl install <package>") }, out.toString())
+    }
+
+    @Test
+    fun `--version prints the build's version and exits zero`() {
+        val out = mutableListOf<String>()
+
+        val code = execute(arrayOf("--version"), anyDir, install = mustNotInstall, out = out::add)
+
+        assertEquals(0, code)
+        assertEquals(listOf("tcl ${BuildInfo.version}"), out)
+    }
+
+    // cli/build.gradle.kts passes tcl's own version to the test JVM; publish-pypi.yml then checks it
+    // against pyproject.toml, so it must not be a literal (docs/SPEC.md section 2.2).
+    @Test
+    fun `the version is the one the build declares`() {
+        val expected = System.getProperty("tcl.expectedVersion")
+        assertTrue(!expected.isNullOrBlank(), "the build passes no tcl.expectedVersion")
+        assertEquals(expected, BuildInfo.version)
+    }
 }
