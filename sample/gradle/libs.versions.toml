@@ -1,0 +1,33 @@
+# sample/ is its own build (toolchain#22): a consumer of python-multiplatform, so it uses
+# python-multiplatform's toolchain (its gradle/libs.versions.toml), not the toolchain plugin's.
+# The plugin itself (../toolchain-gradle-plugin) stays on its own Kotlin for its consumers.
+[versions]
+agp = "8.10.1"
+android-compileSdk = "36"
+android-minSdk = "26"
+android-targetSdk = "34"
+androidx-activityCompose = "1.12.4"
+androidx-lifecycle = "2.10.0"
+compose-multiplatform = "1.11.1"
+kotlin = "2.4.20-Beta2"
+kotlinx-coroutines = "1.10.1"
+# python-multiplatform's coordinates today (its #70 will unify the plugin's version with the library's).
+python-multiplatform = "3.14.7-alpha01"
+python-multiplatform-plugin = "3.13.0"
+# The toolchain plugin, from ../toolchain-gradle-plugin via mavenLocal (`./gradlew :toolchain-gradle-plugin:publishToMavenLocal`).
+toolchain = "1.0.0-alpha"
+
+[libraries]
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
+androidx-lifecycle-viewmodel = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "androidx-lifecycle" }
+androidx-lifecycle-runtime-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
+kotlinx-coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "kotlinx-coroutines" }
+python-multiplatform = { module = "io.github.thisisthepy:python-multiplatform", version.ref = "python-multiplatform" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+python-multiplatform-bindings = { id = "io.github.thisisthepy.python.multiplatform.bindings", version.ref = "python-multiplatform-plugin" }
+toolchain = { id = "org.thisisthepy.python.multiplatform", version.ref = "toolchain" }

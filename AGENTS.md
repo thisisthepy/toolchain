@@ -31,6 +31,16 @@ ask first.**
 
 Writing to *another* repository is not an exception either. Do it only when told to work there.
 
+### Do not add top-level folders
+
+**Never add a new directory (or a new file) at the repository root on your own.** The root layout is
+the maintainer's: source modules, `docs/`, `gradle/`, `.github/` and the files that tools require
+there. Work belongs inside an existing module or directory — sources under `src/<sourceSet>/`,
+CI-only scripts under `.github/scripts/`, temporary files under the git-ignored `.tmp/`. If you think
+a new top-level entry is needed, propose it (what, why, which alternatives inside existing
+directories you ruled out) and wait for approval. This was added after unapproved root folders
+(`ksp-fixtures/`, `tools/`, `kotlin-js-store/`, `iosApp/`, `sample/python`) had to be dismantled.
+
 ## 3. Worktrees link large artefacts instead of copying them
 
 A worktree is a full checkout. Copying large untracked artefacts (prebuilt runtimes, vendored trees,
@@ -60,7 +70,7 @@ landed or reported, not left. Branches named `release-*` are preserved snapshots
 
 `main` carries a reduced layout: of the Markdown files, only `README.md` stays at the repository
 root, and `docs/` keeps only its subdirectories (no Markdown files directly under `docs/`).
-CI runs `tools/release/sync-release.sh` (`.github/workflows/release-sync.yml`) to produce that layout; do not hand-edit `release` or `main`.
+CI runs `.github/scripts/release/sync-release.sh` (`.github/workflows/release-sync.yml`) to produce that layout; do not hand-edit `release` or `main`.
 
 ### Issues and pull requests
 
@@ -161,20 +171,22 @@ GitHub issues `thisisthepy/toolchain#2` (plugin checklist) and `#1` (`tcl`), it 
 - Never edit, move, rename or `git add` it.
 - When the code's DSL disagrees with it, the file wins, and the disagreement is recorded in `docs/SPEC.md` and
   `docs/INTENT.md` §4 until the maintainer decides. Do not "fix" either side on your own.
-- `usage-example/` is the **executable subset** of that file: the part the plugin actually reads.
-  When a DSL property becomes live, add it to `usage-example/build.gradle.kts`, so there is a build
+- `sample/` is the **executable subset** of that file: the part the plugin actually reads.
+  When a DSL property becomes live, add it to `sample/build.gradle.kts`, so there is a build
   that fails if the wiring breaks.
 
 ## 12. Layout
 
 | Module | What it is |
 |---|---|
-| `:toolchain` | The Gradle plugin (`org.thisisthepy.python.multiplatform`, class `PythonPlugin`). DSL in `dsl/`, tasks in `bundle/`, `dependency/`, `hotreload/`. |
-| `:tcl` | toolchain-lite, a CLI application (`tcl install <package>`). |
-| `usage-example/` | **Its own Gradle build** (own settings, catalog and wrapper; toolchain#22): a Compose Multiplatform app applying this plugin and python-multiplatform, on python-multiplatform's Kotlin/Compose/AGP. Run it with its own wrapper: `(cd usage-example && ./gradlew …)`. |
+| `toolchain-gradle-plugin/` (`:toolchain-gradle-plugin`) | The Gradle plugin (id `org.thisisthepy.python.multiplatform`, class `PythonPlugin`). DSL in `dsl/`, tasks in `bundle/`, `dependency/`, `hotreload/`. |
+| `toolchain-cli/` (`:toolchain-cli`) | toolchain-lite, a CLI application (`tcl install <package>`). |
+| `sample/` | **Its own Gradle build** (own settings and catalog; toolchain#22): a Compose Multiplatform app applying this plugin and python-multiplatform, on python-multiplatform's Kotlin/Compose/AGP. Run it with this repository's wrapper: `./gradlew -p sample …`. Its Python package is `sample/src/commonMain/python/`. |
+| `.github/scripts/release/` | The develop → release → main sync (rule 4). |
 
-`pyproject.toml` at the root describes a Python package `toolchain` that does not exist; nothing
-builds it. Do not add Python code to satisfy it without asking (`docs/SPEC.md`, "Outside intent").
+Nothing else belongs at the root (#62): no IDE directories, no lock-file directories (the sample's wasm
+yarn lock is `sample/gradle/wasm-yarn.lock`), no copied wrappers. The pre-#62 layout is the tag
+`archive/pre-restructure`.
 
 ## 13. pypackpack owns the work; toolchain owns the vocabulary
 
@@ -217,10 +229,10 @@ history removing.
   classpath broke every consumer's wasm target once.
 - `-Xskip-metadata-version-check` exists because `packpack` is built with a newer Kotlin than this
   build. Bumping Kotlin build-wide is a decision for the maintainer, not a fix.
-- `usage-example` resolves the plugin **by Maven coordinate from `mavenLocal()`**, not through
-  `includeBuild`. After changing `:toolchain`, run `:toolchain:publishToMavenLocal` before building
-  `usage-example`, or you are testing the previous plugin.
-- `usage-example` is a separate build on python-multiplatform's toolchain (Kotlin 2.4.20-Beta2, Compose
+- `sample` resolves the plugin **by Maven coordinate from `mavenLocal()`**, not through
+  `includeBuild`. After changing `:toolchain-gradle-plugin`, run `:toolchain-gradle-plugin:publishToMavenLocal` before building
+  `sample`, or you are testing the previous plugin.
+- `sample` is a separate build on python-multiplatform's toolchain (Kotlin 2.4.20-Beta2, Compose
   1.11.1, AGP 8.10.1, Gradle 8.11.1), because a Kotlin 2.1 compiler cannot read python-multiplatform's
   klibs. The plugin itself stays on this build's Kotlin for its consumers; do not bump it to match.
 
@@ -228,17 +240,17 @@ history removing.
 
 Prerequisites: `org.thisisthepy.python.multiplatform:packpack:0.1.0` in `~/.m2` (published from the
 `pypackpack` repository), `uv` on `PATH`, and network access — `InstallDependenciesTaskTest` and
-`InstallerTest` run a real `uv add` against PyPI. `usage-example` additionally needs an Android SDK
+`InstallerTest` run a real `uv add` against PyPI. `sample` additionally needs an Android SDK
 (`ANDROID_HOME`) and python-multiplatform in `~/.m2`: from a python-multiplatform checkout,
 `./gradlew publishAllToMavenLocal` (library `3.14.7-alpha01`, bindings plugin `3.13.0` until its #70).
 
 Run each module separately (rule 8), with output to a file under `.tmp/`:
 
 ```bash
-rm -rf toolchain/build/test-results
-./gradlew :toolchain:test --rerun --console=plain > .tmp/toolchain-test.log 2>&1; echo "EXIT=$?"
-rm -rf tcl/build/test-results
-./gradlew :tcl:test --rerun --console=plain > .tmp/tcl-test.log 2>&1; echo "EXIT=$?"
+rm -rf toolchain-gradle-plugin/build/test-results
+./gradlew :toolchain-gradle-plugin:test --rerun --console=plain > .tmp/toolchain-test.log 2>&1; echo "EXIT=$?"
+rm -rf toolchain-cli/build/test-results
+./gradlew :toolchain-cli:test --rerun --console=plain > .tmp/tcl-test.log 2>&1; echo "EXIT=$?"
 ```
 
 Count results from `<module>/build/test-results/test/*.xml`, not from the log.

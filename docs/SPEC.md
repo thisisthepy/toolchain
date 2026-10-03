@@ -12,11 +12,11 @@ Each item carries a status:
 - **planned** — the example build file or an issue asks for it; the code does not do it (or only
   declares a DSL property that nothing reads).
 
-Status was assigned on 2026-10-02 by reading `toolchain/src`, `tcl/src` and their tests. No status
+Status was assigned on 2026-10-02 by reading the plugin's and the CLI's sources and their tests (now `toolchain-gradle-plugin/src`, `toolchain-cli/src`). No status
 here comes from a roadmap, a commit message or an issue checkbox.
 
-Paths below are abbreviated: `plugin/` = `toolchain/src/main/kotlin/org/thisisthepy/python/multiplatform/toolchain/`,
-`ptest/` = the matching `toolchain/src/test/kotlin/...` directory, `tcl/` = `tcl/src/{main,test}/kotlin/org/thisisthepy/python/multiplatform/tcl/`.
+Paths below are abbreviated: `plugin/` = `toolchain-gradle-plugin/src/main/kotlin/org/thisisthepy/python/multiplatform/toolchain/`,
+`ptest/` = the matching `toolchain-gradle-plugin/src/test/kotlin/...` directory, `cli/` = `toolchain-cli/src/{main,test}/kotlin/org/thisisthepy/python/multiplatform/tcl/`.
 
 ---
 
@@ -24,9 +24,9 @@ Paths below are abbreviated: `plugin/` = `toolchain/src/main/kotlin/org/thisisth
 
 ### 1.1 Applying the plugin
 Plugin id `org.thisisthepy.python.multiplatform`, implementation class `PythonPlugin`
-(`toolchain/build.gradle.kts` `gradlePlugin { }`). Applying it creates the `python` extension
+(`toolchain-gradle-plugin/build.gradle.kts` `gradlePlugin { }`). Applying it creates the `python` extension
 (`PythonExtension`) and registers the tasks of §1.10–§1.15 and §1.18, all in group `python`.
-Consumers resolve it from `mavenLocal()` after `./gradlew :toolchain:publishToMavenLocal`; the plugin
+Consumers resolve it from `mavenLocal()` after `./gradlew :toolchain-gradle-plugin:publishToMavenLocal`; the plugin
 itself depends on `org.thisisthepy.python.multiplatform:packpack:0.1.0` from `mavenLocal()`.
 
 **Status: implemented** — `plugin/PythonPlugin.kt`; `ptest/PythonPluginApplyTest.kt` applies the
@@ -34,7 +34,7 @@ plugin id to a ProjectBuilder project and checks the extension, every task name 
 (`installPythonDependencies`, `buildPython`, `packagePython`, `stagePythonBundle` and its
 `Android`/`Ios`/`Desktop` tasks; `hotReloadPython` and `codePushPython` after evaluation), the
 `python` group, and the `packagePython → buildPython → installPythonDependencies` chain. Resolving
-the plugin from `mavenLocal()` is still exercised only by building `usage-example`.
+the plugin from `mavenLocal()` is still exercised only by building `sample`.
 
 ### 1.2 `compileSdk` — the Python version
 `compileSdk` accepts `X.Y`, `X.Y.Z`, `X.Y.Z-alpha[N]` or `X.Y.Z-rc[N]` and classifies it into
@@ -53,7 +53,7 @@ automatically (INTENT §4.1), which is not available yet: the reason fails `buil
 when there is a package to bundle), not the configuration.
 
 **Status: implemented** — `plugin/dsl/PythonSdk.kt`; `ptest/dsl/PythonSdkTest.kt`,
-`ptest/bundle/BuildPythonSdkRejectionTest.kt`; `usage-example` uses `compileSdk = PY3_14_7`.
+`ptest/bundle/BuildPythonSdkRejectionTest.kt`; `sample` uses `compileSdk = PY3_14_7`.
 
 **What `compileSdk` selects (#42).** `compileSdk` selects the Python version of the wheels that
 go into `python/`: it is the `--python-version` of every per-target install (§1.10, #16). It does
@@ -284,7 +284,7 @@ family and flavor, options, rejection), `ptest/PythonPluginTargetDependenciesTes
 install directories, `libDirs` and dependencies on an applied plugin),
 `ptest/dependency/lang/python/InstallDependenciesTaskTest.kt` and
 `ptest/dependency/lang/python/InstallTargetDependenciesTaskTest.kt` (a real install of `six` for
-`aarch64-linux-android`; both need `uv` and network). CI's consumer job checks that usage-example's
+`aarch64-linux-android`; both need `uv` and network). CI's consumer job checks that sample's
 `iniconfig` is in the bundle and the zip.
 → *Known limits: without `compileSdk` no `python-version` is passed and uv uses the interpreter it
 finds. `installPythonDependencies` still `uv add`s every source set for the host, so a package with
@@ -378,18 +378,18 @@ Hand-off to the platform's packaging step:
   real `com.android.application` (AGP 8.5.2, test classpath only) and checks the staged root is a
   `main` asset source directory. Not tested: the `preBuild` / `merge*Assets` → `stagePythonBundleAndroid`
   dependency (AGP creates those tasks only when the project is evaluated against an Android SDK,
-  which `:toolchain:test` does not require), and the built APK.
+  which `:toolchain-gradle-plugin:test` does not require), and the built APK.
 - iOS: toolchain stages and exposes the path; python-multiplatform (#59) owns the Xcode build phase
   that attaches it. `stagePythonBundleIosForXcode` (group `python`) depends on `stagePythonBundleIos`
   and prints exactly one line `PYTHON_PAYLOAD_DIR=<absolute path>` (stdout, visible under `--quiet`).
   It fails with a reason when no iOS variant of the active build type exists, or the staged
   `build/pythonStaging/ios/python/` is missing or empty (no package configured). It never copies into
-  the `.app`. The phase script is `tools/xcode/stage-python-payload.sh` (`set -euo pipefail`, checks
-  the directory exists before `rsync -a --delete "$dir/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/python/"`),
-  for apps **without** python-multiplatform. With python-multiplatform, its `tools/xcode/install-python.sh`
-  is the single phase that copies `python/` (and the stdlib): it takes `PYTHON_PAYLOAD_TASK` (a task
-  printing `PYTHON_PAYLOAD_DIR=`, i.e. this one). Exactly one Xcode phase may copy `python/`; both
-  scripts `rsync --delete` into the same `<app>/python/`.
+  the `.app`. With python-multiplatform, its `tools/xcode/install-python.sh` is the single phase that
+  copies `python/` (and the stdlib): it takes `PYTHON_PAYLOAD_DIR` (or `PYTHON_PAYLOAD_TASK` within its
+  own Gradle root); the sample's `sample/src/iosMain/install-python-phase.sh` computes the directory
+  with this task and passes it. Exactly one Xcode phase may copy `python/`. Wiring by hand without
+  python-multiplatform: the guide's staging page has the safe phase snippet (capture, parse, check
+  the directory, then `rsync --delete`); the repository no longer ships it as a script (#62).
   **partial** — `xcodePayloadLine`, `ptest/bundle/StagePythonBundleIosForXcodeTaskTest.kt`,
   `ptest/bundle/StagePythonPayloadScriptTest.kt`. Not tested: an actual Xcode build.
 - Putting the staged `python/` on `sys.path` at run time is `python-multiplatform`'s side.
@@ -520,7 +520,7 @@ commands, skip warning, mode, exit-code interpretation). The TestKit tests in
 `pyrefly` wheels) and `uv`; without it they are **skipped** with that reason, as on CI.
 Not covered by a test here: exit 2 end to end (only `interpretTypedpythonResult`), and the install
 in a *consumer's* classpath — `withPluginClasspath()` bypasses the Kotlin DSL's `kotlin-stdlib` pin;
-that was verified by building usage-example's `buildPython`.
+that was verified by building sample's `buildPython`.
 → *Until `typedpython` is on PyPI, a build without `-Ptypedpython.wheelDir` skips the check with a warning.*
 → *Platform overlays (`src/<family>`) are checked as files but only `src/main` is an import root:
 **partial**.*
@@ -534,8 +534,8 @@ Finds the nearest `pyproject.toml` at or above the working directory. If there i
 message on stderr for a missing argument, an unknown command or a failed install. No arguments
 prints `Usage: tcl install <package>`.
 
-**Status: implemented** — `tcl/Cli.kt`, `tcl/Installer.kt`; `tcl/CliArgsTest.kt`,
-`tcl/InstallerTest.kt` (needs `uv` and network). Run with `./gradlew :tcl:run --args="install <pkg>"`.
+**Status: implemented** — `cli/Cli.kt`, `cli/Installer.kt`; `cli/CliArgsTest.kt`,
+`cli/InstallerTest.kt` (needs `uv` and network). Run with `./gradlew :toolchain-cli:run --args="install <pkg>"`.
 
 ---
 
@@ -545,7 +545,7 @@ These exist in the code but are not asked for by the example build file or the i
 
 1. **`python { localLibraryPath = "…" }`** — not in the example build file, which uses
    `sourceSets { commonMain { srcDirs(…) } }`. It overrides `srcDirs` and is the only source root
-   hot reload reads. `usage-example` depends on it.
+   hot reload reads. `sample` depends on it.
 2. **`-Ppython.buildType=<name>`** — a project property choosing the active build type when no
    platform variant is declared. The example build file says nothing about selecting a build type.
 3. **Hot reload over `adb push` + broadcast.** The example describes an HTTPS `serverHost` with a
@@ -556,6 +556,5 @@ These exist in the code but are not asked for by the example build file or the i
    wired), `bundle/PythonLocalLoader.kt`, `dependency/DependencyType.kt`, and
    `BinariesExtension` / `FrozenPackConfig` / `BuildTypeEnum` in `dsl/DSLPlatforms.kt`. Nothing calls
    any of them.
-5. **`pyproject.toml`** declares a flit-built Python package named `toolchain` (Python 3.9–3.13)
-   that does not exist in the repository — the root `toolchain/` directory is the Gradle module.
-   Nothing builds or tests it.
+5. ~~**`pyproject.toml`**~~ — deleted in #62 (a flit stub for a Python package that never existed;
+   nothing built it). It survives in the tag `archive/pre-restructure`.

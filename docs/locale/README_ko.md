@@ -52,11 +52,17 @@ Python 을 내장한 Kotlin Multiplatform 앱에는 맞물려 돌아가야 하�
 
 ```shell
 # pypackpack 에서:  ./gradlew :packpack:publishToMavenLocal
-./gradlew :toolchain:publishToMavenLocal
+./gradlew :toolchain-gradle-plugin:publishToMavenLocal
 ```
 
+| 좌표 | 무엇 |
+|---|---|
+| 플러그인 id `org.thisisthepy.python.multiplatform` | Gradle 플러그인; id 로 적용 (변경 없음) |
+| `org.thisisthepy.python.multiplatform:toolchain-gradle-plugin` | 플러그인 구현 아티팩트 (#62 이전에는 `…:toolchain`) |
+| `org.thisisthepy.python.multiplatform:toolchain-cli` | CLI, toolchain-lite (#62 이전에는 `…:tcl`) |
+
 Kotlin Multiplatform 옆에 플러그인을 적용하고 `pypackpack` 패키지를 가리키게 합니다. 아래는
-`usage-example/build.gradle.kts` 를 줄인 것입니다.
+`sample/build.gradle.kts` 를 줄인 것입니다.
 
 ```kotlin
 plugins {
@@ -69,18 +75,17 @@ python {
     compileSdk = "3.13"
     localLibraryPath = "python"      // pypackpack 패키지: pyproject.toml + src/main/<pkg>
     packaging {
-        fileName = "usage-example"
+        fileName = "sample"
     }
 }
 ```
 
 ```shell
-cd usage-example                              # 별도 빌드 (python-multiplatform 의 Kotlin 사용)
-./gradlew packagePython                       # 설치 → 번들 → zip
-./gradlew stagePythonBundle                   # android, ios, desktop 용 python/ 스테이징
+./gradlew -p sample packagePython             # 설치 → 번들 → zip (sample/ 은 별도 빌드)
+./gradlew -p sample stagePythonBundle         # android, ios, desktop 용 python/ 스테이징
 ```
 
-> **iOS, 임시:** usage-example 의 Xcode 단계(`usage-example/src/iosMain/install-python-phase.sh`)는
+> **iOS, 임시:** sample 의 Xcode 단계(`sample/src/iosMain/install-python-phase.sh`)는
 > python-multiplatform#90 이 published 플러그인으로 그 배선을 제공할 때까지 `Python.xcframework` 와 stdlib 을 위해
 > python-multiplatform 체크아웃을 가리키는 `PYTHON_MULTIPLATFORM_DIR` 가 필요합니다.
 
@@ -102,7 +107,7 @@ python {
 Python 만 쓰나요? Gradle 빌드 없이:
 
 ```shell
-./gradlew :tcl:run --args="install pythonx-compose"
+./gradlew :toolchain-cli:run --args="install pythonx-compose"
 ```
 
 ## 🧭 한눈에 보는 구조
