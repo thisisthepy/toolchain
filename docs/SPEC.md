@@ -556,7 +556,8 @@ tcl --help
 - The platform tag is read from the binary (`.github/scripts/pypi/build_wheel.py`). No sdist:
   building needs a JDK and GraalVM.
 - `.github/workflows/publish-pypi.yml` runs on a published GitHub Release only and uploads through
-  trusted publishing (environment `pypi`). Before uploading it requires the tag to be `v<version>`,
+  trusted publishing (environment `pypi`, which accepts only `toolchain-lite-v*` tags). Before uploading
+  it requires the tag to be `toolchain-lite-v<version>` (bare `v*` tags are the Gradle plugin's, #71),
   `pyproject.toml` and `tcl/build.gradle.kts` to carry that version, the version to be new on PyPI,
   and every wheel to pass `smoke_wheel.py` in a fresh venv (`tcl --help`, `tcl --version`,
   `python -m toolchain_lite --version`, and `tcl install six` writing a `pyproject.toml`).
