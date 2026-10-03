@@ -1,4 +1,4 @@
-# sample/ is its own build (toolchain#22): a consumer of python-multiplatform, so it uses
+# usage-example/ is its own build (toolchain#22): a consumer of python-multiplatform, so it uses
 # python-multiplatform's toolchain (its gradle/libs.versions.toml), not the toolchain plugin's.
 # The plugin itself (../toolchain) stays on its own Kotlin for its consumers.
 [versions]

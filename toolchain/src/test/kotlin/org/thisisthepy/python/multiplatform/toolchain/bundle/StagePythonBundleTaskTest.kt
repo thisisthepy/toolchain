@@ -121,7 +121,7 @@ class StagePythonBundleTaskTest {
         // A regression guard for a defect this task actually had. With the bundle declared nowhere,
         // Gradle had nothing to compare and reported `stagePythonBundleDesktop UP-TO-DATE` on every
         // run after the first, so the staged tree -- and the jar built from it -- kept a payload
-        // from an earlier revision of the Python package. Found by building `:sample:
+        // from an earlier revision of the Python package. Found by building `:usage-example:
         // desktopJar`, deleting a module, and building again: the module was still in the archive.
         //
         // Asserted on the annotation rather than through a Gradle run because up-to-date checking

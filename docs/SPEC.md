@@ -34,7 +34,7 @@ plugin id to a ProjectBuilder project and checks the extension, every task name 
 (`installPythonDependencies`, `buildPython`, `packagePython`, `stagePythonBundle` and its
 `Android`/`Ios`/`Desktop` tasks; `hotReloadPython` and `codePushPython` after evaluation), the
 `python` group, and the `packagePython → buildPython → installPythonDependencies` chain. Resolving
-the plugin from `mavenLocal()` is still exercised only by building `sample`.
+the plugin from `mavenLocal()` is still exercised only by building `usage-example`.
 
 ### 1.2 `compileSdk`: the Python version
 `compileSdk` accepts `X.Y`, `X.Y.Z`, `X.Y.Z-alpha[N]` or `X.Y.Z-rc[N]` and classifies it into
@@ -53,7 +53,7 @@ automatically (INTENT §4.1), which is not available yet: the reason fails `buil
 when there is a package to bundle), not the configuration.
 
 **Status: implemented**. `plugin/dsl/PythonSdk.kt`; `ptest/dsl/PythonSdkTest.kt`,
-`ptest/bundle/BuildPythonSdkRejectionTest.kt`; `sample` uses `compileSdk = PY3_14_7`.
+`ptest/bundle/BuildPythonSdkRejectionTest.kt`; `usage-example` uses `compileSdk = PY3_14_7`.
 
 **What `compileSdk` selects (#42).** `compileSdk` selects the Python version of the wheels that
 go into `python/`: it is the `--python-version` of every per-target install (§1.10, #16). It does
@@ -284,7 +284,7 @@ family and flavor, options, rejection), `ptest/PythonPluginTargetDependenciesTes
 install directories, `libDirs` and dependencies on an applied plugin),
 `ptest/dependency/lang/python/InstallDependenciesTaskTest.kt` and
 `ptest/dependency/lang/python/InstallTargetDependenciesTaskTest.kt` (a real install of `six` for
-`aarch64-linux-android`; both need `uv` and network). CI's consumer job checks that sample's
+`aarch64-linux-android`; both need `uv` and network). CI's consumer job checks that usage-example's
 `iniconfig` is in the bundle and the zip.
 → *Known limits: without `compileSdk` no `python-version` is passed and uv uses the interpreter it
 finds. `installPythonDependencies` still `uv add`s every source set for the host, so a package with
@@ -386,7 +386,7 @@ Hand-off to the platform's packaging step:
   `build/pythonStaging/ios/python/` is missing or empty (no package configured). It never copies into
   the `.app`. With python-multiplatform, its `tools/xcode/install-python.sh` is the single phase that
   copies `python/` (and the stdlib): it takes `PYTHON_PAYLOAD_DIR` (or `PYTHON_PAYLOAD_TASK` within its
-  own Gradle root); the sample's `sample/src/iosMain/install-python-phase.sh` computes the directory
+  own Gradle root); usage-example's `usage-example/src/iosMain/install-python-phase.sh` computes the directory
   with this task and passes it. Exactly one Xcode phase may copy `python/`. Wiring by hand without
   python-multiplatform: the guide's staging page has the safe phase snippet (capture, parse, check
   the directory, then `rsync --delete`); the repository no longer ships it as a script (#62).
@@ -520,7 +520,7 @@ commands, skip warning, mode, exit-code interpretation). The TestKit tests in
 `pyrefly` wheels) and `uv`; without it they are **skipped** with that reason, as on CI.
 Not covered by a test here: exit 2 end to end (only `interpretTypedpythonResult`), and the install
 in a *consumer's* classpath: `withPluginClasspath()` bypasses the Kotlin DSL's `kotlin-stdlib` pin;
-that was verified by building sample's `buildPython`.
+that was verified by building usage-example's `buildPython`.
 → *Until `typedpython` is on PyPI, a build without `-Ptypedpython.wheelDir` skips the check with a warning.*
 → *Platform overlays (`src/<family>`) are checked as files but only `src/main` is an import root:
 **partial**.*
@@ -575,7 +575,7 @@ These exist in the code but are not asked for by the example build file or the i
 
 1. **`python { localLibraryPath = "…" }`**: not in the example build file, which uses
    `sourceSets { commonMain { srcDirs(…) } }`. It overrides `srcDirs` and is the only source root
-   hot reload reads. `sample` depends on it.
+   hot reload reads. `usage-example` depends on it.
 2. **`-Ppython.buildType=<name>`**: a project property choosing the active build type when no
    platform variant is declared. The example build file says nothing about selecting a build type.
 3. **Hot reload over `adb push` + broadcast.** The example describes an HTTPS `serverHost` with a
