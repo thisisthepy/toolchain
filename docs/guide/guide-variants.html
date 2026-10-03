@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en" data-title-en="Platforms & build types · toolchain" data-title-ko="플랫폼과 빌드 타입 · toolchain">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Platforms & build types · toolchain</title>
+<meta name="description" content="toolchain: declare the Python half of a Kotlin Multiplatform app in Gradle.">
+<meta name="theme-color" content="#0f9d76">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+<header class="site-header"><div class="wrap">
+<a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" fill="none"><rect x="1.5" y="1.5" width="21" height="21" rx="6" stroke="currentColor" stroke-opacity=".35" stroke-width="1.5"/><circle cx="8" cy="8.5" r="2.4" fill="#0f9d76"/><circle cx="16" cy="15.5" r="2.4" fill="#0f9d76"/><path d="M8 11v1.5a3 3 0 0 0 3 3h2.6" stroke="#0f9d76" stroke-width="1.8" stroke-linecap="round"/></svg><span translate="no">toolchain</span></a>
+<nav class="top-nav" aria-label="Main" data-label-en="Main" data-label-ko="주 메뉴"><a href="index.html"><span data-lang="en">Home</span><span data-lang="ko">홈</span></a><a href="getting-started.html"><span data-lang="en">Start</span><span data-lang="ko">시작</span></a><a href="concepts.html"><span data-lang="en">Concepts</span><span data-lang="ko">개념</span></a><a href="guide-variants.html" aria-current="page"><span data-lang="en">Guides</span><span data-lang="ko">가이드</span></a><a href="ecosystem.html"><span data-lang="en">Ecosystem</span><span data-lang="ko">생태계</span></a><a href="status.html"><span data-lang="en">Status</span><span data-lang="ko">상태</span></a></nav>
+<div class="controls">
+<button class="ctl" id="lang-toggle" type="button" aria-label="Switch language" data-label-en="Switch language to Korean" data-label-ko="언어를 영어로 전환"><span data-lang="en">한국어</span><span data-lang="ko">English</span></button>
+<button class="ctl" id="theme-toggle" type="button" aria-label="Toggle theme" data-label-en="Toggle light or dark theme" data-label-ko="밝은 테마와 어두운 테마 전환"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+</div>
+</div></header>
+<main>
+<div class="wrap doc"><nav class="doc-side" aria-label="Documentation" data-label-en="Documentation" data-label-ko="문서"><p data-lang="en">Documentation</p><p data-lang="ko">문서</p><a href="getting-started.html"><span data-lang="en">Getting started</span><span data-lang="ko">시작하기</span></a><a href="concepts.html"><span data-lang="en">Concepts</span><span data-lang="ko">개념</span></a><a href="guide-variants.html" aria-current="page"><span data-lang="en">Platforms & build types</span><span data-lang="ko">플랫폼과 빌드 타입</span></a><a href="guide-dependencies.html"><span data-lang="en">Source sets & dependencies</span><span data-lang="ko">소스셋과 의존성</span></a><a href="guide-staging.html"><span data-lang="en">Into the app</span><span data-lang="ko">앱 안으로</span></a><a href="guide-tcl.html"><span data-lang="en">tcl for Python users</span><span data-lang="ko">Python 사용자를 위한 tcl</span></a><a href="ecosystem.html"><span data-lang="en">Ecosystem</span><span data-lang="ko">생태계</span></a><a href="status.html"><span data-lang="en">Status & FAQ</span><span data-lang="ko">상태와 FAQ</span></a></nav><article class="doc-body">
+<h1><span data-lang="en">Platforms &amp; build types</span><span data-lang="ko">플랫폼과 빌드 타입</span></h1>
+<p data-lang="en" class="muted">Build one bundle per target and per build type.</p><p data-lang="ko" class="muted">타깃과 빌드 타입마다 번들을 하나씩 만듭니다.</p>
+
+<section>
+<h2><span data-lang="en">Declare platforms</span><span data-lang="ko">플랫폼 선언</span></h2>
+<pre><code class="language-kotlin">python {
+    android(&quot;android&quot;) {
+        androidSdk = 24                           // forwarded to pypackpack as minSdk
+    }
+    listOf(androidArm64(), androidX64())
+
+    ios {
+        iosSdk = 14
+    }
+    listOf(iosArm64(), iosSimulatorArm64())
+
+    desktop()
+    listOf(macosArm64(), linuxX64(), mingwX64())
+}</code></pre>
+<p data-lang="en">Calling a variant function declares that variant; <code>listOf(...)</code> only groups the calls. A variant called without its platform block gets that platform with its defaults.</p><p data-lang="ko">변형 함수를 부르는 것이 곧 그 변형을 선언하는 것이고, <code>listOf(...)</code> 는 호출을 묶어 보여 줄 뿐입니다. 플랫폼 블록 없이 부른 변형은 그 플랫폼의 기본값을 씁니다.</p>
+<div class="table-wrap"><table><thead><tr><th><span data-lang="en">Variant</span><span data-lang="ko">변형</span></th><th><span data-lang="en">pypackpack triple</span><span data-lang="ko">pypackpack 트리플</span></th><th><span data-lang="en">Kotlin target</span><span data-lang="ko">Kotlin 타깃</span></th></tr></thead><tbody><tr><td><code>androidArm64</code></td><td><code>aarch64-linux-android</code></td><td><code>androidNativeArm64</code></td></tr><tr><td><code>androidX64</code></td><td><code>x86_64-linux-android</code></td><td><code>androidNativeX64</code></td></tr><tr><td><code>iosArm64</code></td><td><code>arm64-apple-ios</code></td><td><code>iosArm64</code></td></tr><tr><td><code>iosX64</code></td><td><code>x86_64-apple-ios-simulator</code></td><td><code>iosX64</code></td></tr><tr><td><code>iosSimulatorArm64</code></td><td><code>arm64-apple-ios-simulator</code></td><td><code>iosSimulatorArm64</code></td></tr><tr><td><code>macosX64</code> · <code>macosArm64</code></td><td><code>x86_64-apple-darwin</code> · <code>aarch64-apple-darwin</code></td><td><span data-lang="en">same name</span><span data-lang="ko">같은 이름</span></td></tr><tr><td><code>linuxX64</code> · <code>linuxArm64</code></td><td><code>x86_64-unknown-linux-gnu</code> · <code>aarch64-unknown-linux-gnu</code></td><td><span data-lang="en">same name</span><span data-lang="ko">같은 이름</span></td></tr><tr><td><code>mingwX64</code></td><td><code>x86_64-pc-windows-msvc</code></td><td><code>mingwX64</code></td></tr></tbody></table></div>
+<div class="note"><p data-lang="en"><code>androidArm32()</code> and <code>androidX86()</code> do not compile: Android follows CPython's official support (PEP 738), which is arm64 and x86_64 only. A declared variant whose Kotlin target your <code>kotlin { }</code> block does not enable produces a warning.</p><p data-lang="ko"><code>androidArm32()</code> 와 <code>androidX86()</code> 은 컴파일되지 않습니다. 안드로이드는 CPython 공식 지원(PEP 738)을 따르며, 그 범위는 arm64 와 x86_64 뿐입니다. <code>kotlin { }</code> 블록에서 켜지 않은 Kotlin 타깃의 변형을 선언하면 경고가 납니다.</p></div>
+</section>
+
+<section>
+<h2><span data-lang="en">Build types</span><span data-lang="ko">빌드 타입</span></h2>
+<pre><code class="language-kotlin">python {
+    buildTypes {
+        getByName(&quot;debug&quot;)   { compileLevel = &quot;instant&quot; }
+        getByName(&quot;release&quot;) { compileLevel = &quot;bytecode&quot; }
+    }
+}</code></pre>
+<p data-lang="en">Only <code>debug</code> and <code>release</code> exist. <code>useCodeMinifier</code>, <code>excludeMetaclass</code> and <code>enableCodePush</code> are release-only: setting them on <code>debug</code> throws.</p><p data-lang="ko"><code>debug</code> 와 <code>release</code> 만 있습니다. <code>useCodeMinifier</code>, <code>excludeMetaclass</code>, <code>enableCodePush</code> 는 release 전용이며 <code>debug</code> 에 설정하면 예외가 납니다.</p>
+<div class="table-wrap"><table><thead><tr><th><span data-lang="en">compileLevel</span><span data-lang="ko">compileLevel</span></th><th><span data-lang="en">Meaning</span><span data-lang="ko">의미</span></th><th><span data-lang="en">Today</span><span data-lang="ko">지금</span></th></tr></thead><tbody><tr><td><code>instant</code> <span data-lang="en">(or blank)</span><span data-lang="ko">(또는 빈 값)</span></td><td><span data-lang="en">.py only</span><span data-lang="ko">.py 만</span></td><td><span data-lang="en" class="pill ok">implemented</span><span data-lang="ko" class="pill ok">구현됨</span></td></tr><tr><td><code>bytecode</code></td><td><span data-lang="en">debug: .py + .pyc; release: .pyc only</span><span data-lang="ko">debug: .py + .pyc, release: .pyc 만</span></td><td><span data-lang="en" class="pill ok">implemented</span><span data-lang="ko" class="pill ok">구현됨</span></td></tr><tr><td><code>native</code></td><td><span data-lang="en">native code only</span><span data-lang="ko">네이티브 코드만</span></td><td><span data-lang="en" class="pill plan">planned (pypackpack#19)</span><span data-lang="ko" class="pill plan">계획 (pypackpack#19)</span></td></tr><tr><td><code>mixed</code></td><td><span data-lang="en">your code as bytecode, libraries native</span><span data-lang="ko">내 코드는 바이트코드, 라이브러리는 네이티브</span></td><td><span data-lang="en" class="pill plan">planned (pypackpack#19)</span><span data-lang="ko" class="pill plan">계획 (pypackpack#19)</span></td></tr></tbody></table></div>
+<div class="note"><p data-lang="en"><code>bytecode</code> compiles with the Python in a <code>.venv</code> at or above your package directory. <code>installPythonDependencies</code> leaves one there (<code>uv add</code> creates <code>&lt;package&gt;/.venv</code>) once you declare a dependency; otherwise run <code>uv venv --python 3.14</code> in the package directory. Its minor version must match <code>compileSdk</code>, because a <code>.pyc</code> only loads on the CPython minor version that wrote it; a mismatch fails the variant. Without a declared <code>compileSdk</code>, or a <code>pyvenv.cfg</code> to read, the versions are not compared.</p><p data-lang="ko"><code>bytecode</code> 는 패키지 디렉터리나 그 위의 <code>.venv</code> 에 있는 Python 으로 컴파일합니다. 의존성을 하나라도 선언하면 <code>installPythonDependencies</code> 가 그것을 만들어 둡니다(<code>uv add</code> 가 <code>&lt;package&gt;/.venv</code> 를 만듭니다). 그렇지 않으면 패키지 디렉터리에서 <code>uv venv --python 3.14</code> 를 실행하세요. 그 마이너 버전은 <code>compileSdk</code> 와 같아야 합니다. <code>.pyc</code> 는 그것을 쓴 CPython 마이너 버전에서만 로드되기 때문이며, 다르면 그 변형이 실패합니다. <code>compileSdk</code> 를 선언하지 않았거나 읽을 <code>pyvenv.cfg</code> 가 없으면 버전을 비교하지 않습니다.</p></div>
+<p data-lang="en">A planned level fails only its own variant's <code>buildPython…</code> task, so <code>./gradlew packagePython --continue</code> still builds every other variant.</p><p data-lang="ko">계획 단계의 레벨은 그 변형의 <code>buildPython…</code> 태스크만 실패시키므로, <code>./gradlew packagePython --continue</code> 는 나머지 변형을 모두 빌드합니다.</p>
+</section>
+
+<section>
+<h2><span data-lang="en">Project flavors</span><span data-lang="ko">프로젝트 플레이버</span></h2>
+<pre><code class="language-kotlin">python {
+    androidArm64()
+    projectFlavors {
+        create(&quot;free&quot;)
+        create(&quot;paid&quot;)
+    }
+}
+// → buildPythonAndroidArm64FreeDebug, buildPythonAndroidArm64PaidDebug, …</code></pre>
+<p data-lang="en">Each flavor is crossed with every platform variant and build type, as in Android's product flavors. Put a flavor's own dependencies in a <code>&lt;flavor&gt;Main</code> source set. Staging takes one flavor: <code>-Ppython.flavor=paid</code>, or the first declared. Flavors need at least one platform variant.</p><p data-lang="ko">플레이버마다 모든 플랫폼 변형과 빌드 타입이 곱해집니다(Android 의 product flavor 와 같습니다). 플레이버 고유 의존성은 <code>&lt;flavor&gt;Main</code> 소스셋에 둡니다. 스테이징은 플레이버 하나를 씁니다: <code>-Ppython.flavor=paid</code>, 없으면 처음 선언한 것. 플레이버에는 플랫폼 변형이 하나 이상 있어야 합니다.</p>
+</section>
+
+<section>
+<h2><span data-lang="en">Choosing the active build type</span><span data-lang="ko">활성 빌드 타입 고르기</span></h2>
+<p data-lang="en">Without platforms there are no per-variant task names to ask for, so a project property picks the build type. It defaults to <code>debug</code>; a name you did not declare fails the build.</p><p data-lang="ko">플랫폼이 없으면 고를 변형 태스크 이름이 없으므로 프로젝트 속성으로 빌드 타입을 정합니다. 기본값은 <code>debug</code> 이고, 선언하지 않은 이름은 빌드를 실패시킵니다.</p>
+<pre><code class="language-shell">./gradlew packagePython -Ppython.buildType=release</code></pre>
+<p data-lang="en">The same property decides which variant's bundle is staged into your app — see <a href="guide-staging.html">Into the app</a>.</p><p data-lang="ko">같은 속성이 앱에 스테이징될 변형도 정합니다 — <a href="guide-staging.html">앱 안으로</a>를 보세요.</p>
+</section>
+</article></div>
+</main>
+<footer class="site-footer"><div class="wrap">
+<nav aria-label="All pages" data-label-en="All pages" data-label-ko="모든 페이지"><a href="index.html"><span data-lang="en">Home</span><span data-lang="ko">홈</span></a><a href="getting-started.html"><span data-lang="en">Getting started</span><span data-lang="ko">시작하기</span></a><a href="concepts.html"><span data-lang="en">Concepts</span><span data-lang="ko">개념</span></a><a href="guide-variants.html"><span data-lang="en">Platforms & build types</span><span data-lang="ko">플랫폼과 빌드 타입</span></a><a href="guide-dependencies.html"><span data-lang="en">Source sets & dependencies</span><span data-lang="ko">소스셋과 의존성</span></a><a href="guide-staging.html"><span data-lang="en">Into the app</span><span data-lang="ko">앱 안으로</span></a><a href="guide-tcl.html"><span data-lang="en">tcl for Python users</span><span data-lang="ko">Python 사용자를 위한 tcl</span></a><a href="ecosystem.html"><span data-lang="en">Ecosystem</span><span data-lang="ko">생태계</span></a><a href="status.html"><span data-lang="en">Status & FAQ</span><span data-lang="ko">상태와 FAQ</span></a></nav>
+<p data-lang="en">Part of the <a href="ecosystem.html">thisisthepy</a> ecosystem. MIT licensed. Source: <a href="https://github.com/thisisthepy/toolchain">github.com/thisisthepy/toolchain</a>.</p><p data-lang="ko"><a href="ecosystem.html">thisisthepy</a> 생태계의 일부입니다. MIT 라이선스. 소스: <a href="https://github.com/thisisthepy/toolchain">github.com/thisisthepy/toolchain</a>.</p>
+</div></footer>
+</body>
+</html>

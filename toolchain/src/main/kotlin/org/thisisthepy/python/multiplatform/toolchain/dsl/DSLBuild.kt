@@ -49,8 +49,22 @@ class ReleaseBuildType(name: String) : BuildType(name) {
     override var enableCodePush: Boolean = false
 }
 
+/**
+ * `buildFeatures { metaclass; compose }`; decided by `resolveBundledMetaDirs`,
+ * `resolveComposePythonInstall` and `resolveComposeKotlinDependency` (`BuildFeatures.kt`).
+ */
 open class BuildFeaturesExtension {
-    var metaclass: Boolean = false
+    /**
+     * Forward `commonMain`'s `metaDirs` to the bundle. `true` by default: `metaDirs` were forwarded
+     * before this flag was read, and the example build file writes `metaclass = true`.
+     */
+    var metaclass: Boolean = true
+
+    /**
+     * Install `pythonx-compose` and add `python-multiplatform-compose` to Kotlin `commonMain`; both
+     * locations come from the Gradle properties `python.compose.pythonxCompose` and
+     * `python.compose.kotlinModule`.
+     */
     var compose: Boolean = false
 }
 
@@ -116,6 +130,12 @@ open class SourceSetsExtension {
 }
 
 class AutoSourceSetDelegate(private val container: SourceSetsExtension) {
+    /** Registers the source set when the property is declared, not when it is first read. */
+    operator fun provideDelegate(thisRef: Any?, property: KProperty<*>): AutoSourceSetDelegate {
+        container.getByName(property.name)
+        return this
+    }
+
     operator fun getValue(thisRef: Any?, property: KProperty<*>): SourceSetConfig {
         return container.getByName(property.name)
     }
@@ -125,9 +145,13 @@ class AutoSourceSetDelegateWithConfig(
     private val container: SourceSetsExtension,
     private val action: SourceSetConfig.() -> Unit
 ) {
-    operator fun getValue(thisRef: Any?, property: KProperty<*>): SourceSetConfig {
-        val config = container.getByName(property.name)
-        config.action()
-        return config
+    /**
+     * Runs [action] once, at declaration (issue #35). Kotlin calls `getValue` only when the property
+     * is read, so applying the block there silently dropped it for `val commonMain by getting { }`
+     * when nothing read `commonMain`.
+     */
+    operator fun provideDelegate(thisRef: Any?, property: KProperty<*>): AutoSourceSetDelegate {
+        container.getByName(property.name).action()
+        return AutoSourceSetDelegate(container)
     }
 }
