@@ -185,6 +185,9 @@ graalvmNative {
         named("main") {
             imageName.set("tcl")
             mainClass.set(tclMainClass)
+            // An executable, not a library: the native plugin defaults to a shared library when
+            // `java-library` is applied, which `java-gradle-plugin` does for this module.
+            sharedLibrary.set(false)
             classpath.setFrom(cliJar, configurations[cliMain.runtimeClasspathConfigurationName])
             buildArgs.addAll(
                 "--no-fallback",
