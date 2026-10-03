@@ -53,26 +53,26 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 - 스테이징 복사 규칙과 플랫폼별 변형 선택
 - 데스크톱 jar 로의 스테이징 연결: `desktopProcessResources` (`PythonPluginAttachmentTest`)
 - `tcl install <package>`
+- `embedLevel`: 플랫폼별 0/1/2 결정(Android·iOS 는 경고와 함께 2 로 상향), `python.embedLevel` 속성 재정의,
+  `<zip>.embed.json` 기록(`embedLevel`, `platformFamily`, `warning`, `interpreterVersion`) (`EmbedLevelTest`,
+  `PythonPluginEmbedLevelTest`). 레벨 2 = python-multiplatform 이 인터프리터를 내장, 1 = 외부, 0 = 없음.
+  toolchain 은 어느 레벨에서도 인터프리터를 싣지 않고 번들은 `python/` 만 담음 (`PythonPluginPythonOnlyTest`)
 
 **부분**
 - APK 로의 스테이징 연결: `android.sourceSets.main.assets` 등록은 실제 AGP 로 테스트됨
   (`PythonPluginAttachmentTest`), `preBuild`/`merge*Assets` 의존성은 Android SDK 가 있어야 생기므로 테스트 없음
-- iOS: 스테이징만 되고 Xcode 프로젝트에 연결되지 않음
+- iOS: `stagePythonBundleIosForXcode` 가 스테이징 후 `PYTHON_PAYLOAD_DIR=<경로>` 한 줄을 출력(`tools/xcode/stage-python-payload.sh`). `.app` 으로 복사하는 Xcode 단계는 python-multiplatform(#59) 소유
 - 핫 리로드: Android 전용 `adb push` + 브로드캐스트. `serverHost`, `cert` 는 검증만
 - 코드 푸시: 검증과 안내 태스크만, 업로드 없음
 - `installPythonDependencies`(`uv add`)는 여전히 모든 소스셋을 호스트용으로 설치하므로, 호스트 wheel 이 없는
   `androidMain` 전용 패키지는 이 태스크에서 실패할 수 있음. `ResourceBundler` 가 `.pyd` 를 빼므로 Windows
   확장 모듈은 `mingwX64` 번들에 들어가지 않음
-- `embedLevel`: 플랫폼별 0/1/2 결정(Android·iOS 는 경고와 함께 2 로 상향), `python.embedLevel` 속성 재정의,
-  `<zip>.embed.json` 기록(`interpreterVersion`, `interpreterBundled` 포함)까지 구현 (`EmbedLevelTest`,
-  `PythonPluginEmbedLevelTest`). 레벨 1 은 기대 버전만 기록, 레벨 2 는 번들의 `python/` 옆 `runtime/` 에 인터프리터를
-  복사하고 `runtime-manifest.json` 을 씀 (`PythonPluginInterpreterTest`). 스테이징은 여전히 `python/` 만 옮김
-- `compileSdk` 로 인터프리터 선택(#18): `planInterpreter` 가 변형별 계획을 정하고, (버전, 트리플) 마다 공유되는
-  `acquirePythonInterpreter<Triple>Py<X_Y_Z>` 태스크가 `build/pythonRuntime/<triple>/<version>/` 을 출력으로 가짐
-  (`InterpreterPlanTest`, `PythonPluginInterpreterTest`). 지원되지 않는 조합(예: Android 3.13.0)은 pypackpack 의
-  메시지로 그 확보 태스크만 실패. **실제 다운로드는 없음**: pypackpack `installPython(version, target)` 은 `user.dir`
-  로 찾은 프로젝트에 설치하고 디렉터리를 받는 형태가 없어서(AGENTS.md §13), 지원되는 조합도 그 API 부재를 밝히고
-  실패한다. 그래서 패키지가 있는 레벨 2 변형(모든 Android·iOS 변형)의 `buildPython…` 은 그 API 가 생길 때까지 실패
+- `compileSdk` 와 python-multiplatform `pythonVersion` 대조(#42): 레벨 2 변형에서 둘의 `X.Y.Z` 가 다르면 그 변형의
+  `buildPython…` 만 두 버전을 밝히며 실패 (`PythonVersionAgreementTest`, `PythonPluginPythonOnlyTest`). 버전은
+  `python.multiplatform.pythonVersion` 속성, 없으면 같은 빌드의 `:python-multiplatform` 프로젝트의
+  `pythonMultiplatform` 확장(python-multiplatform#61)에서 읽음. 배포된 의존으로 쓰는 경우의 출처(모듈 메타데이터
+  `org.thisisthepy.python.version` 또는 jar 리소스 `META-INF/python-multiplatform/python.properties`)는 아직 없음 —
+  출처는 리드 결정 전까지 잠정
 
 **계획 (선언만 있거나 없음)**
 - `native` / `mixed` 컴파일 레벨 (pypackpack#19 선행 필요)
@@ -87,7 +87,7 @@ Python 코드와 의존성이 실려 빌드·실행되는 상태. 기한을 맞�
 | 마일스톤 | 기한 | 범위 | 완료 기준 | 근거 |
 |---|---|---|---|---|
 | M1 DSL = 예시 파일 | 10-17 | 플랫폼(#7 완료), pip(#9), `compileSdk` 상수(#10), `defaultConfig` 버전(#11), `buildFeatures`(#12), `projectFlavors`(#13), 플러그인 적용·zip·jar/APK 테스트(#14) | 예시 파일의 모든 속성이 컴파일되고, 읽히거나 좁게 거부됨. `usage-example` 이 그 모양으로 빌드됨 | 이슈 7개, 외부 의존 없음 |
-| M2 실제 페이로드 | 11-07 | `bytecode`(#15), 소스셋·타깃별 의존성(#16), `embedLevel`(#17), `compileSdk` 로 인터프리터 선택(#18), `KLIBDEPENS`(#19) | 각 변형의 번들에 그 타깃의 wheel 이 들어가고, bytecode 변형은 `.pyc` 를 실음 | pypackpack M2(타깃별 실제 설치)에 의존 |
+| M2 실제 페이로드 | 11-07 | `bytecode`(#15), 소스셋·타깃별 의존성(#16), `embedLevel`(#17), ~~`compileSdk` 로 인터프리터 선택(#18)~~ → python-multiplatform `pythonVersion` 대조(#42), `KLIBDEPENS`(#19) | 각 변형의 번들에 그 타깃의 wheel 이 들어가고, bytecode 변형은 `.pyc` 를 실음 | pypackpack M2(타깃별 실제 설치)에 의존 |
 | M3 쓸 수 있는 수준 | 11-30 | iOS 페이로드 연결(#20), TypedPython 검사 태스크(#21), 세 플랫폼 실행(#22) | 예시 앱이 Android 에뮬레이터·iOS 시뮬레이터·데스크톱에서 Python 과 의존성을 실행 | python-multiplatform 런타임 로딩에 의존 |
 
 11-30 이후로 넘김: `native`/`mixed`(pypackpack Cython 슬롯은 pypackpack M3, 나머지 컴파일러는 빈 껍데기),
@@ -136,6 +136,14 @@ Python 테스트는 없다. 루트 `pyproject.toml` 이 가리키는 Python 패�
   `workingDir` 의 `-r pyproject.toml` 만 읽으므로, 집합의 요구사항을 적은 `pyproject.toml` 을 태스크의 임시
   디렉터리(`build/tmp/<task>/`)에 써서 넘긴다. 설치된 패키지를 `libDirs` 맨 앞에 두어 사용자가 선언한
   `libDirs(...)` 가 덮어쓸 수 있게 한다.
+- **toolchain 은 `python/` 만 싣는다** (#42, 리드 결정 2026-10-03): 인터프리터와 stdlib 는 python-multiplatform
+  몫이다. python-multiplatform 은 libpython 을 자기 바이너리(Android JNI, iOS 프레임워크, 데스크톱 FFM)에 링크하고
+  맞는 stdlib 를 직접 싣는다(Android `assets/<abi>/lib/python3.14`, PYTHONHOME). toolchain 이 따로 받은
+  인터프리터는 같은 버전이어도 링크된 것과 다를 수 있고(iOS 3.14.6 사례), APK 에 두 벌이 들어간다. 그래서 #40 의
+  인터프리터 확보(`acquirePythonInterpreter…`, `build/pythonRuntime/`)와 `runtime/`·`runtime-manifest.json`
+  번들링, 기록의 `interpreterBundled` 를 걷어냈다. `compileSdk` 는 wheel 의 `--python-version` 만 고르고,
+  레벨 2 에서는 python-multiplatform 의 `pythonVersion` 과 대조한다. 의존성은 이미 `python/` 에 평평하게
+  들어가므로(`ResourceBundler` 가 `libDirs` 를 합침) `site-packages` 하위 디렉터리 규칙은 필요 없다.
 
 ## 열린 질문
 
@@ -148,5 +156,8 @@ Python 테스트는 없다. 루트 `pyproject.toml` 이 가리키는 Python 패�
 5. 참조되지 않는 코드(`PythonMultiplatformPlugin.kt`, `reslover.kt`, `decompileKotlinMeta.kt`,
    `PythonLocalLoader.kt`, `DependencyType.kt`, `FrozenPackConfig` 등)와 빈 `pyproject.toml` 을
    지울 것인가.
-6. ~~레벨 2 인터프리터 확보에 필요한 pypackpack API~~ — **해결(2026-10-03)**: pypackpack#37 의
-   `installPython(version, target, installDir)` 를 쓴다.
+6. ~~레벨 2 인터프리터 확보에 필요한 pypackpack API~~ — **해결 후 철회(2026-10-03)**: pypackpack#37 의
+   `installPython(version, target, installDir)` 를 썼으나, #42 결정으로 toolchain 은 인터프리터를 받지 않는다.
+7. python-multiplatform `pythonVersion` 을 어디서 읽을 것인가 — 같은 빌드는 `:python-multiplatform` 의
+   `pythonMultiplatform` 확장(구현), 배포된 의존은 모듈 메타데이터나 jar 리소스(미구현). 리드 결정 대기
+   (python-multiplatform#61).

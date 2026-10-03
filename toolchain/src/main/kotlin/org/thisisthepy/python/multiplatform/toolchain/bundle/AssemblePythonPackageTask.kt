@@ -15,8 +15,8 @@ open class AssemblePythonPackageTask : Zip() {
     // cover these two custom ones. `@Internal` since neither participates in up-to-date checking.
     /**
      * The *resolved* level (`resolveEmbedLevel`), not the declared one: an `@Input`, so changing it
-     * re-packages. It is logged and recorded in `<archive>.embed.json` beside the zip. At level 2 the
-     * bundle this task zips carries `runtime/` (`BuildPythonArtifactTask.interpreterVersion`).
+     * re-packages. It is logged and recorded in `<archive>.embed.json` beside the zip. It never changes
+     * the payload: the zip carries `python/` only, at every level (docs/SPEC.md §1.12).
      */
     @get:Input
     var embedLevel: Int = 0
@@ -25,14 +25,13 @@ open class AssemblePythonPackageTask : Zip() {
     @get:Input
     var embedFamily: String = "unknown"
 
-    /** The interpreter release the level implies (`InterpreterPlan.recordedVersion`); recorded. */
+    /**
+     * The interpreter release the app expects (`expectedInterpreterVersion`): at level 2, the one
+     * python-multiplatform is expected to embed. Recorded, not shipped.
+     */
     @get:Input
     @get:Optional
     var interpreterVersion: String? = null
-
-    /** True at level 2, where the bundling task carries the interpreter into `runtime/`; recorded. */
-    @get:Input
-    var interpreterBundled: Boolean = false
 
     /** Why the level was raised, or `null`. Logged and recorded; not an up-to-date input. */
     @get:Internal
@@ -98,9 +97,6 @@ open class AssemblePythonPackageTask : Zip() {
         super.copy()
 
         embedWarning?.let { logger.warn(it) }
-        // Recorded as bundled only when `runtime/` really is in what was zipped (a bundle with no
-        // package skips bundling, and with it the interpreter).
-        val bundled = interpreterBundled && File(bundleDir, BUNDLE_RUNTIME_ROOT).isDirectory
-        embedRecordFile().writeText(embedRecordJson(embedLevel, embedFamily, embedWarning, interpreterVersion, bundled))
+        embedRecordFile().writeText(embedRecordJson(embedLevel, embedFamily, embedWarning, interpreterVersion))
     }
 }

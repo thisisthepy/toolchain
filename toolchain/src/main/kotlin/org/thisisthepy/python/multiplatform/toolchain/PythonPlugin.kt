@@ -17,7 +17,6 @@ import org.gradle.kotlin.dsl.register
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
 import org.thisisthepy.python.multiplatform.packpack.utils.Platforms
-import org.thisisthepy.python.multiplatform.toolchain.bundle.AcquirePythonInterpreterTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.AssemblePythonPackageTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.BuildPythonArtifactTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.PythonStagingPlatform
@@ -69,7 +68,7 @@ class PythonPlugin : Plugin<Project> {
         }
         val buildTask = project.tasks.register<BuildPythonArtifactTask>(BUILD_TASK) {
             group = TASK_GROUP
-            description = "Builds Python bundle including interpreter and source files"
+            description = "Builds the Python bundle (python/: sources and dependencies; no interpreter)"
         }
         // `packageDir` is read lazily in `afterEvaluate` below, once `extension.localLibraryPath`
         // has its final value -- DSL blocks run before the plugin's own `afterEvaluate` callbacks.
@@ -116,6 +115,13 @@ class PythonPlugin : Plugin<Project> {
         // ---------------------------------------------------------------------------------------
         val stageTasks = registerStagingTasks(project)
         attachStagingToPackaging(project, stageTasks)
+        org.thisisthepy.python.multiplatform.toolchain.bundle.registerStagePythonBundleIosForXcode(
+            project, stageTasks.getValue(PythonStagingPlatform.IOS),
+        )
+
+        // python-multiplatform's `pythonVersion` is read from its extension in `afterEvaluate` below
+        // (SPEC §1.12, #42), so a `:python-multiplatform` project of this build is evaluated first.
+        evaluatePythonMultiplatformFirst(project)
 
         project.afterEvaluate {
             // Blank stays a no-op skip, the same convention `packageDir == null` already uses below
@@ -134,15 +140,31 @@ class PythonPlugin : Plugin<Project> {
             val (hostEmbedLevel, hostEmbedWarning) =
                 resolveEmbedLevel(extension.packaging.embedLevel, embedOverride, hostEmbedFamily)
             hostEmbedWarning?.let { project.logger.warn(it) }
-            // What the host chain does about its interpreter (SPEC §1.12, #18); wired below.
-            val hostInterpreterPlan = planInterpreter(hostEmbedLevel, Platforms.detectHostTarget(), pythonSdk)
             packageTask.configure {
                 embedLevel = hostEmbedLevel
                 embedFamily = hostEmbedFamily
                 embedWarning = hostEmbedWarning
-                interpreterVersion = hostInterpreterPlan.recordedVersion
-                interpreterBundled = hostInterpreterPlan is InterpreterPlan.Embed
+                interpreterVersion = expectedInterpreterVersion(hostEmbedLevel, pythonSdk)
             }
+            // python-multiplatform embeds the interpreter at level 2; compileSdk must name the same
+            // X.Y.Z (SPEC §1.12, #42). The property wins over the `:python-multiplatform` extension
+            // (python-multiplatform#61); read once, when the first bundling task is configured.
+            val pythonMultiplatformVersion by lazy {
+                selectPythonMultiplatformVersion(
+                    project.findProperty(PYTHON_MULTIPLATFORM_VERSION_PROPERTY)?.toString(),
+                    readPythonMultiplatformExtensionVersion(project),
+                ).also { version ->
+                    if (version == null) {
+                        project.logger.lifecycle(
+                            "python-multiplatform's pythonVersion is unknown (no $PYTHON_MULTIPLATFORM_VERSION_PROPERTY " +
+                                "property, no $PYTHON_MULTIPLATFORM_PROJECT_PATH project with a " +
+                                "$PYTHON_MULTIPLATFORM_EXTENSION extension): compileSdk is not checked against it.",
+                        )
+                    }
+                }
+            }
+            fun pythonVersionRejectionFor(embedLevel: Int): String? =
+                if (embedLevel == 2) checkPythonVersionAgreement(pythonSdk, pythonMultiplatformVersion) else null
             if (pythonSdk != null) {
                 project.logger.lifecycle(
                     "Configured Python compileSdk: ${extension.compileSdk} " +
@@ -305,26 +327,6 @@ class PythonPlugin : Plugin<Project> {
                 }
             }
 
-            // embedLevel 2 (SPEC §1.12, #18): one acquisition per (compileSdk version, triple), shared
-            // by every variant with that pair, into build/pythonRuntime/<triple>/<version>/.
-            // Registered here, outside any task's configure block, and handed to the bundling task.
-            val interpreterAcquisitions = mutableMapOf<String, TaskProvider<AcquirePythonInterpreterTask>>()
-            fun acquisitionFor(plan: InterpreterPlan): TaskProvider<AcquirePythonInterpreterTask>? {
-                if (plan !is InterpreterPlan.Embed) return null
-                return interpreterAcquisitions.getOrPut(plan.taskName) {
-                    project.tasks.register<AcquirePythonInterpreterTask>(plan.taskName) {
-                        group = TASK_GROUP
-                        description = "Acquires Python ${plan.version} for ${plan.target} through pypackpack " +
-                            "into build/$INTERPRETER_RUNTIME_DIRECTORY/${plan.target}/${plan.version}"
-                        pythonVersion = plan.version
-                        target = plan.target
-                        runtimeDir = plan.runtimeDir(projectBuildDir)
-                        // As for the target installs: no package, no bundle, nothing to fetch.
-                        onlyIf { hasPackage }
-                    }
-                }
-            }
-
             // Kotlin half: see `resolveComposeKotlinDependency` for why a missing coordinate fails
             // configuration here and why a project without Kotlin Multiplatform only gets a warning.
             when (
@@ -425,9 +427,8 @@ class PythonPlugin : Plugin<Project> {
                 // defaults to. Installed packages come first in `libDirs`, so a directory the
                 // consumer declares with `libDirs(...)` (a vendored tree) overrides them.
                 val hostInstall = registerTargetInstall("Host", HOST_DEPENDENCY_SET, Platforms.detectHostTarget(), null)
-                val hostAcquisition = acquisitionFor(hostInterpreterPlan)
                 buildTask.configure {
-                    applyInterpreterPlan(hostInterpreterPlan, projectBuildDir, hostAcquisition)
+                    pythonVersionRejection = pythonVersionRejectionFor(hostEmbedLevel)
                     libDirs = listOf(targetDependenciesDir(projectBuildDir, HOST_DEPENDENCY_SET)) + resolvedLibDirs
                     dependsOn(hostInstall)
                     buildType = activeBuildTypeName
@@ -476,8 +477,6 @@ class PythonPlugin : Plugin<Project> {
                     val (variantEmbedLevel, variantEmbedWarning) =
                         resolveEmbedLevel(extension.packaging.embedLevel, embedOverride, variantFamily)
                     variantEmbedWarning?.let { project.logger.warn("${variant.dirName}: $it") }
-                    val variantInterpreterPlan = planInterpreter(variantEmbedLevel, variant.target, pythonSdk)
-                    val variantAcquisition = acquisitionFor(variantInterpreterPlan)
 
                     val variantBuildTask =
                         project.tasks.register<BuildPythonArtifactTask>(BUILD_TASK + variant.taskSuffix) {
@@ -508,8 +507,8 @@ class PythonPlugin : Plugin<Project> {
                             compileLevel = variant.compileLevel
                             minSdk = variant.minSdk
                             bundleDir = variantBundleDir
+                            pythonVersionRejection = pythonVersionRejectionFor(variantEmbedLevel)
                             dependsOn(installTask, targetInstall, typedpythonCheckTask)
-                            applyInterpreterPlan(variantInterpreterPlan, projectBuildDir, variantAcquisition)
                         }
 
                     val variantPackageTask =
@@ -521,8 +520,7 @@ class PythonPlugin : Plugin<Project> {
                             embedLevel = variantEmbedLevel
                             embedFamily = variantFamily
                             embedWarning = variantEmbedWarning
-                            interpreterVersion = variantInterpreterPlan.recordedVersion
-                            interpreterBundled = variantInterpreterPlan is InterpreterPlan.Embed
+                            interpreterVersion = expectedInterpreterVersion(variantEmbedLevel, pythonSdk)
                             fileName = extension.packaging.fileName
                             bundleDir = variantBundleDir
                             variantName = variant.dirName
@@ -579,24 +577,6 @@ class PythonPlugin : Plugin<Project> {
             }
         }
     }
-}
-
-/**
- * Hands a bundling task what its [plan] needs (SPEC §1.12, #18): at level 2 the version and the
- * acquired runtime directory to carry into `runtime/`, and a dependency on [acquisition]; a refused
- * plan's reason, which fails this task only.
- */
-private fun BuildPythonArtifactTask.applyInterpreterPlan(
-    plan: InterpreterPlan,
-    buildDir: File,
-    acquisition: TaskProvider<AcquirePythonInterpreterTask>?,
-) {
-    interpreterRejection = (plan as? InterpreterPlan.Refused)?.reason
-    if (plan is InterpreterPlan.Embed) {
-        interpreterVersion = plan.version
-        interpreterDir = plan.runtimeDir(buildDir)
-    }
-    acquisition?.let { dependsOn(it) }
 }
 
 /**
