@@ -385,7 +385,11 @@ Hand-off to the platform's packaging step:
   It fails with a reason when no iOS variant of the active build type exists, or the staged
   `build/pythonStaging/ios/python/` is missing or empty (no package configured). It never copies into
   the `.app`. The phase script is `tools/xcode/stage-python-payload.sh` (`set -euo pipefail`, checks
-  the directory exists before `rsync -a --delete "$dir/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/python/"`).
+  the directory exists before `rsync -a --delete "$dir/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/python/"`),
+  for apps **without** python-multiplatform. With python-multiplatform, its `tools/xcode/install-python.sh`
+  is the single phase that copies `python/` (and the stdlib): it takes `PYTHON_PAYLOAD_TASK` (a task
+  printing `PYTHON_PAYLOAD_DIR=`, i.e. this one). Exactly one Xcode phase may copy `python/`; both
+  scripts `rsync --delete` into the same `<app>/python/`.
   **partial** — `xcodePayloadLine`, `ptest/bundle/StagePythonBundleIosForXcodeTaskTest.kt`,
   `ptest/bundle/StagePythonPayloadScriptTest.kt`. Not tested: an actual Xcode build.
 - Putting the staged `python/` on `sys.path` at run time is `python-multiplatform`'s side.
