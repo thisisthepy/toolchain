@@ -132,9 +132,8 @@ Python 테스트는 없다. 루트 `pyproject.toml` 이 가리키는 Python 패�
   와 비교해 다르면 거부한다(`compileSdk` 미선언이거나 `pyvenv.cfg` 가 없으면 비교하지 않음).
 - **번들의 의존성은 타깃별 설치에서 온다** (#16): `uv add` 의 `.venv` 는 호스트용이라 번들에 쓰지 않는다.
   설치 단위는 변형이 아니라 의존성 집합(플랫폼 × 플레이버)이다. 빌드 타입은 요구사항 목록도 트리플도 바꾸지
-  않으므로 debug/release 가 한 번 설치를 공유한다. `pypackpack` 의 `installDependenciesToTarget` 는
-  `workingDir` 의 `-r pyproject.toml` 만 읽으므로, 집합의 요구사항을 적은 `pyproject.toml` 을 태스크의 임시
-  디렉터리(`build/tmp/<task>/`)에 써서 넘긴다. 설치된 패키지를 `libDirs` 맨 앞에 두어 사용자가 선언한
+  않으므로 debug/release 가 한 번 설치를 공유한다. 요구사항 목록은 `pypackpack` 의
+  `installDependenciesToTarget(requirements = …)`(pypackpack#36)로 그대로 넘기며 파일을 쓰지 않는다(#45). 설치된 패키지를 `libDirs` 맨 앞에 두어 사용자가 선언한
   `libDirs(...)` 가 덮어쓸 수 있게 한다.
 - **toolchain 은 `python/` 만 싣는다** (#42, 리드 결정 2026-10-03): 인터프리터와 stdlib 는 python-multiplatform
   몫이다. python-multiplatform 은 libpython 을 자기 바이너리(Android JNI, iOS 프레임워크, 데스크톱 FFM)에 링크하고

@@ -43,8 +43,9 @@ class InstallTargetDependenciesTaskTest {
             val wheel = File(installDir, "six-1.17.0.dist-info/WHEEL")
             assertTrue(wheel.readText().contains("Tag: py3-none-any"), wheel.readText())
             assertFalse(File(installDir, "stale.py").exists(), "the install directory was not cleared first")
-            assertFalse(File(installDir, "pyproject.toml").exists(), "the requirements file would be bundled")
-            assertTrue(File(requirementsDir, "pyproject.toml").readText().contains("\"six==1.17.0\""))
+            // The list goes to uv as arguments (pypackpack#36): no generated pyproject anywhere.
+            assertFalse(File(installDir, "pyproject.toml").exists(), "a pyproject.toml would be bundled")
+            assertFalse(File(requirementsDir, "pyproject.toml").exists(), "the requirements are passed as a list now")
         } finally {
             root.deleteRecursively()
         }

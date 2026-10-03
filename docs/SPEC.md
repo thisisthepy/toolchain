@@ -255,9 +255,10 @@ share one install.
 - The task (`installPythonDependenciesAndroidArm64`, `…AndroidArm64Free`) clears
   `build/pythonDeps/<set>/` (`androidArm64`, `androidArm64-free`) and calls `pypackpack`'s
   `UVBackend.installDependenciesToTarget(targetDir, pythonPlatform = <the variant's triple>, extraArgs,
-  workingDir)` — `uv pip install -r pyproject.toml --target <dir> --python-platform <triple>`. That
-  call reads only a `pyproject.toml` in `workingDir`, so the task writes one listing the set's
-  requirements into its temporary directory (`build/tmp/<task>/`) and passes that directory.
+  workingDir, requirements = <the set's list>)` — `uv pip install <requirements…> --target <dir>
+  --python-platform <triple>` (pypackpack#36). The list goes to `uv` as arguments; nothing is
+  written. `uv` runs in the task's temporary directory (`build/tmp/<task>/`), outside the install
+  directory.
 - Options: the `pip { }` repositories (§1.3), `python-version` = `compileSdk`'s `major.minor` (wheel
   tags carry the CPython ABI), and `only-binary = :all:` (no sdist is built with the host compiler).
   A requirement with no wheel for the triple fails that set's task with uv's message, which names it.

@@ -8,13 +8,12 @@ import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendType
-import org.thisisthepy.python.multiplatform.toolchain.renderRequirementsPyproject
 import java.io.File
 import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendInterface as DependencyBackend
 
 /**
  * Installs one dependency set's requirements for one target triple into [installDir], through
- * `pypackpack`'s `UVBackend.installDependenciesToTarget` (`uv pip install -r pyproject.toml --target
+ * `pypackpack`'s `UVBackend.installDependenciesToTarget` (`uv pip install <requirements…> --target
  * <dir> --python-platform <triple>`). docs/SPEC.md §1.10, issue #16.
  *
  * One task per *dependency set* -- a platform variant crossed with a flavor -- not per bundle variant:
@@ -90,10 +89,9 @@ open class InstallTargetDependenciesTask : DefaultTask() {
  * install --target` adds to a directory and never removes, and a requirement dropped from the DSL
  * must leave the bundle. An empty [requirements] stops there, without calling `uv`.
  *
- * Otherwise [requirementsDir] gets a `pyproject.toml` listing [requirements]
- * ([renderRequirementsPyproject]) and becomes the backend's `workingDir`, because
- * `installDependenciesToTarget` reads only `-r pyproject.toml` from there. It must not be inside
- * [installDir], or that file would be bundled.
+ * Otherwise [requirements] go to `installDependenciesToTarget(requirements = …)` (pypackpack#36), which
+ * passes them to `uv` as arguments; nothing is written. [requirementsDir] is only the directory `uv`
+ * runs in, kept outside [installDir] so nothing `uv` might leave there is bundled.
  *
  * A failure -- including a requirement with no wheel for [pythonPlatform] under `only-binary` --
  * becomes a [GradleException] carrying uv's message, which names the package.
@@ -116,7 +114,6 @@ fun installDependenciesForTarget(
     if (requirements.isEmpty()) return ""
 
     requirementsDir.mkdirs()
-    File(requirementsDir, "pyproject.toml").writeText(renderRequirementsPyproject(requirements))
 
     val backend = DependencyBackend.create(BackendType.UV)
     backend.initialize()
@@ -126,6 +123,7 @@ fun installDependenciesForTarget(
             pythonPlatform = pythonPlatform,
             extraArgs = extraArgs,
             workingDir = requirementsDir,
+            requirements = requirements,
         )
     }.getOrElse { error ->
         throw GradleException(
