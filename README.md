@@ -81,6 +81,10 @@ cd usage-example                              # its own build, on python-multipl
 ./gradlew stagePythonBundle                   # stage python/ for android, ios and desktop
 ```
 
+> **iOS, interim:** usage-example's Xcode phase (`usage-example/src/iosMain/install-python-phase.sh`) needs
+> `PYTHON_MULTIPLATFORM_DIR` pointing at a python-multiplatform checkout for `Python.xcframework` and the
+> stdlib, until python-multiplatform#90 ships that wiring in its published plugin.
+
 Want one bundle per target? Declare platforms and build types:
 
 ```kotlin

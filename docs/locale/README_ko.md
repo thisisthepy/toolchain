@@ -80,6 +80,10 @@ cd usage-example                              # 별도 빌드 (python-multiplatf
 ./gradlew stagePythonBundle                   # android, ios, desktop 용 python/ 스테이징
 ```
 
+> **iOS, 임시:** usage-example 의 Xcode 단계(`usage-example/src/iosMain/install-python-phase.sh`)는
+> python-multiplatform#90 이 published 플러그인으로 그 배선을 제공할 때까지 `Python.xcframework` 와 stdlib 을 위해
+> python-multiplatform 체크아웃을 가리키는 `PYTHON_MULTIPLATFORM_DIR` 가 필요합니다.
+
 타깃마다 번들을 따로 만들고 싶다면 플랫폼과 빌드 타입을 선언합니다.
 
 ```kotlin
