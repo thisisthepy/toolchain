@@ -152,28 +152,13 @@ open class BuildPythonArtifactTask : DefaultTask() {
     var libDirs: List<File> = emptyList()
 
     /**
-     * embedLevel 2 (docs/SPEC.md §1.12, issue #18): the interpreter release carried into
-     * `<bundle>/runtime/` from [interpreterDir] after bundling, with a `runtime-manifest.json`.
-     * `null` for levels 0 and 1, which bundle no interpreter.
+     * Why `compileSdk` disagrees with python-multiplatform's `pythonVersion`, the interpreter and
+     * stdlib python-multiplatform embeds at embedLevel 2 (`checkPythonVersionAgreement`, docs/SPEC.md
+     * §1.12, issue #42). Fails this task like [pythonSdkRejection].
      */
     @get:Input
     @get:Optional
-    var interpreterVersion: String? = null
-
-    /**
-     * `build/pythonRuntime/<triple>/<version>/`, the output of this pair's
-     * `AcquirePythonInterpreterTask`, which this task depends on. `@Internal` rather than
-     * `@InputDirectory`: the directory does not exist when there is no package (acquisition is skipped
-     * too), and Gradle would refuse the missing directory before the action could skip. This task
-     * declares no outputs, so it is never up to date and a changed interpreter is always re-copied.
-     */
-    @get:Internal
-    var interpreterDir: File? = null
-
-    /** Why embedLevel 2 has no interpreter to bundle (no compileSdk); fails like [pythonSdkRejection]. */
-    @get:Input
-    @get:Optional
-    var interpreterRejection: String? = null
+    var pythonVersionRejection: String? = null
 
     @TaskAction
     fun buildPython() {
@@ -196,7 +181,7 @@ open class BuildPythonArtifactTask : DefaultTask() {
 
         pythonSdkRejection?.let { throw GradleException(it) }
         flavorRejection?.let { throw GradleException(it) }
-        interpreterRejection?.let { throw GradleException(it) }
+        pythonVersionRejection?.let { throw GradleException(it) }
 
         // Throws for anything `ppp`'s ResourceBundler cannot bundle. Deliberately here rather than
         // during configuration -- see `compileLevel`'s kdoc.
@@ -214,16 +199,6 @@ open class BuildPythonArtifactTask : DefaultTask() {
                 (minSdk?.let { ", declared minSdk $it" } ?: "") +
                 ")",
         )
-
-        val version = interpreterVersion
-        val runtime = interpreterDir
-        if (version != null && runtime != null) {
-            val copied = carryInterpreterIntoBundle(runtime, bundleDir, version, target)
-            logger.lifecycle(
-                "Carried the Python $version interpreter for $target ($copied file(s)) into " +
-                    "${File(bundleDir, BUNDLE_RUNTIME_ROOT)}",
-            )
-        }
     }
 }
 
