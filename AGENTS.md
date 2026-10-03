@@ -184,9 +184,11 @@ GitHub issues `thisisthepy/toolchain#2` (plugin checklist) and `#1` (`tcl`), it 
 | `sample/` | **Its own Gradle build** (own settings and catalog; toolchain#22): a Compose Multiplatform app applying this plugin and python-multiplatform, on python-multiplatform's Kotlin/Compose/AGP. Run it with this repository's wrapper: `./gradlew -p sample …`. Its Python package is `sample/src/commonMain/python/`. |
 | `.github/scripts/release/` | The develop → release → main sync (rule 4). |
 
-`pyproject.toml` at the root is toolchain-lite's PyPI build: `toolchain-lite` 0.0.1 on PyPI came
-from it. Keep it. (It still declares the name `toolchain` and a flit module that is not in the
-repository; fixing that belongs to the toolchain-lite publishing work, not to a cleanup.)
+`pyproject.toml` at the root is toolchain-lite, the PyPI distribution of `tcl` (#69): one platform
+wheel per OS carrying the native `tcl` binary, plus the launcher package `toolchain_lite`
+(`tcl/src/main/python/`). `.github/workflows/publish-pypi.yml` builds, smoke-tests and uploads the
+wheels; its version must equal `tcl/build.gradle.kts`'s, and `docs/pypi/README.md` is its PyPI page.
+Keep the launcher a launcher: the work stays in Kotlin.
 
 Nothing else belongs at the root (#62): no IDE directories, no lock-file directories (the sample's wasm
 yarn lock is `sample/gradle/wasm-yarn.lock`), no copied wrappers. The pre-#62 layout is the tag

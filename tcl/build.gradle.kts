@@ -1,5 +1,8 @@
 group = rootProject.group
-version = rootProject.version
+// tcl's own version, which `tcl --version` prints and the toolchain-lite wheel carries:
+// publish-pypi.yml refuses to publish unless it equals pyproject.toml's. The plugin keeps
+// rootProject.version.
+version = "0.1.0"
 
 plugins {
     // No explicit version: `org.jetbrains.kotlin.jvm` is already on this settings' shared plugin
@@ -8,6 +11,7 @@ plugins {
     // already resolved ("plugin is already on the classpath with an unknown version").
     id("org.jetbrains.kotlin.jvm")
     application
+    id("org.graalvm.buildtools.native") version "0.10.6"
 }
 
 dependencies {
@@ -35,4 +39,48 @@ application {
 // language/API level compatibility.
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions.freeCompilerArgs.add("-Xskip-metadata-version-check")
+}
+
+tasks.test {
+    systemProperty("tcl.expectedVersion", project.version.toString())
+}
+
+// `BuildInfo` reads this resource, so the version is not a literal in the source.
+val generateBuildInfo by tasks.registering {
+    val tclVersion = project.version.toString()
+    val outputDir = layout.buildDirectory.dir("generated/build-info")
+    inputs.property("version", tclVersion)
+    outputs.dir(outputDir)
+    doLast {
+        val file = outputDir.get().file("org/thisisthepy/python/multiplatform/tcl/build-info.properties").asFile
+        file.parentFile.mkdirs()
+        file.writeText("version=$tclVersion\n")
+    }
+}
+sourceSets.main { resources.srcDir(generateBuildInfo) }
+
+// The native `tcl` binary that the toolchain-lite wheel carries (publish-pypi.yml). Same settings
+// as pypackpack's CLI, which this links: io.ktor reaches org.slf4j (slf4j-nop, no I/O at init),
+// which GraalVM 21 otherwise refuses to initialize at build time.
+graalvmNative {
+    binaries {
+        named("main") {
+            imageName.set("tcl")
+            mainClass.set("org.thisisthepy.python.multiplatform.tcl.CliKt")
+            buildArgs.addAll(
+                "--no-fallback",
+                "--install-exit-handlers",
+                "--initialize-at-build-time=kotlin,kotlinx.coroutines,io.ktor,kotlinx.io,org.slf4j",
+                "-H:+AddAllCharsets",
+                "--gc=serial",
+            )
+            if (System.getProperty("os.name").lowercase().contains("mac")) {
+                // Without this the binary's minimum macOS is the build host's.
+                buildArgs.add("-H:NativeLinkerOption=-mmacosx-version-min=11.0")
+            }
+            resources.autodetect()
+        }
+    }
+    // native-image comes from GRAALVM_HOME/JAVA_HOME, not a toolchain Gradle might pick.
+    toolchainDetection.set(false)
 }

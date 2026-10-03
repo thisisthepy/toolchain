@@ -26,6 +26,14 @@ fun execute(
     }
 
     return when (args[0]) {
+        "--help", "-h" -> {
+            out(USAGE)
+            0
+        }
+        "--version" -> {
+            out("tcl ${BuildInfo.version}")
+            0
+        }
         "install" -> {
             val packageName = args.getOrNull(1)
             if (packageName.isNullOrBlank()) {

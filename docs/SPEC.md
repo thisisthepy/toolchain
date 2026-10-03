@@ -537,6 +537,35 @@ prints `Usage: tcl install <package>`.
 **Status: implemented**. `tcl/Cli.kt`, `tcl/Installer.kt`; `tcl/CliArgsTest.kt`,
 `tcl/InstallerTest.kt` (needs `uv` and network). Run with `./gradlew :tcl:run --args="install <pkg>"`.
 
+### 2.2 `tcl --help` and `tcl --version`
+`--help` (or `-h`) prints the usage line on stdout and exits 0. `--version` prints `tcl <version>`
+and exits 0. The version is tcl's own (`tcl/build.gradle.kts`, 0.1.0), separate from the plugin's,
+written by the build into `build-info.properties` and read by `BuildInfo`.
+
+**Status: implemented**. `tcl/Cli.kt`, `tcl/BuildInfo.kt`; `tcl/CliArgsTest.kt` (the version test
+compares against the version the build passes to the test JVM).
+
+### 2.3 toolchain-lite on PyPI
+```shell
+uv tool install toolchain-lite
+tcl --help
+```
+- One wheel per platform, `py3-none-<platform>`: Linux x86_64 and aarch64 (manylinux), macOS arm64
+  (11+), Windows x86_64. Each carries the GraalVM native image `tcl` as a script, plus the launcher
+  package `toolchain_lite` (`tcl/src/main/python/`) for `python -m toolchain_lite`.
+- The platform tag is read from the binary (`.github/scripts/pypi/build_wheel.py`). No sdist:
+  building needs a JDK and GraalVM.
+- `.github/workflows/publish-pypi.yml` runs on a published GitHub Release only and uploads through
+  trusted publishing (environment `pypi`). Before uploading it requires the tag to be `v<version>`,
+  `pyproject.toml` and `tcl/build.gradle.kts` to carry that version, the version to be new on PyPI,
+  and every wheel to pass `smoke_wheel.py` in a fresh venv (`tcl --help`, `tcl --version`,
+  `python -m toolchain_lite --version`, and `tcl install six` writing a `pyproject.toml`).
+  Pull requests that touch these files run everything but the upload.
+- PyPI's 0.0.1 (2025-06-12) packed the old `toolchain/` Gradle directory and installs no `tcl`.
+
+**Status: partial**. Built and smoke-tested by CI on every pull request that touches it; nothing
+uploaded yet.
+
 ---
 
 ## Outside intent: needs a decision
@@ -556,6 +585,4 @@ These exist in the code but are not asked for by the example build file or the i
    wired), `bundle/PythonLocalLoader.kt`, `dependency/DependencyType.kt`, and
    `BinariesExtension` / `FrozenPackConfig` / `BuildTypeEnum` in `dsl/DSLPlatforms.kt`. Nothing calls
    any of them.
-5. **`pyproject.toml`** is toolchain-lite's PyPI build (`toolchain-lite` 0.0.1, 2025-06-12). It
-   still declares a flit-built package named `toolchain` (Python 3.9–3.13) whose module is not in
-   the repository, and no CI builds or publishes it yet.
+5. **`pyproject.toml`** is toolchain-lite's PyPI build, §2.3.

@@ -1,65 +1,44 @@
+# toolchain-lite, the PyPI distribution of `tcl`. The wheel carries the native `tcl` command line
+# (GraalVM Native Image) and is assembled per platform by .github/scripts/pypi/build_wheel.py in
+# publish-pypi.yml, which reads [project] below. Its version must equal tcl/build.gradle.kts's: the
+# workflow refuses to publish unless the installed binary prints it.
+#
+# Installing from source (`uv pip install .`) gives only the Python package, without the binary;
+# `python -m toolchain_lite` then says so and exits.
 [build-system]
-requires = ["flit_core>=3.12,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "toolchain"
-version = "0.0.1"
-description = "Python Multiplatform Build Plugin/Tool with Kotlin Multiplatform Mobile"
-readme = "README.md"
-requires-python = ">=3.9, <3.14"
+name = "toolchain-lite"
+version = "0.1.0"
+description = "tcl: install Python packages for a Kotlin Multiplatform app's Python half, no Gradle project needed"
+readme = "docs/pypi/README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
-    {name = "THISISTHEPY", email = "thisisthepy@gmail.com"}
+    { name = "thisisthepy", email = "thisisthepy@gmail.com" },
 ]
+keywords = ["kotlin-multiplatform", "python", "uv", "packaging"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "Operating System :: OS Independent",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Build Tools",
 ]
-dependencies = [
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "mypy>=1.0.0",
-]
-docs = [
-    "sphinx>=6.0.0",
-    "sphinx-rtd-theme>=1.2.0",
-]
+requires-python = ">=3.9"
+dependencies = []
 
 [project.urls]
-"Homepage" = "https://github.com/thisisthepy/toolchain"
-"Bug Tracker" = "https://github.com/thisisthepy/toolchain/issues"
-"Documentation" = "https://thisisthepy.github.io/"
+Homepage = "https://github.com/thisisthepy/toolchain"
+Documentation = "https://thisisthepy.github.io/toolchain/guide-tcl.html"
+Repository = "https://github.com/thisisthepy/toolchain"
+Issues = "https://github.com/thisisthepy/toolchain/issues"
 
-[tool.flit.module]
-name = "toolchain"
-
-[tool.black]
-line-length = 88
-target-version = ["py39", "py310", "py311", "py312"]
-
-[tool.isort]
-profile = "black"
-line_length = 88
-
-[tool.mypy]
-python_version = "3.9"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
+[tool.setuptools]
+package-dir = { toolchain_lite = "tcl/src/main/python" }
+packages = ["toolchain_lite"]
