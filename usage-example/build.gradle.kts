@@ -125,6 +125,10 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.runtime.compose)
         }
+        iosMain.dependencies {
+            // CPython for iOS; `--python-smoke` (PythonSmoke.ios.kt) runs it on a simulator.
+            implementation(libs.python.multiplatform)
+        }
         desktopMain.dependencies {
             // CPython for the desktop app; `--python-smoke` (PythonSmoke.kt) runs it headless.
             implementation(libs.python.multiplatform)
