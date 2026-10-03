@@ -1,7 +1,7 @@
 package org.thisisthepy.python.multiplatform.toolchain.dsl
 
 /**
- * `projectFlavors { create("free"); create("paid") }` — `(플러그인예시)build.gradle.kts` declares the
+ * `projectFlavors { create("free"); create("paid") }`: `(플러그인예시)build.gradle.kts` declares the
  * block (empty); its meaning follows AGP's product flavors (decided 2026-10-03). Each flavor is
  * crossed into the variant graph between platform and build type
  * (`buildPythonAndroidArm64FreeDebug`), and its own dependencies go in a `<flavor>Main` source set.

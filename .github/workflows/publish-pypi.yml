@@ -1,0 +1,139 @@
+name: Publish to PyPI
+
+# toolchain-lite (the PyPI distribution of tcl). Adapted from pypackpack's publish-pypi.yml
+# (pypackpack #53), with the same gates. Publishing a GitHub Release `toolchain-lite-v<version>`
+# (#71: bare `v*` tags belong to the Gradle plugin, which this repository also releases) builds the native
+# tcl on each platform, wraps each binary in a wheel (.github/scripts/pypi/build_wheel.py), installs
+# and smoke-tests every wheel (smoke_wheel.py), and only then uploads them all through trusted
+# publishing (environment `pypi`, no token). A pull request that touches the publishing files, or a
+# manual run, does everything except the upload.
+#
+# A published Release, not a pushed `v*` tag: a PyPI version can never be uploaded twice, so the
+# trigger is a deliberate act. No sdist: building needs a JDK and GraalVM, so an sdist would install
+# the launcher without the binary.
+#
+# tcl links pypackpack's packpack library from mavenLocal, so each wheel job first publishes it
+# from pypackpack's develop branch, as test.yml does.
+on:
+  release:
+    types: [published]
+  pull_request:
+    paths:
+      - .github/workflows/publish-pypi.yml
+      - .github/scripts/pypi/**
+      - pyproject.toml
+      - docs/pypi/**
+      - toolchain/src/cliMain/**
+      - toolchain/build.gradle.kts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push supersedes a dry run; a release run is never cancelled.
+concurrency:
+  group: publish-pypi-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
+
+jobs:
+  version:
+    # Another product's Release (the Gradle plugin's `v*`) skips this workflow; skipped jobs skip their dependants.
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'toolchain-lite-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag, pyproject.toml and tcl agree; the version is new on PyPI
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          IS_RELEASE: ${{ github.event_name == 'release' }}
+        run: |
+          py=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          cli=$(sed -n 's/^val tclVersion = "\(.*\)"$/\1/p' toolchain/build.gradle.kts)
+          echo "pyproject.toml: $py   toolchain/build.gradle.kts tclVersion: $cli   tag: ${TAG:-none (dry run)}"
+          if [ -z "$cli" ] || [ "$py" != "$cli" ]; then
+            echo "::error::pyproject.toml ($py) and toolchain/build.gradle.kts tclVersion ($cli) must carry the same version"; exit 1
+          fi
+          if [ "$IS_RELEASE" = true ] && [ "$TAG" != "toolchain-lite-v$py" ]; then
+            echo "::error::release tag '$TAG' is not 'toolchain-lite-v$py'"; exit 1
+          fi
+          if curl -fsS -o /dev/null "https://pypi.org/pypi/toolchain-lite/$py/json"; then
+            if [ "$IS_RELEASE" = true ]; then echo "::error::toolchain-lite $py is already on PyPI"; exit 1; fi
+            echo "::warning::toolchain-lite $py is already on PyPI; bump the version before releasing"
+          fi
+
+  wheel:
+    needs: version
+    name: wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-22.04: the oldest glibc (2.35) a hosted runner offers, so the widest manylinux tag.
+        os: [ubuntu-22.04, ubuntu-22.04-arm, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "21"
+          distribution: graalvm-community
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: thisisthepy/pypackpack
+          ref: develop
+          path: .ci/pypackpack
+
+      - name: packpack into mavenLocal
+        working-directory: .ci/pypackpack
+        run: ./gradlew --no-daemon :packpack:publishToMavenLocal
+
+      - name: Native image
+        run: ./gradlew --no-daemon :toolchain:nativeCompile
+
+      - name: Wheel
+        run: |
+          exe=toolchain/build/native/nativeCompile/tcl
+          [ "$RUNNER_OS" = Windows ] && exe="$exe.exe"
+          python .github/scripts/pypi/build_wheel.py --binary "$exe" --out dist
+
+      - name: Install and smoke-test the wheel
+        run: python .github/scripts/pypi/smoke_wheel.py dist/*.whl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'release'
+    needs: wheel
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/toolchain-lite/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          merge-multiple: true
+          path: dist
+      - name: One wheel per platform
+        run: |
+          ls -la dist
+          test "$(ls dist/*.whl | wc -l)" -eq 4
+      - uses: pypa/gh-action-pypi-publish@release/v1

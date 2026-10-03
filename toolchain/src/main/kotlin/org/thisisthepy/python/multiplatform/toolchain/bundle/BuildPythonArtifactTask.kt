@@ -32,7 +32,7 @@ import java.io.File
 open class BuildPythonArtifactTask : DefaultTask() {
     // `@Internal` on every property below, not `@Input`/`@InputDirectory`: Gradle 8's task property
     // validation (run at execution time, not compile time -- this is why the naive implementation
-    // never surfaced it, since nothing had ever actually run this task before `usage-example`
+    // never surfaced it, since nothing had ever actually run this task before `sample`
     // started applying the plugin) rejects any public task property with no annotation at all.
     // `@Internal` is the honest answer for now -- none of these participate in up-to-date checking
     // yet, so marking them `@Input`/`@InputDirectory` would be a false promise of incremental
