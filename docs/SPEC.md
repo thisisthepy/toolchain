@@ -85,16 +85,22 @@ Where `pythonMultiplatformVersion` comes from, in order (`selectPythonMultiplatf
    extension's `pythonVersion` (type `python.multiplatform.gradle.EmbeddedPythonVersion`,
    python-multiplatform#61), read reflectively by name; that project is made to evaluate first
    (`evaluationDependsOn`);
-3. otherwise unknown: no check, logged once.
+3. otherwise, for a consumer of the **published** artifact (`io.github.thisisthepy:python-multiplatform*`,
+   python-multiplatform#61): the first resolvable runtime classpath that declares it is resolved, and
+   the version is the resolved variant's module-metadata attribute `org.thisisthepy.python.version`,
+   else the jar resource `META-INF/python-multiplatform/python.properties` (`pythonVersion`; inside
+   an AAR's `classes.jar`). This resolves a configuration, so it runs only when 1 and 2 give nothing,
+   and only for a level-2 bundle (#49);
+4. otherwise unknown: no check, logged once.
 
-**Status: partial** — `plugin/PythonVersionAgreement.kt`; `ptest/PythonVersionAgreementTest.kt`
-(the check and the precedence), `ptest/PythonPluginPythonOnlyTest.kt` (the property and the
-extension reaching the bundling task, the property winning). The source is **provisional**, pending
-the lead's decision: an included build's projects are not reachable through
-`rootProject.findProject`, and published consumers have no source yet. → *Next step, not
-implemented: read the version from python-multiplatform's Gradle module metadata attribute
-`org.thisisthepy.python.version` or its jar resource `META-INF/python-multiplatform/python.properties`
-(keys `pythonVersion`, `freeThreaded`).* The extension's `freeThreaded` flag is not read.
+**Status: implemented** — `plugin/PythonVersionAgreement.kt`, `plugin/PublishedPythonVersion.kt`;
+`ptest/PythonVersionAgreementTest.kt` (the check and the precedence),
+`ptest/PythonPluginPythonOnlyTest.kt` (the property and the extension reaching the bundling task, the
+property winning), `ptest/PublishedPythonVersionTest.kt` (a local Maven repository with a fake
+python-multiplatform module: the metadata attribute, the jar-resource fallback, the AAR's
+`classes.jar`, and the published source consulted last). An included build's projects are not
+reachable through `rootProject.findProject`; such a build states the version with the property. The
+`freeThreaded` flag is not read.
 → *Automatic build of a version python-multiplatform does not provide: **planned**, past 2026-11.*
 
 ### 1.3 `defaultConfig { versionCode, versionName, pip { … } }`

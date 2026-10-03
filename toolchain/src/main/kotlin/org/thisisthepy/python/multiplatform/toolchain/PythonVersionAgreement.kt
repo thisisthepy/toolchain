@@ -38,6 +38,19 @@ fun selectPythonMultiplatformVersion(propertyOverride: String?, extensionValue: 
         ?: extensionValue?.trim()?.takeIf { it.isNotEmpty() }
 
 /**
+ * As above, then [published] -- python-multiplatform's published module metadata or jar resource
+ * ([readPublishedPythonMultiplatformVersion], #49) -- which is called only when the first two give
+ * nothing, because it resolves a configuration.
+ */
+fun selectPythonMultiplatformVersion(
+    propertyOverride: String?,
+    extensionValue: String?,
+    published: () -> String?,
+): String? =
+    selectPythonMultiplatformVersion(propertyOverride, extensionValue)
+        ?: published()?.trim()?.takeIf { it.isNotEmpty() }
+
+/**
  * Why [compileSdk] cannot be used with the python-multiplatform that embeds the interpreter, or `null`.
  *
  * python-multiplatform links libpython into its binaries and ships the matching stdlib; toolchain
@@ -77,9 +90,9 @@ fun evaluatePythonMultiplatformFirst(project: Project) {
  * extension or property, or it has no value. A `Provider` is unwrapped; anything else is
  * `toString()`-ed.
  *
- * Only a project of the same build is reachable this way. Published consumers will read the version
- * from python-multiplatform's module metadata or jar resource (docs/SPEC.md §1.12); until then, and for
- * an included build, `python.multiplatform.pythonVersion` states it.
+ * Only a project of the same build is reachable this way. A published consumer's version comes from
+ * python-multiplatform's module metadata or jar resource ([readPublishedPythonMultiplatformVersion]);
+ * for an included build, `python.multiplatform.pythonVersion` states it.
  */
 fun readPythonMultiplatformExtensionVersion(project: Project): String? {
     val pythonMultiplatform = project.rootProject.findProject(PYTHON_MULTIPLATFORM_PROJECT_PATH) ?: return null

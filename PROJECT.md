@@ -70,9 +70,9 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 - `compileSdk` 와 python-multiplatform `pythonVersion` 대조(#42): 레벨 2 변형에서 둘의 `X.Y.Z` 가 다르면 그 변형의
   `buildPython…` 만 두 버전을 밝히며 실패 (`PythonVersionAgreementTest`, `PythonPluginPythonOnlyTest`). 버전은
   `python.multiplatform.pythonVersion` 속성, 없으면 같은 빌드의 `:python-multiplatform` 프로젝트의
-  `pythonMultiplatform` 확장(python-multiplatform#61)에서 읽음. 배포된 의존으로 쓰는 경우의 출처(모듈 메타데이터
-  `org.thisisthepy.python.version` 또는 jar 리소스 `META-INF/python-multiplatform/python.properties`)는 아직 없음 —
-  출처는 리드 결정 전까지 잠정
+  `pythonMultiplatform` 확장(python-multiplatform#61), 그것도 없으면 배포된 의존의 모듈 메타데이터
+  `org.thisisthepy.python.version` 이나 jar 리소스 `META-INF/python-multiplatform/python.properties` 에서 읽음
+  (#49, `PublishedPythonVersionTest`)
 
 **계획 (선언만 있거나 없음)**
 - `native` / `mixed` 컴파일 레벨 (pypackpack#19 선행 필요)
