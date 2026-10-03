@@ -1,4 +1,4 @@
-[English](../../README.md) | 한국어
+[English](https://github.com/thisisthepy/toolchain/blob/develop/README.md) | 한국어
 
 <div align="center">
 
@@ -6,13 +6,13 @@
 
 **Kotlin Multiplatform 앱의 Python 절반을 Gradle 에 선언하고, 그대로 배포하세요.**
 
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-0f9d76.svg)](../../LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-0f9d76.svg)](https://github.com/thisisthepy/toolchain/blob/develop/LICENSE)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7f52ff.svg?logo=kotlin&logoColor=white)
 ![Gradle](https://img.shields.io/badge/Gradle-8.9-02303a.svg?logo=gradle&logoColor=white)
 ![Targets](https://img.shields.io/badge/targets-Android%20%7C%20iOS%20%7C%20Desktop-0f9d76.svg)
 ![Status](https://img.shields.io/badge/status-alpha-orange.svg)
 
-[가이드](../guide/index.html) · [시작하기](../guide/getting-started.html) · [상태](../guide/status.html) · [생태계](../guide/ecosystem.html)
+[가이드](https://thisisthepy.github.io/toolchain/index.html) · [시작하기](https://thisisthepy.github.io/toolchain/getting-started.html) · [상태](https://thisisthepy.github.io/toolchain/status.html) · [생태계](https://thisisthepy.github.io/toolchain/ecosystem.html)
 
 </div>
 
@@ -127,35 +127,35 @@ flowchart LR
 
 ## 📊 현재 상태
 
-솔직한 요약입니다. 항목별 전체 계약은 가이드의 [상태 페이지](../guide/status.html)에 있습니다.
+솔직한 요약입니다. 항목별 전체 계약은 가이드의 [상태 페이지](https://thisisthepy.github.io/toolchain/status.html)에 있습니다.
 
 | 영역 | 상태 |
 |---|---|
-| `compileSdk` 파싱 (alpha / rc / normal) | ✅ 구현됨 |
-| 플랫폼 → 타깃 트리플, Kotlin 타깃 대조, 최소 SDK | ✅ 구현됨 |
-| `debug` / `release` 와 변형별 태스크 그래프 | ✅ 구현됨 |
-| `uv` 를 통한 `implementation` / `integration` 의존성, 소스셋별로 변형마다 그 트리플용으로 설치해 번들에 포함 | ✅ 구현됨 |
-| `instant` 레벨의 `pypackpack` 번들링 | ✅ 구현됨 |
-| `bytecode` 컴파일 레벨 (`.pyc`, `compileSdk` 와 맞는 `.venv` 필요) | ✅ 구현됨 |
+| `compileSdk` 파싱 (alpha / rc / normal) | ✅ 구현 |
+| 플랫폼 → 타깃 트리플, Kotlin 타깃 대조, 최소 SDK | ✅ 구현 |
+| `debug` / `release` 와 변형별 태스크 그래프 | ✅ 구현 |
+| `uv` 를 통한 `implementation` / `integration` 의존성, 소스셋별로 변형마다 그 트리플용으로 설치해 번들에 포함 | ✅ 구현 |
+| `instant` 레벨의 `pypackpack` 번들링 | ✅ 구현 |
+| `bytecode` 컴파일 레벨 (`.pyc`, `compileSdk` 와 맞는 `.venv` 필요) | ✅ 구현 |
 | `native` / `mixed` 컴파일 레벨 | ⏳ 계획: 현재는 명시적으로 거부 |
 | 데스크톱 jar 와 APK 로의 스테이징 | 🟡 부분: iOS 는 스테이징만 되고 연결되지 않음 |
 | 핫 리로드 | 🟡 부분: Android 전용, `adb` 경유 |
 | 코드 푸시 | 🟡 부분: 검증만, 업로드 없음 |
-| `buildFeatures { metaclass, compose }` | ✅ 구현됨: compose 위치는 Gradle 속성 두 개로 지정 |
+| `buildFeatures { metaclass, compose }` | ✅ 구현: compose 위치는 Gradle 속성 두 개로 지정 |
 | `embedLevel`, `projectFlavors`, `pip { }` | ⏳ 계획 |
-| `tcl install` | ✅ 구현됨 |
+| `tcl install` | ✅ 구현 |
 
 ## 📖 문서
 
-- **[가이드](../guide/index.html)**: 개념, 작업별 가이드, 상태. 영어와 한국어.
-- **[English README](../../README.md)**
+- **[가이드](https://thisisthepy.github.io/toolchain/index.html)**: 개념, 작업별 가이드, 상태. 영어와 한국어.
+- **[English README](https://github.com/thisisthepy/toolchain/blob/develop/README.md)**
 
 ## 🤝 기여
 
 이 저장소의 작업은 의도 → 스펙 → 테스트 → 코드 순서로 진행합니다. 동작을 바꾸려면 스펙부터
 바꾸고, 그 테스트를 먼저 작성해 실패하는 것을 확인한 뒤 구현합니다. 테스트 실행 방법은 가이드의
-[기여 안내](../guide/status.html#contributing)에 있습니다.
+[기여 안내](https://thisisthepy.github.io/toolchain/status.html#contributing)에 있습니다.
 
 ## 📄 라이선스
 
-[Apache-2.0](../../LICENSE) © 2024 thisisthepy
+[Apache-2.0](https://github.com/thisisthepy/toolchain/blob/develop/LICENSE) © 2024 thisisthepy

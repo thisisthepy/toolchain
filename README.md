@@ -1,4 +1,4 @@
-English | [한국어](docs/locale/README_ko.md)
+English | [한국어](https://github.com/thisisthepy/toolchain/blob/develop/docs/locale/README_ko.md)
 
 <div align="center">
 
@@ -6,13 +6,13 @@ English | [한국어](docs/locale/README_ko.md)
 
 **Declare the Python half of your Kotlin Multiplatform app in Gradle, and ship it.**
 
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-0f9d76.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-0f9d76.svg)](https://github.com/thisisthepy/toolchain/blob/develop/LICENSE)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7f52ff.svg?logo=kotlin&logoColor=white)
 ![Gradle](https://img.shields.io/badge/Gradle-8.9-02303a.svg?logo=gradle&logoColor=white)
 ![Targets](https://img.shields.io/badge/targets-Android%20%7C%20iOS%20%7C%20Desktop-0f9d76.svg)
 ![Status](https://img.shields.io/badge/status-alpha-orange.svg)
 
-[Guide](docs/guide/index.html) · [Getting started](docs/guide/getting-started.html) · [Status](docs/guide/status.html) · [Ecosystem](docs/guide/ecosystem.html)
+[Guide](https://thisisthepy.github.io/toolchain/index.html) · [Getting started](https://thisisthepy.github.io/toolchain/getting-started.html) · [Status](https://thisisthepy.github.io/toolchain/status.html) · [Ecosystem](https://thisisthepy.github.io/toolchain/ecosystem.html)
 
 </div>
 
@@ -129,7 +129,7 @@ flowchart LR
 ## 📊 Status
 
 An honest summary: the full contract, item by item, is on the guide's
-[Status page](docs/guide/status.html).
+[Status page](https://thisisthepy.github.io/toolchain/status.html).
 
 | Area | State |
 |---|---|
@@ -149,15 +149,15 @@ An honest summary: the full contract, item by item, is on the guide's
 
 ## 📖 Documentation
 
-- **[Guide](docs/guide/index.html)**: concepts, task guides, status, in English and 한국어.
-- **[한국어 README](docs/locale/README_ko.md)**
+- **[Guide](https://thisisthepy.github.io/toolchain/index.html)**: concepts, task guides, status, in English and 한국어.
+- **[한국어 README](https://github.com/thisisthepy/toolchain/blob/develop/docs/locale/README_ko.md)**
 
 ## 🤝 Contributing
 
 Work here runs intent → spec → test → code: a behaviour change starts as a spec change, and its test
 is written and seen failing before the implementation. The guide's
-[contributing notes](docs/guide/status.html#contributing) say how to run the tests.
+[contributing notes](https://thisisthepy.github.io/toolchain/status.html#contributing) say how to run the tests.
 
 ## 📄 License
 
-[Apache-2.0](LICENSE) © 2024 thisisthepy
+[Apache-2.0](https://github.com/thisisthepy/toolchain/blob/develop/LICENSE) © 2024 thisisthepy

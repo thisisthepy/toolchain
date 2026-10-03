@@ -21,8 +21,7 @@ files) lives **inside this repository's root directory.**
 |---|---|
 | Worktrees | `.worktrees/<name>` (git-ignored) |
 | Temporary files | `.tmp/` (git-ignored); delete when done |
-| Benchmarks | `benchmarks/` |
-| Developer tooling | `tools/` |
+| CI-only scripts | `.github/scripts/` |
 
 Before writing a file, check that its absolute path starts with this repository's root. If it does
 not, stop. The only exceptions are a path the user names explicitly, and caches that build tools
@@ -49,7 +48,7 @@ build caches, model weights, `node_modules`) into every worktree is how 86 workt
 
 - Create worktrees under `.worktrees/<name>`.
 - **Symlink** large untracked directories from the main checkout instead of copying or rebuilding
-  them. If `tools/worktree-add.sh` exists, use it: it does the linking.
+  them.
 - Delete a worktree once its branch is merged: `git worktree remove .worktrees/<name>`.
 - Periodically delete `build/` directories inside worktrees; they only grow.
 
@@ -271,7 +270,7 @@ python3 docs/guide/check_guide.py
 
 | File | Language | Holds |
 |---|---|---|
-| `README.md` | English | The public face. Links only to `docs/guide/`, `docs/locale/`, `docs/<subdir>/` and `LICENSE` (rule 4: other root and `docs/*.md` files do not exist on `main`). |
+| `README.md` | English | The public face. Links only to the guide site, `docs/locale/`, `docs/<subdir>/` and `LICENSE`, always as absolute URLs (the file is read on GitHub, PyPI and elsewhere; rule 4: other root and `docs/*.md` files do not exist on `main`). |
 | `docs/locale/README_ko.md` | Korean | A faithful translation of `README.md`. Change both together. |
 | `PROJECT.md` | Korean | Status, structure, how to build, decisions, open questions. |
 | `docs/INTENT.md` | English | Why the project exists and what it is not. |
