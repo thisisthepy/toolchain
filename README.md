@@ -63,7 +63,7 @@ owns the Gradle vocabulary in between.
 | PyPI `toolchain-lite` | `tcl`, the command line for Python users (`uv tool install toolchain-lite`) |
 
 Apply the plugin next to Kotlin Multiplatform and point it at a `pypackpack` package. This is
-`sample/build.gradle.kts`, trimmed:
+`usage-example/build.gradle.kts`, trimmed:
 
 ```kotlin
 plugins {
@@ -76,17 +76,17 @@ python {
     compileSdk = "3.13"
     localLibraryPath = "src/commonMain/python"  // a pypackpack package: pyproject.toml + src/main/<pkg>
     packaging {
-        fileName = "sample"
+        fileName = "usage-example"
     }
 }
 ```
 
 ```shell
-./gradlew -p sample packagePython             # install → bundle → zip (sample/ is its own build)
-./gradlew -p sample stagePythonBundle         # stage python/ for android, ios and desktop
+./gradlew -p usage-example packagePython             # install → bundle → zip (usage-example/ is its own build)
+./gradlew -p usage-example stagePythonBundle         # stage python/ for android, ios and desktop
 ```
 
-> **iOS, interim:** sample's Xcode phase (`sample/src/iosMain/install-python-phase.sh`) needs
+> **iOS, interim:** usage-example's Xcode phase (`usage-example/src/iosMain/install-python-phase.sh`) needs
 > `PYTHON_MULTIPLATFORM_DIR` pointing at a python-multiplatform checkout for `Python.xcframework` and the
 > stdlib, until python-multiplatform#90 ships that wiring in its published plugin.
 

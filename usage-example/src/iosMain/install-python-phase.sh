@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Xcode Run Script phase for the sample's iOS app (toolchain#22): put this app's python/ payload,
+# Xcode Run Script phase for usage-example's iOS app (toolchain#22): put this app's python/ payload,
 # CPython's standard library and Python.framework into the .app.
 #
 # The payload comes from this build: stagePythonBundleIosForXcode prints PYTHON_PAYLOAD_DIR=, which is
@@ -15,10 +15,10 @@ set -euo pipefail
 # TODO(python-multiplatform#90): no checkout once the plugin provides these to consumers.
 : "${PYTHON_MULTIPLATFORM_DIR:?set PYTHON_MULTIPLATFORM_DIR to a python-multiplatform checkout (interim, python-multiplatform#90)}"
 
-# 1. This app's payload, from the sample's own build. Captured, parsed, then checked, so a failing
+# 1. This app's payload, from usage-example's own build. Captured, parsed, then checked, so a failing
 #    Gradle can never hand rsync an empty source.
 cd "$SRCROOT/../../.."
-out=$(./gradlew -q -p sample stagePythonBundleIosForXcode)
+out=$(./gradlew -q -p usage-example stagePythonBundleIosForXcode)
 payload=$(printf '%s\n' "$out" | sed -n 's/^PYTHON_PAYLOAD_DIR=//p')
 [ -n "$payload" ] && [ -d "$payload" ] || { echo "error: no Python payload dir from stagePythonBundleIosForXcode" >&2; exit 1; }
 export PYTHON_PAYLOAD_DIR="$payload"

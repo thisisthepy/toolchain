@@ -20,8 +20,8 @@ dependencies {
     // not left as an independent literal. A skewed pin here (previously `2.0.0` against a `2.1.0`
     // root) put two different `kotlin-gradle-plugin` versions on the plugin classpath any consumer
     // sees once it applies both this plugin and `org.jetbrains.kotlin.multiplatform` in the same
-    // `plugins {}` block (as `sample/build.gradle.kts` does). Gradle does not merge/conflict
-    // -resolve those into one: `sample/build.gradle.kts` compiled its `KotlinWebpackConfig
+    // `plugins {}` block (as `usage-example/build.gradle.kts` does). Gradle does not merge/conflict
+    // -resolve those into one: `usage-example/build.gradle.kts` compiled its `KotlinWebpackConfig
     // .DevServer()` call (browser { commonWebpackConfig { ... } }) against 2.0.0's shape (`proxy:
     // Map<String, Any>`), while the actually-applied multiplatform plugin (2.1.0, `proxy:
     // List<Proxy>` as of that release) drove `wasmJsBrowserTest` task creation at runtime --
@@ -51,7 +51,7 @@ dependencies {
     // Test-only: `PythonPluginAttachmentTest` applies `com.android.application` to a ProjectBuilder
     // project to check that the staged Android root really lands in `android.sourceSets.main.assets`
     // (the plugin reaches that object reflectively, so only a real AGP proves the method chain).
-    // Same version as `sample` (`gradle/libs.versions.toml` `agp`); never on the plugin's
+    // Same version as `usage-example` (`gradle/libs.versions.toml` `agp`); never on the plugin's
     // own runtime classpath.
     testImplementation("com.android.tools.build:gradle:${libs.versions.agp.get()}")
 }
