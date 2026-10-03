@@ -1,8 +1,11 @@
 package org.thisisthepy.python.multiplatform.toolchain
 
+import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonSdk
+import org.thisisthepy.python.multiplatform.toolchain.dsl.resolvePythonSdk
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -70,12 +73,27 @@ class EmbedLevelTest {
     }
 
     @Test
-    fun `the embed record is JSON carrying the level, family, warning and the payload caveat`() {
-        val json = embedRecordJson(2, "android", "raised \"x\"")
+    fun `the embed record is JSON carrying the level, family, warning and expected interpreter version`() {
+        val json = embedRecordJson(2, "android", "raised \"x\"", "3.14.7")
         assertTrue(json.contains("\"embedLevel\": 2"), json)
         assertTrue(json.contains("\"platformFamily\": \"android\""), json)
         assertTrue(json.contains("raised \\\"x\\\""), json)
-        assertTrue(json.contains("\"interpreterBundled\": false"), json)
-        assertTrue(embedRecordJson(0, "linux", null).contains("\"warning\": null"))
+        assertTrue(json.contains("\"interpreterVersion\": \"3.14.7\""), json)
+        // toolchain ships no interpreter (SPEC §1.12, #42), so the record no longer says whether one is bundled.
+        assertFalse(json.contains("interpreterBundled"), json)
+        val none = embedRecordJson(0, "linux", null)
+        assertTrue(none.contains("\"warning\": null") && none.contains("\"interpreterVersion\": null"), none)
+    }
+
+    private fun sdk(requested: String) = resolvePythonSdk(PythonSdk().apply { assign(requested) })
+
+    @Test
+    fun `the expected interpreter version is the compileSdk release at levels 1 and 2, none at 0`() {
+        assertNull(expectedInterpreterVersion(0, sdk("3.14.7")))
+        assertEquals("3.14.7", expectedInterpreterVersion(1, sdk("3.14")))
+        assertEquals("3.14.7", expectedInterpreterVersion(2, sdk("3.14.7")))
+        assertNull(expectedInterpreterVersion(2, null))
+        // A rejected compileSdk (not provided by python-multiplatform) names no version to expect.
+        assertNull(expectedInterpreterVersion(2, sdk("3.11.9-alpha")))
     }
 }
