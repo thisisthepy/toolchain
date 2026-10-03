@@ -8,16 +8,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import kotlin.test.fail
+import org.junit.Assume.assumeTrue
+import kotlin.test.BeforeTest
 
 /**
  * `typedpythonCheck` applied to a real Gradle build through TestKit (`docs/SPEC.md` §1.18, issue
  * `toolchain#23`): the gate is really installed into `build/typedpython/venv` and really run.
  *
- * Needs `uv` on `PATH`, network access for `pyrefly` from PyPI, and the `typedpython` wheel, which
- * is not on PyPI yet: run with `-Ptypedpython.wheelDir=<directory holding typedpython-0.1.0-*.whl>`
- * (`toolchain/build.gradle.kts` forwards it as a system property). Without it these tests fail with
- * that message rather than skipping -- a skipped gate test is a verification that cannot fail.
+ * Needs `uv` on `PATH` and a wheel directory holding the `typedpython` wheel **and** the `pyrefly`
+ * wheel it pins (the gate is installed with `--no-index`, so nothing comes from PyPI): run with
+ * `-Ptypedpython.wheelDir=<dir>` (`toolchain/build.gradle.kts` forwards it as a system property).
+ * Without it these tests are skipped with that reason -- CI has no wheel directory.
  *
  * Every test project lives under this module's `build/` (AGENTS.md §2), and so does the TestKit
  * Gradle home.
@@ -34,13 +35,21 @@ import kotlin.test.fail
  * `buildPython` succeeding over an `Any` leak -- the pre-implementation failure, not a regression.
  */
 class TypedpythonCheckTaskTest {
-    private val wheelDir: String =
-        System.getProperty("typedpython.wheelDir").orEmpty().ifBlank {
-            fail(
-                "TypedpythonCheckTaskTest needs the typedpython wheel: run the tests with " +
-                    "-Ptypedpython.wheelDir=<directory holding typedpython-0.1.0-py3-none-any.whl>",
-            )
-        }
+    private val wheelDir: String = System.getProperty("typedpython.wheelDir").orEmpty()
+
+    /**
+     * Without the wheel directory (CI does not have one) these tests are *skipped*, with the reason
+     * below, not failed. The decision tests (`TypedpythonDecisionsTest`) and
+     * `TypedpythonNoWheelTest` run everywhere.
+     */
+    @BeforeTest
+    fun requireWheelDir() {
+        assumeTrue(
+            "SKIPPED: needs the typedpython and pyrefly wheels; run with " +
+                "-Ptypedpython.wheelDir=<directory holding typedpython-0.1.0-py3-none-any.whl and the pyrefly wheel>",
+            wheelDir.isNotBlank(),
+        )
+    }
 
     private val testKitHome = File("build/testkit-home").absoluteFile
 
@@ -64,12 +73,12 @@ class TypedpythonCheckTaskTest {
         }
     }
 
-    private fun runner(dir: File, vararg tasks: String): GradleRunner =
+    private fun runner(dir: File, vararg tasks: String, wheels: String = wheelDir): GradleRunner =
         GradleRunner.create()
             .withProjectDir(dir)
             .withTestKitDir(testKitHome)
             .withPluginClasspath()
-            .withArguments(*tasks, "-Ptypedpython.wheelDir=$wheelDir", "--stacktrace")
+            .withArguments(*tasks, "-Ptypedpython.wheelDir=$wheels", "--stacktrace")
             .forwardOutput()
 
     private fun BuildResult.outcomeOf(task: String): TaskOutcome? = task(":$task")?.outcome
@@ -157,6 +166,55 @@ class TypedpythonCheckTaskTest {
     fun `the package's modules import one another`() {
         val dir = newProject("intra")
         write(dir, "pkg/src/main/demo/a.py", "from demo.ok import g\nfrom . import ok\n\n\ndef k() -> int:\n    return g(1) + ok.g(2)\n")
+
+        val result = runner(dir, "typedpythonCheck").build()
+
+        assertEquals(TaskOutcome.SUCCESS, result.outcomeOf("typedpythonCheck"), result.output)
+    }
+
+    @Test
+    fun `pyrefly is pinned and an input, and comes from the wheel directory only`() {
+        val dir = newProject("pyrefly-pin")
+        assertEquals(TaskOutcome.SUCCESS, runner(dir, "typedpythonCheck").build().outcomeOf("typedpythonCheck"))
+
+        // 1.3.1 exists on PyPI but is not in the wheel directory: with --no-index the install must
+        // fail rather than fetch it, and changing the pin must re-run the (otherwise UP-TO-DATE) check.
+        File(dir, "build.gradle.kts").appendText(
+            "\ntasks.named<org.thisisthepy.python.multiplatform.toolchain.typedpython.TypedpythonCheckTask>" +
+                "(\"typedpythonCheck\") {\n    pyreflyVersion.set(\"1.3.1\")\n}\n",
+        )
+        val failed = runner(dir, "typedpythonCheck").buildAndFail()
+        assertEquals(TaskOutcome.FAILED, failed.outcomeOf("typedpythonCheck"), failed.output)
+        assertTrue("pyrefly==1.3.1" in failed.output, failed.output)
+    }
+
+    @Test
+    fun `a wheel directory without pyrefly fails -- pyrefly is never fetched from an index`() {
+        val dir = newProject("no-pyrefly-wheel")
+        val onlyTypedpython = File("build/typedpython-testkit/wheels-without-pyrefly").absoluteFile
+        onlyTypedpython.deleteRecursively()
+        onlyTypedpython.mkdirs()
+        File(wheelDir).listFiles { f -> f.name.startsWith("typedpython-") && f.extension == "whl" }!!
+            .forEach { it.copyTo(File(onlyTypedpython, it.name)) }
+
+        val failed = runner(dir, "typedpythonCheck", wheels = onlyTypedpython.path).buildAndFail()
+
+        assertEquals(TaskOutcome.FAILED, failed.outcomeOf("typedpythonCheck"), failed.output)
+        assertTrue("pyrefly" in failed.output && "--no-index" in failed.output, failed.output)
+    }
+
+    @Test
+    fun `metaDirs and libDirs are bundled but not checked`() {
+        val dir = newProject(
+            "meta-lib",
+            DEFAULT_BUILD_SCRIPT.replace(
+                "localLibraryPath = \"pkg\"",
+                "localLibraryPath = \"pkg\"\n    sourceSets {\n        val commonMain by getting {\n" +
+                    "            metaDirs(\"meta\")\n            libDirs(\"site-packages\")\n        }\n    }",
+            ),
+        )
+        write(dir, "meta/generated.py", LEAK)
+        write(dir, "site-packages/thirdparty.py", LEAK)
 
         val result = runner(dir, "typedpythonCheck").build()
 

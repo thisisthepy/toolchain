@@ -16,11 +16,16 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.SkipWhenEmpty
 import org.gradle.api.tasks.TaskAction
+import kotlinx.coroutines.runBlocking
+import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendInterface
+import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendType
 import java.io.File
 import java.io.IOException
 
 /** `docs/SPEC.md` §1.18. The gate's version until a newer one is pinned here. */
 const val DEFAULT_TYPEDPYTHON_VERSION = "0.1.0"
+/** The `pyrefly` the gate pins (`typedpython` 0.1.0 `Requires-Dist: pyrefly==1.3.2`). */
+const val DEFAULT_PYREFLY_VERSION = "1.3.2"
 const val DEFAULT_TYPEDPYTHON_MODE = "checked"
 val TYPEDPYTHON_MODES = listOf("checked", "compiled")
 
@@ -35,23 +40,15 @@ const val TYPEDPYTHON_NO_STUBS_NOTICE =
 
 /**
  * Statically checks the project's own Python with the TypedPython gate before it is bundled
- * (issue `toolchain#23`, `docs/SPEC.md` §1.18).
+ * (issue `toolchain#23`, `docs/SPEC.md` section 1.18).
  *
- * The gate is installed into [venvDir] (`build/typedpython/venv`) by calling `uv` directly, **not**
- * through `pypackpack`'s UV backend (AGENTS.md §13 would prefer the backend). Two reasons, both
- * observed on 2026-10-03:
- *
- * 1. The backend cannot run inside a consumer build. `packpack` is compiled with Kotlin 2.3, and a
- *    Kotlin DSL build pins the plugin classpath's `kotlin-stdlib` to Gradle's embedded one
- *    (`{strictly 1.9.23}` on Gradle 8.9 -- `:usage-example:buildEnvironment`). Its suspend
- *    `createVirtualEnvironment` then fails in `usage-example` with
- *    `NoClassDefFoundError: kotlin/coroutines/jvm/internal/SpillingKt`. TestKit's
- *    `withPluginClasspath()` injects the classes without that pin, so the TestKit tests passed over it.
- * 2. The backend interface has no "install these requirements into that venv" operation:
- *    `installDependenciesToTarget` always reads `-r pyproject.toml`.
- *
- * Both are `pypackpack` changes -- another repository, proposed rather than made here. Once they
- * land, [ensureTypedpythonGate] is the one place to switch back.
+ * The gate's venv ([venvDir], `build/typedpython/venv`) is created through `pypackpack`'s UV backend
+ * (`createVirtualEnvironment`). The install into it calls `uv` directly: the backend has no operation
+ * that installs named requirements into an existing venv from a local wheel directory.
+ * `installDependenciesToTarget` always reads `-r pyproject.toml` into a `--target` directory, and
+ * `addDependencies` edits `pyproject.toml`. What is missing is a `pip install <requirements>
+ * --python <venv> [--no-index] [--find-links <dir>]` operation; with it, [ensureTypedpythonGate] is
+ * the one place to switch. That is a `pypackpack` change, proposed rather than made here.
  */
 abstract class TypedpythonCheckTask : DefaultTask() {
     /** The `.py`/`.pyi` files of the package directory -- see [typedpythonSourceExcluded]. */
@@ -70,6 +67,10 @@ abstract class TypedpythonCheckTask : DefaultTask() {
 
     @get:Input
     abstract val gateVersion: Property<String>
+
+    /** Installed explicitly (`pyrefly==<v>`) so the check re-runs when it changes. */
+    @get:Input
+    abstract val pyreflyVersion: Property<String>
 
     /** `-Ptypedpython.wheelDir`, resolved against the project directory. */
     @get:Input
@@ -103,8 +104,17 @@ abstract class TypedpythonCheckTask : DefaultTask() {
             return
         }
 
+        // Before anything is created or run. `typedpython` is not ours on PyPI, so without a wheel
+        // directory there is nothing safe to install: skip, loudly -- never fall back to an index.
+        val wheels = wheelDir.orNull
+        if (wheels == null) {
+            logger.warn(typedpythonSkippedWarning(gateVersion.get(), pyreflyVersion.get()))
+            reportFile.parentFile.mkdirs()
+            reportFile.writeText("skipped: no -P$TYPEDPYTHON_WHEEL_DIR_PROPERTY\n")
+            return
+        }
         val venv = venvDir.get().asFile
-        val executable = ensureTypedpythonGate(venv, gateVersion.get(), wheelDir.orNull)
+        val executable = ensureTypedpythonGate(venv, gateVersion.get(), pyreflyVersion.get(), wheels)
 
         val stubs = stubDirs.files.toList()
         if (stubs.isEmpty()) logger.lifecycle(TYPEDPYTHON_NO_STUBS_NOTICE)
@@ -146,27 +156,34 @@ abstract class TypedpythonCheckTask : DefaultTask() {
 }
 
 /**
- * Installs `typedpython==<version>` into [venv] unless the same request is already installed
- * there, and returns its console script.
+ * Installs `typedpython==<version>` and `pyrefly==<pyreflyVersion>` into [venv] from [wheelDir] only
+ * (`--no-index`) unless the same request is already installed there, and returns its console script.
  */
-fun ensureTypedpythonGate(venv: File, version: String, wheelDir: String?): File {
+fun ensureTypedpythonGate(venv: File, version: String, pyreflyVersion: String, wheelDir: String): File {
     val executable = typedpythonExecutable(venv)
     val marker = File(venv, ".typedpython-request")
-    val request = "typedpython==$version find-links=${wheelDir.orEmpty()}"
+    val request = "typedpython==$version pyrefly==$pyreflyVersion no-index find-links=$wheelDir"
     if (executable.isFile && marker.isFile && marker.readText() == request) return executable
 
     val work = venv.parentFile.apply { mkdirs() }
     if (!File(venv, "pyvenv.cfg").isFile) {
-        runUv(typedpythonVenvCommand(venv), work).let { (exit, output) ->
-            if (exit != 0) throw GradleException("Could not create the typedpython venv at $venv (uv exit $exit):\n$output")
+        // Through pypackpack's UV backend (AGENTS.md section 13); it can create a venv with these options.
+        val created = runBlocking {
+            BackendInterface.create(BackendType.UV).createVirtualEnvironment(
+                path = venv.path,
+                pythonVersion = TYPEDPYTHON_PYTHON_REQUEST,
+                extraArgs = typedpythonVenvOptions(),
+                workingDir = work,
+            )
         }
+        created.onFailure { throw GradleException("Could not create the typedpython venv at $venv: ${it.message}", it) }
     }
-    runUv(typedpythonInstallCommand(venv, version, wheelDir), work).let { (exit, output) ->
+    runUv(typedpythonInstallCommand(venv, version, pyreflyVersion, wheelDir), work).let { (exit, output) ->
         if (exit != 0) {
             throw GradleException(
-                "Could not install typedpython==$version into $venv (uv exit $exit):\n$output\n" +
-                    (if (wheelDir == null) "typedpython is not on PyPI yet: " else "") +
-                    "set -P$TYPEDPYTHON_WHEEL_DIR_PROPERTY=<directory holding the typedpython-$version wheel>.",
+                "Could not install typedpython==$version and pyrefly==$pyreflyVersion into $venv from $wheelDir " +
+                    "(uv exit $exit, --no-index):\n$output\n" +
+                    typedpythonWheelInstruction(version, pyreflyVersion),
             )
         }
     }
@@ -175,16 +192,38 @@ fun ensureTypedpythonGate(venv: File, version: String, wheelDir: String?): File 
     return executable
 }
 
-/** `uv venv` for the gate: the wheel's Python, and never the user's `pyproject.toml` project. */
-fun typedpythonVenvCommand(venv: File): List<String> =
-    listOf("uv", "venv", "--no-project", "--clear", "--python", TYPEDPYTHON_PYTHON_REQUEST, venv.path)
+fun typedpythonWheelInstruction(version: String, pyreflyVersion: String): String =
+    "The directory named by -P$TYPEDPYTHON_WHEEL_DIR_PROPERTY=<directory> must hold the " +
+        "typedpython-$version wheel and the pyrefly-$pyreflyVersion wheel for this platform; nothing " +
+        "is fetched from an index."
 
-fun typedpythonInstallCommand(venv: File, version: String, wheelDir: String?): List<String> =
-    buildList {
-        addAll(listOf("uv", "pip", "install", "--python", venv.path))
-        wheelDir?.let { addAll(listOf("--find-links", it)) }
-        add("typedpython==$version")
-    }
+/**
+ * The warning printed when the check is skipped for want of a wheel directory. It says what was
+ * skipped, why, and how to turn the check on. The gate is never installed from an index: `typedpython`
+ * is unclaimed on PyPI, so a bare-name install would run whatever someone publishes under that name.
+ */
+fun typedpythonSkippedWarning(version: String, pyreflyVersion: String): String =
+    "\n!!! typedpythonCheck SKIPPED: the project's Python was NOT type-checked !!!\n" +
+        "Why: the typedpython gate is not on PyPI yet, and it is never installed from an index " +
+        "(a package of that name there would not be ours).\n" +
+        "To turn the check on: pass -P$TYPEDPYTHON_WHEEL_DIR_PROPERTY=<directory>. " +
+        typedpythonWheelInstruction(version, pyreflyVersion) + "\n"
+
+/**
+ * The directories whose Python is checked: the bundled package directory only. `libDirs` (third-party
+ * site-packages) and `metaDirs` (generated metadata) are bundled too but are not code the user wrote.
+ */
+fun typedpythonCheckedDirs(packageDir: File, metaDirs: List<File>, libDirs: List<File>): List<File> = listOf(packageDir)
+
+/** `uv venv` options for the gate: never the user's `pyproject.toml` project, and a fresh venv. */
+fun typedpythonVenvOptions(): Map<String, String> = linkedMapOf("no-project" to "", "clear" to "")
+
+/** `--no-index`: both packages come from [wheelDir], so nothing can be fetched from PyPI. */
+fun typedpythonInstallCommand(venv: File, version: String, pyreflyVersion: String, wheelDir: String): List<String> =
+    listOf(
+        "uv", "pip", "install", "--python", venv.path, "--no-index", "--find-links", wheelDir,
+        "typedpython==$version", "pyrefly==$pyreflyVersion",
+    )
 
 private fun runUv(command: List<String>, workingDir: File): Pair<Int, String> {
     val process = try {

@@ -219,20 +219,27 @@ bundled. Every `buildPython<Variant><BuildType>` and the single host `buildPytho
 
 - **Sources.** Every `.py` file under the directory `resolvePackageDir` resolves to (§1.9) — the
   directory that gets bundled — excluding hidden directories (`.venv`, …), `__pycache__` and
-  `build`. `.py` and `.pyi` files there are `@InputFiles` with `@PathSensitive(RELATIVE)`: a changed
+  `build`. `metaDirs` and `libDirs` are bundled but **not checked**: `libDirs` holds third-party
+  site-packages and `metaDirs` generated metadata, neither of which the user wrote or could fix (asserted
+  by `typedpythonCheckedDirs`). `.py` and `.pyi` files there are `@InputFiles` with `@PathSensitive(RELATIVE)`: a changed
   `.py` re-runs the check, a change to any other file leaves it `UP-TO-DATE`. No package directory,
   or no `.py` file in it: the check is skipped with a log line and the gate is not installed.
-- **Gate.** The `typedpython` wheel at a pinned version (`@Input`, default `0.1.0`), installed into
-  `build/typedpython/venv` — never the project's `.venv` — with `uv` from `PATH`:
-  `uv venv --no-project --clear --python ">=3.13" <venv>` (only when the venv does not exist), then
-  `uv pip install --python <venv> [--find-links <dir>] typedpython==<version>` (skipped when the
-  same request is already installed). Until the wheel is on PyPI, the project property
-  `typedpython.wheelDir` supplies `<dir>`. An install failure fails the task and names that property.
-  This calls `uv` directly rather than `pypackpack`'s UV backend (AGENTS.md §13): `packpack`'s suspend
-  backend fails in a Kotlin DSL consumer build (`NoClassDefFoundError:
-  kotlin/coroutines/jvm/internal/SpillingKt` — its Kotlin 2.3 code against the build classpath's
-  `kotlin-stdlib {strictly 1.9.23}`), and the backend has no "install these requirements into this
-  venv" operation. Both are `pypackpack` changes, not made here.
+- **Gate.** The `typedpython` wheel and the `pyrefly` it pins, both at pinned versions (`@Input`,
+  defaults `0.1.0` and `1.3.2`), installed into `build/typedpython/venv` — never the project's `.venv`.
+  The venv is created through `pypackpack`'s UV backend (`createVirtualEnvironment`, `--no-project
+  --clear`, Python `>=3.13`; only when the venv does not exist). The install is
+  `uv pip install --python <venv> --no-index --find-links <dir> typedpython==<v> pyrefly==<v>`
+  (skipped when the same request is already installed): **both packages come from `<dir>` and
+  nothing is ever fetched from an index** — `typedpython` is unclaimed on PyPI, so a bare-name install
+  would run whatever someone publishes under that name on every consumer's build. `<dir>` is the
+  project property `typedpython.wheelDir` and must hold the `typedpython` wheel and the `pyrefly` wheel
+  for the platform. An install failure fails the task and names that requirement. The install calls
+  `uv` directly: `pypackpack`'s backend has no operation that installs named requirements into an
+  existing venv from a local wheel directory (`installDependenciesToTarget` reads `-r pyproject.toml`
+  into `--target`; `addDependencies` edits `pyproject.toml`) — a `pypackpack` change, not made here.
+- **No wheel directory.** The check is **skipped with a loud warning** (what was skipped, that the
+  gate is not on PyPI yet, and `-Ptypedpython.wheelDir=<dir>` to turn it on); nothing is created or
+  installed. With a wheel directory a failed check fails the build.
 - **Run.** `<venv>/bin/typedpython check --mode <mode> [--search-path <dir>]... <file>...`, with
   explicit files (the 0.1.0 gate crashes on a directory argument). `mode` is an `@Input`, default
   `checked`; any value other than `checked`/`compiled` fails the task.
@@ -252,13 +259,17 @@ bundled. Every `buildPython<Variant><BuildType>` and the single host `buildPytho
 `ptest/typedpython/TypedpythonCheckTaskTest.kt` (TestKit: an `Any` leak fails `buildPython` and the
 fix passes; per-variant `buildPython*` depend on the check; only a `.py` change re-runs it; a
 `typedpythonStubs` directory resolves an import that fails without it; the no-stubs line appears
-once; the package's modules import one another), `ptest/typedpython/TypedpythonDecisionsTest.kt`
-(source selection, import root, commands, mode, exit-code interpretation). The TestKit tests need
-`-Ptypedpython.wheelDir=<dir>`, `uv` and network (`pyrefly` from PyPI).
+once; the package's modules import one another; a `pyrefly` pin absent from the wheel directory fails
+instead of being fetched; `metaDirs`/`libDirs` are not checked),
+`ptest/typedpython/TypedpythonNoWheelTest.kt` (no wheel directory: skipped with the warning),
+`ptest/typedpython/TypedpythonDecisionsTest.kt` (source selection, import root, `--no-index`
+commands, skip warning, mode, exit-code interpretation). The TestKit tests in
+`TypedpythonCheckTaskTest` need `-Ptypedpython.wheelDir=<dir>` (holding the `typedpython` and
+`pyrefly` wheels) and `uv`; without it they are **skipped** with that reason, as on CI.
 Not covered by a test here: exit 2 end to end (only `interpretTypedpythonResult`), and the install
 in a *consumer's* classpath — `withPluginClasspath()` bypasses the Kotlin DSL's `kotlin-stdlib` pin;
 that was verified by building `:usage-example:buildPython`.
-→ *Building `usage-example` now requires `-Ptypedpython.wheelDir` until `typedpython` is on PyPI.*
+→ *Until `typedpython` is on PyPI, a build without `-Ptypedpython.wheelDir` skips the check with a warning.*
 → *Platform overlays (`src/<family>`) are checked as files but only `src/main` is an import root:
 **partial**.*
 

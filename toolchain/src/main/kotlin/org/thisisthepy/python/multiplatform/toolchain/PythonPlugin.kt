@@ -22,10 +22,12 @@ import org.thisisthepy.python.multiplatform.toolchain.hotreload.CodePushPendingT
 import org.thisisthepy.python.multiplatform.toolchain.hotreload.HotReloadPushTask
 import org.thisisthepy.python.multiplatform.toolchain.hotreload.validateCodePushConfig
 import org.thisisthepy.python.multiplatform.toolchain.hotreload.validateHotReloadConfig
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.DEFAULT_PYREFLY_VERSION
 import org.thisisthepy.python.multiplatform.toolchain.typedpython.DEFAULT_TYPEDPYTHON_MODE
 import org.thisisthepy.python.multiplatform.toolchain.typedpython.DEFAULT_TYPEDPYTHON_VERSION
 import org.thisisthepy.python.multiplatform.toolchain.typedpython.TYPEDPYTHON_WHEEL_DIR_PROPERTY
 import org.thisisthepy.python.multiplatform.toolchain.typedpython.TypedpythonCheckTask
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.typedpythonCheckedDirs
 import org.thisisthepy.python.multiplatform.toolchain.typedpython.typedpythonSourceExcluded
 import java.io.File
 
@@ -87,6 +89,7 @@ class PythonPlugin : Plugin<Project> {
             description = "Type-checks the project's Python with the TypedPython gate"
             mode.convention(DEFAULT_TYPEDPYTHON_MODE)
             gateVersion.convention(DEFAULT_TYPEDPYTHON_VERSION)
+            pyreflyVersion.convention(DEFAULT_PYREFLY_VERSION)
             wheelDir.set(
                 project.providers.gradleProperty(TYPEDPYTHON_WHEEL_DIR_PROPERTY).map { project.file(it).absolutePath },
             )
@@ -154,7 +157,10 @@ class PythonPlugin : Plugin<Project> {
             // Exactly the directory that gets bundled is what gets checked.
             typedpythonCheckTask.configure {
                 packageDir = resolvedPackageDir
-                resolvedPackageDir?.let { dir ->
+                // metaDirs/libDirs are bundled but deliberately not checked: typedpythonCheckedDirs.
+                resolvedPackageDir?.let {
+                    typedpythonCheckedDirs(it, resolvedMetaDirs, resolvedLibDirs)
+                }.orEmpty().forEach { dir ->
                     sources.from(
                         project.fileTree(dir) {
                             include("**/*.py", "**/*.pyi")

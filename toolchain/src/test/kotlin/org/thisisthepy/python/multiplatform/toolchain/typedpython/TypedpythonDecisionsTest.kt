@@ -86,21 +86,38 @@ class TypedpythonDecisionsTest {
 
     @Test
     fun `the gate venv is created for the wheel's Python without discovering the user's project`() {
+        assertEquals(">=3.13", TYPEDPYTHON_PYTHON_REQUEST)
+        assertEquals(listOf("no-project", "clear"), typedpythonVenvOptions().keys.toList())
+    }
+
+    @Test
+    fun `the gate is installed from the wheel directory only -- --no-index, both packages pinned`() {
         assertEquals(
-            listOf("uv", "venv", "--no-project", "--clear", "--python", ">=3.13", "/b/typedpython/venv"),
-            typedpythonVenvCommand(File("/b/typedpython/venv")),
+            listOf(
+                "uv", "pip", "install", "--python", "/b/venv", "--no-index", "--find-links", "/w",
+                "typedpython==0.1.0", "pyrefly==1.3.2",
+            ),
+            typedpythonInstallCommand(File("/b/venv"), "0.1.0", "1.3.2", "/w"),
         )
     }
 
     @Test
-    fun `the gate is installed into its own venv, from the wheel directory when one is given`() {
+    fun `the skip warning says what was skipped, why, and how to turn the check on`() {
+        val warning = typedpythonSkippedWarning("0.1.0", "1.3.2")
+        assertTrue("SKIPPED" in warning && "NOT type-checked" in warning, warning)
+        assertTrue("not on PyPI" in warning, warning)
+        assertTrue("-Ptypedpython.wheelDir" in warning, warning)
+        assertTrue("typedpython-0.1.0" in warning && "pyrefly-1.3.2" in warning, warning)
+    }
+
+    @Test
+    fun `only the package directory is checked, not metaDirs or libDirs`() {
+        // libDirs hold third-party site-packages and metaDirs generated metadata: neither is code
+        // the user wrote, and a diagnostic there could not be fixed by them. SPEC §1.18.
+        val pkg = File("/p/pkg")
         assertEquals(
-            listOf("uv", "pip", "install", "--python", "/b/venv", "--find-links", "/w", "typedpython==0.1.0"),
-            typedpythonInstallCommand(File("/b/venv"), "0.1.0", "/w"),
-        )
-        assertEquals(
-            listOf("uv", "pip", "install", "--python", "/b/venv", "typedpython==0.2.0"),
-            typedpythonInstallCommand(File("/b/venv"), "0.2.0", null),
+            listOf(pkg),
+            typedpythonCheckedDirs(pkg, metaDirs = listOf(File("/p/meta")), libDirs = listOf(File("/p/site-packages"))),
         )
     }
 
