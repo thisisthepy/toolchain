@@ -114,17 +114,19 @@ class PythonPlugin : Plugin<Project> {
             }
             // python-multiplatform embeds the interpreter at level 2; compileSdk must name the same
             // X.Y.Z (SPEC §1.12, #42). The property wins over the `:python-multiplatform` extension
-            // (python-multiplatform#61); read once, when the first bundling task is configured.
+            // (python-multiplatform#61), then the published dependency's metadata or jar resource (#49);
+            // read once, when the first level-2 bundling task is configured.
             val pythonMultiplatformVersion by lazy {
                 selectPythonMultiplatformVersion(
                     project.findProperty(PYTHON_MULTIPLATFORM_VERSION_PROPERTY)?.toString(),
                     readPythonMultiplatformExtensionVersion(project),
-                ).also { version ->
+                ) { readPublishedPythonMultiplatformVersion(project) }.also { version ->
                     if (version == null) {
                         project.logger.lifecycle(
                             "python-multiplatform's pythonVersion is unknown (no $PYTHON_MULTIPLATFORM_VERSION_PROPERTY " +
                                 "property, no $PYTHON_MULTIPLATFORM_PROJECT_PATH project with a " +
-                                "$PYTHON_MULTIPLATFORM_EXTENSION extension): compileSdk is not checked against it.",
+                                "$PYTHON_MULTIPLATFORM_EXTENSION extension, no published python-multiplatform " +
+                                "dependency stating it): compileSdk is not checked against it.",
                         )
                     }
                 }
