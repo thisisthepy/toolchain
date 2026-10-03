@@ -33,7 +33,7 @@ fun findProjectRoot(startDir: File): File? {
  * call the issue's usage example shows.
  *
  * Deliberately calls `dependency.backend.BackendInterface` directly -- the same layer
- * `:toolchain`'s `InstallDependenciesTask.installWithPackpack` uses -- rather than the
+ * `:toolchain-gradle-plugin`'s `InstallDependenciesTask.installWithPackpack` uses -- rather than the
  * `dependency.frontend`/`middleware` layers `pypackpack`'s own CLI is built on. Those resolve the
  * project root from the JVM-global `user.dir` system property (`pypackpack`'s internal
  * `findProjectRoot()`); the backend layer takes `workingDir: File?` as an explicit parameter

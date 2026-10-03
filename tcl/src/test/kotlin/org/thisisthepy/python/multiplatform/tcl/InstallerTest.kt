@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
  * (toolchain-lite, `tcl install <package>`): a python-only user may or may not already have a
  * `pypackpack` project at the target directory, and `install` must handle both. Uses real `uv`
  * and real network access (PyPI), the same tradeoff `InstallDependenciesTaskTest`
- * (`:toolchain`) documents and accepts for the same reason: a fake backend would only prove this
+ * (`:toolchain-gradle-plugin`) documents and accepts for the same reason: a fake backend would only prove this
  * module calls the right function, not that the resulting `pyproject.toml` is real.
  *
  * Pre-implementation state: this file fails to compile (no `Installer`, no `installBlocking`, no

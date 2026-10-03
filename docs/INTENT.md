@@ -14,7 +14,7 @@ The intent is derived from what the maintainer wrote by hand, in this order of a
 | GitHub issue [`toolchain#2`](https://github.com/thisisthepy/toolchain/issues/2), "Kotlin Gradle Plugin and Build Tools" | The plugin checklist: Python version setup, target platforms, hot reload / code push, source sets, compile levels, build automation. |
 | GitHub issue [`toolchain#1`](https://github.com/thisisthepy/toolchain/issues/1), "Toolchain-lite for python-only users" | A simplified CLI for Python users: `tcl install pythonx-compose`. |
 | `pyproject.toml` / the original `README.md` | "Python Multiplatform Build Plugin/Tool with Kotlin Multiplatform Mobile". |
-| `usage-example/` | The executable subset of the target DSL that the plugin reads today. |
+| `sample/` | The executable subset of the target DSL that the plugin reads today. |
 
 Anything below that is an inference rather than a statement from those sources is marked
 `> Inferred — confirm with the maintainer.`

@@ -47,7 +47,7 @@
 <section>
 <h2 id="contributing"><span data-lang="en">Contributing</span><span data-lang="ko">기여하기</span></h2>
 <p data-lang="en">Changes go intent → spec → test → code. A behaviour change begins as a change to the specification; its test is written first and seen failing; then the code makes it pass. A DSL value is never accepted silently — it is wired to a task, or rejected with a reason.</p><p data-lang="ko">변경은 의도 → 스펙 → 테스트 → 코드 순서로 갑니다. 동작 변경은 스펙 변경에서 시작하고, 테스트를 먼저 써서 실패를 확인한 뒤, 코드로 통과시킵니다. DSL 값은 조용히 받아들이지 않습니다 — 태스크에 연결하거나, 이유와 함께 거부합니다.</p>
-<pre><code class="language-shell">./gradlew :toolchain:test --rerun     # plugin; needs packpack in Maven Local, uv and network
+<pre><code class="language-shell">./gradlew :toolchain-gradle-plugin:test --rerun     # plugin; needs packpack in Maven Local, uv and network
 ./gradlew :tcl:test --rerun           # tcl; needs uv and network
 python3 docs/guide/check_guide.py     # this site</code></pre>
 <p data-lang="en">Run each module on its own, and count results from <code>build/test-results/</code> rather than from the console.</p><p data-lang="ko">모듈은 따로따로 실행하고, 결과는 콘솔이 아니라 <code>build/test-results/</code> 에서 세세요.</p>

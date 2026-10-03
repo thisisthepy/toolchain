@@ -14,7 +14,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
 
     // `tcl` ("toolchain-lite", GitHub issue thisisthepy/toolchain#1) is a thin CLI layer over
-    // `pypackpack`'s dependency backend -- the same artifact `:toolchain` already resolves through
+    // `pypackpack`'s dependency backend -- the same artifact `:toolchain-gradle-plugin` already resolves through
     // `mavenLocal()` (see that module's `build.gradle.kts` for the `publishToMavenLocal`
     // prerequisite this also depends on).
     implementation("org.thisisthepy.python.multiplatform:packpack:0.1.0")
@@ -30,7 +30,7 @@ application {
 
 // `packpack` is built with Kotlin 2.3.0 while this module's own `compileKotlin` resolves to
 // Kotlin 2.1.0 (whichever Kotlin Gradle Plugin version wins the shared plugin classpath across
-// this settings). Same escape hatch `:toolchain/build.gradle.kts` already uses for the same
+// this settings). Same escape hatch `:toolchain-gradle-plugin/build.gradle.kts` already uses for the same
 // mismatch, for the same reason: this only relaxes the metadata-format version gate, not
 // language/API level compatibility.
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {

@@ -53,11 +53,17 @@ owns the Gradle vocabulary in between.
 
 ```shell
 # in pypackpack:  ./gradlew :packpack:publishToMavenLocal
-./gradlew :toolchain:publishToMavenLocal
+./gradlew :toolchain-gradle-plugin:publishToMavenLocal
 ```
 
+| Coordinates | What |
+|---|---|
+| plugin id `org.thisisthepy.python.multiplatform` | the Gradle plugin; apply it by id (unchanged) |
+| `org.thisisthepy.python.multiplatform:toolchain-gradle-plugin` | the plugin's implementation artifact (was `…:toolchain` before #62) |
+| `org.thisisthepy.python.multiplatform:tcl` | the CLI, toolchain-lite (tcl) |
+
 Apply the plugin next to Kotlin Multiplatform and point it at a `pypackpack` package. This is
-`usage-example/build.gradle.kts`, trimmed:
+`sample/build.gradle.kts`, trimmed:
 
 ```kotlin
 plugins {
@@ -68,20 +74,19 @@ plugins {
 
 python {
     compileSdk = "3.13"
-    localLibraryPath = "python"      // a pypackpack package: pyproject.toml + src/main/<pkg>
+    localLibraryPath = "src/commonMain/python"  // a pypackpack package: pyproject.toml + src/main/<pkg>
     packaging {
-        fileName = "usage-example"
+        fileName = "sample"
     }
 }
 ```
 
 ```shell
-cd usage-example                              # its own build, on python-multiplatform's Kotlin
-./gradlew packagePython                       # install → bundle → zip
-./gradlew stagePythonBundle                   # stage python/ for android, ios and desktop
+./gradlew -p sample packagePython             # install → bundle → zip (sample/ is its own build)
+./gradlew -p sample stagePythonBundle         # stage python/ for android, ios and desktop
 ```
 
-> **iOS, interim:** usage-example's Xcode phase (`usage-example/src/iosMain/install-python-phase.sh`) needs
+> **iOS, interim:** sample's Xcode phase (`sample/src/iosMain/install-python-phase.sh`) needs
 > `PYTHON_MULTIPLATFORM_DIR` pointing at a python-multiplatform checkout for `Python.xcframework` and the
 > stdlib, until python-multiplatform#90 ships that wiring in its published plugin.
 

@@ -33,14 +33,14 @@
 ./gradlew :packpack:publishToMavenLocal
 
 # in this repository
-./gradlew :toolchain:publishToMavenLocal</code></pre>
+./gradlew :toolchain-gradle-plugin:publishToMavenLocal</code></pre>
 <div class="note"><p data-lang="en">The plugin is pre-release and resolved from <code>mavenLocal()</code>. Add <code>mavenLocal()</code> to <code>pluginManagement.repositories</code> in your <code>settings.gradle.kts</code>.</p><p data-lang="ko">플러그인은 출시 전이며 <code>mavenLocal()</code> 에서 받습니다. <code>settings.gradle.kts</code> 의 <code>pluginManagement.repositories</code> 에 <code>mavenLocal()</code> 을 추가하세요.</p></div>
 </section>
 
 <section>
 <h2><span data-lang="en">2. A Python package</span><span data-lang="ko">2. Python 패키지</span></h2>
 <p data-lang="en">The plugin bundles a <em>pypackpack package</em>: a directory with a <code>pyproject.toml</code> and its code under <code>src/main/</code>. Platform-specific code can sit in <code>src/android</code>, <code>src/ios</code> and so on; the bundler overlays it.</p><p data-lang="ko">플러그인이 번들링하는 것은 <em>pypackpack 패키지</em>입니다. <code>pyproject.toml</code> 이 있고 코드가 <code>src/main/</code> 아래에 있는 디렉터리입니다. 플랫폼 전용 코드는 <code>src/android</code>, <code>src/ios</code> 등에 두면 번들러가 덮어씌웁니다.</p>
-<pre><code class="language-text">usage-example/python/
+<pre><code class="language-text">sample/src/commonMain/python/
 ├── pyproject.toml
 └── src/main/example_py/
     ├── __init__.py
@@ -57,20 +57,19 @@
 
 python {
     compileSdk = &quot;3.13&quot;
-    localLibraryPath = &quot;python&quot;
+    localLibraryPath = &quot;src/commonMain/python&quot;
     packaging {
-        fileName = &quot;usage-example&quot;
+        fileName = &quot;sample&quot;
     }
 }</code></pre>
-<p data-lang="en">This is the repository's own <code>usage-example/build.gradle.kts</code>. Instead of <code>localLibraryPath</code> you can point <code>sourceSets { commonMain { srcDirs(...) } }</code> at the package.</p><p data-lang="ko">이 저장소의 <code>usage-example/build.gradle.kts</code> 그대로입니다. <code>localLibraryPath</code> 대신 <code>sourceSets { commonMain { srcDirs(...) } }</code> 로 패키지를 가리켜도 됩니다.</p>
+<p data-lang="en">This is the repository's own <code>sample/build.gradle.kts</code>. Instead of <code>localLibraryPath</code> you can point <code>sourceSets { commonMain { srcDirs(...) } }</code> at the package.</p><p data-lang="ko">이 저장소의 <code>sample/build.gradle.kts</code> 그대로입니다. <code>localLibraryPath</code> 대신 <code>sourceSets { commonMain { srcDirs(...) } }</code> 로 패키지를 가리켜도 됩니다.</p>
 </section>
 
 <section>
 <h2><span data-lang="en">4. Run it</span><span data-lang="ko">4. 실행</span></h2>
-<pre><code class="language-shell">cd usage-example                             # its own build / 별도 빌드
-./gradlew packagePython                      # installPythonDependencies → buildPython → zip
-./gradlew stagePythonBundle                  # copy python/ where each platform packages from
-./gradlew tasks --group python               # everything the plugin registered</code></pre>
+<pre><code class="language-shell">./gradlew -p sample packagePython            # installPythonDependencies → buildPython → zip
+./gradlew -p sample stagePythonBundle        # copy python/ where each platform packages from
+./gradlew -p sample tasks --group python     # everything the plugin registered</code></pre>
 </section>
 
 <section>
