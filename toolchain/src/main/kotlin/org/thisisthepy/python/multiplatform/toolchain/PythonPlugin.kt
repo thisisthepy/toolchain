@@ -81,6 +81,9 @@ class PythonPlugin : Plugin<Project> {
         // ---------------------------------------------------------------------------------------
         val stageTasks = registerStagingTasks(project)
         attachStagingToPackaging(project, stageTasks)
+        org.thisisthepy.python.multiplatform.toolchain.bundle.registerStagePythonBundleIosForXcode(
+            project, stageTasks.getValue(PythonStagingPlatform.IOS),
+        )
 
         // python-multiplatform's `pythonVersion` is read from its extension in `afterEvaluate` below
         // (SPEC §1.12, #42), so a `:python-multiplatform` project of this build is evaluated first.
