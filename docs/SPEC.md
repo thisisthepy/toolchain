@@ -73,14 +73,14 @@ acquisition goes through pypackpack: the pair is checked against pypackpack's pi
 (`PythonDistributions.resolve`), so a pair it does not provide (3.13.0 for Android or iOS) fails that
 acquisition task with pypackpack's own message, and only the variants that need that pair fail.
 
-**Status: partial** — the plan, the shared task, its wiring and the version reaching the installer
-for the variant's own triple are implemented (`ptest/InterpreterPlanTest.kt`,
-`ptest/PythonPluginInterpreterTest.kt`, with a fake installer: no network). The download itself is
-**not**: pypackpack's `DefaultBackend.installPython(version, target)` installs under the project
-it finds from the JVM's `user.dir`, which a Gradle daemon shares between builds (AGENTS.md §13), and
-it has no form that takes an explicit directory. Until pypackpack adds one, a supported pair fails
-the acquisition task naming that missing API, so every variant at level 2 (every Android and iOS
-variant, whose level is always 2) fails its `buildPython…` when it has a package.
+**Status: implemented** — the plan, the shared task, its wiring and the version reaching the
+installer for the variant's own triple (`ptest/InterpreterPlanTest.kt`,
+`ptest/PythonPluginInterpreterTest.kt`, with a fake installer: no network). The real installer calls
+pypackpack's `installPython(version, target, installDir)` (pypackpack#37), which verifies the pinned
+SHA-256 and extracts into `build/pythonRuntime/<triple>/<version>/`, never into a project found from
+the daemon's `user.dir`; that path is tested offline in pypackpack (`DefaultBackendTest`).
+→ *The bundle's `runtime/` does not reach the APK or the jar yet: staging copies only `python/`
+(§1.13).*
 → *Automatic build of a version python-multiplatform does not provide: **planned**, past 2026-11.*
 
 ### 1.3 `defaultConfig { versionCode, versionName, pip { … } }`

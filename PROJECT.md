@@ -148,6 +148,5 @@ Python 테스트는 없다. 루트 `pyproject.toml` 이 가리키는 Python 패�
 5. 참조되지 않는 코드(`PythonMultiplatformPlugin.kt`, `reslover.kt`, `decompileKotlinMeta.kt`,
    `PythonLocalLoader.kt`, `DependencyType.kt`, `FrozenPackConfig` 등)와 빈 `pyproject.toml` 을
    지울 것인가.
-6. 레벨 2 인터프리터 확보에 필요한 pypackpack API (#18): `BackendInterface.installPython` 에 명시적 설치
-   디렉터리를 받는 형태(예: `installDir: File? = null`, 주어지면 `projectRoot()`·`.venv` 규칙 없이 그 디렉터리에
-   그대로 풀기)를 추가할 것인가. 다른 저장소이므로 결정 전까지 toolchain 은 확보 태스크에서 거부한다.
+6. ~~레벨 2 인터프리터 확보에 필요한 pypackpack API~~ — **해결(2026-10-03)**: pypackpack#37 의
+   `installPython(version, target, installDir)` 를 쓴다.

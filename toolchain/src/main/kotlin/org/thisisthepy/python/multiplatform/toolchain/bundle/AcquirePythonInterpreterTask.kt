@@ -6,7 +6,9 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
-import org.thisisthepy.python.multiplatform.packpack.dependency.backend.PythonDistributions
+import kotlinx.coroutines.runBlocking
+import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendType
+import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendInterface as DependencyBackend
 import org.thisisthepy.python.multiplatform.packpack.utils.Platforms
 import java.io.File
 import java.nio.file.Files
@@ -23,34 +25,20 @@ fun interface PythonInterpreterInstaller {
 }
 
 /**
- * The installer that goes through pypackpack's backend layer (AGENTS.md §13).
- *
- * pypackpack's `DefaultBackend.installPython(version, target)` places the interpreter under
- * `projectRoot()`, which is `findProjectRoot()` from the JVM-global `user.dir` -- in a Gradle daemon
- * that is whichever build started the daemon, not this project. `projectRoot()` is a protected test
- * seam, not an API, and the host triple goes to `<root>/.venv` whatever is asked. So there is no call
- * that installs into an explicit directory, and this installer refuses rather than write into another
- * project:
- *
- * 1. the pair is first checked against pypackpack's own pinned table (`PythonDistributions.resolve`),
- *    so an unsupported pair (3.13.0 for Android, which has no pinned SHA-256) fails with
- *    pypackpack's message, and nothing is downloaded;
- * 2. a supported pair fails naming the missing pypackpack API.
- *
- * When pypackpack has `installPython(version, target, installDir)`, step 2 becomes that call.
+ * The installer that goes through pypackpack's backend layer (AGENTS.md §13):
+ * `installPython(version, target, installDir = destination)` (pypackpack#37). With an explicit
+ * `installDir`, pypackpack resolves the pair against its pinned table (an unsupported pair, such as
+ * 3.13.0 for Android with no pinned SHA-256, is refused before any download), verifies the archive,
+ * and extracts it straight into [destination] -- never into a project found from the daemon's shared
+ * `user.dir`.
  */
 object PypackpackInterpreterInstaller : PythonInterpreterInstaller {
-    const val MISSING_API =
-        "pypackpack has no installPython that takes an explicit install directory: " +
-            "DefaultBackend.installPython(version, target) installs under the project found from the " +
-            "JVM's user.dir, which a Gradle daemon shares between builds (toolchain AGENTS.md §13). " +
-            "embedLevel 2 cannot bundle an interpreter until pypackpack adds one."
-
     override fun install(version: String, target: String, destination: File): Result<String> {
         val canonical = Platforms.normalizeTarget(target)
             ?: return Result.failure(IllegalArgumentException("Unsupported target platform: $target"))
-        PythonDistributions.resolve(version, canonical).getOrElse { return Result.failure(it) }
-        return Result.failure(IllegalStateException("Python $version for $canonical: $MISSING_API"))
+        val backend = DependencyBackend.create(BackendType.UV)
+        backend.initialize()
+        return runBlocking { backend.installPython(version, canonical, installDir = destination) }
     }
 }
 

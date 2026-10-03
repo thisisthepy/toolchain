@@ -95,17 +95,6 @@ class InterpreterPlanTest {
     }
 
     @Test
-    fun `a supported pair fails naming the missing pypackpack API instead of using user dir`() {
-        val destination = createTempDirectory("runtime-supported").toFile()
-
-        val error = PypackpackInterpreterInstaller.install("3.14.7", android, destination).exceptionOrNull()
-
-        val message = error?.message.orEmpty()
-        assertTrue("explicit install directory" in message && "3.14.7" in message, message)
-        assertTrue(destination.listFiles().isNullOrEmpty())
-    }
-
-    @Test
     fun `the acquired tree is carried into runtime beside python, links kept, with a manifest`() {
         val runtime = createTempDirectory("runtime-tree").toFile()
         File(runtime, "bin/python3.14").apply { parentFile.mkdirs() }.writeText("#!fake\n")
