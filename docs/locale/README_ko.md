@@ -73,7 +73,7 @@ plugins {
 
 python {
     compileSdk = "3.13"
-    localLibraryPath = "python"      // pypackpack 패키지: pyproject.toml + src/main/<pkg>
+    localLibraryPath = "src/commonMain/python"  // pypackpack 패키지: pyproject.toml + src/main/<pkg>
     packaging {
         fileName = "sample"
     }

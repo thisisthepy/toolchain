@@ -74,7 +74,7 @@ plugins {
 
 python {
     compileSdk = "3.13"
-    localLibraryPath = "python"      // a pypackpack package: pyproject.toml + src/main/<pkg>
+    localLibraryPath = "src/commonMain/python"  // a pypackpack package: pyproject.toml + src/main/<pkg>
     packaging {
         fileName = "sample"
     }
