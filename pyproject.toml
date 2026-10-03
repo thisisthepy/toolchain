@@ -1,5 +1,5 @@
 [build-system]
-requires = ["flit_core>=3.4,<4"]
+requires = ["flit_core>=3.12,<4"]
 build-backend = "flit_core.buildapi"
 
 [project]
@@ -8,7 +8,8 @@ version = "0.0.1"
 description = "Python Multiplatform Build Plugin/Tool with Kotlin Multiplatform Mobile"
 readme = "README.md"
 requires-python = ">=3.9, <3.14"
-license = {file = "LICENSE"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [
     {name = "THISISTHEPY", email = "thisisthepy@gmail.com"}
 ]
@@ -16,7 +17,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",

@@ -4,9 +4,9 @@ English | [한국어](docs/locale/README_ko.md)
 
 # toolchain
 
-**Declare the Python half of your Kotlin Multiplatform app in Gradle — and ship it.**
+**Declare the Python half of your Kotlin Multiplatform app in Gradle, and ship it.**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-0f9d76.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-0f9d76.svg)](LICENSE)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7f52ff.svg?logo=kotlin&logoColor=white)
 ![Gradle](https://img.shields.io/badge/Gradle-8.9-02303a.svg?logo=gradle&logoColor=white)
 ![Targets](https://img.shields.io/badge/targets-Android%20%7C%20iOS%20%7C%20Desktop-0f9d76.svg)
@@ -21,8 +21,8 @@ English | [한국어](docs/locale/README_ko.md)
 ## 💡 Why
 
 A Kotlin Multiplatform app that embeds Python has two builds to keep in step: the Kotlin one Gradle
-already understands, and a Python one — interpreter version, packages, per-platform bundles,
-assets — that it does not. `toolchain` is the Gradle plugin that closes the gap. You write one
+already understands, and a Python one (interpreter version, packages, per-platform bundles,
+assets) that it does not. `toolchain` is the Gradle plugin that closes the gap. You write one
 `python { }` block next to your `kotlin { }` block; the build installs your Python dependencies,
 bundles your code per target, and puts the payload where each platform's packaging step picks it up.
 
@@ -33,18 +33,18 @@ owns the Gradle vocabulary in between.
 
 ## ✨ Features
 
-- 🧩 **One DSL block** — `compileSdk`, platforms, `buildTypes`, `sourceSets` and `packaging`, all
+- 🧩 **One DSL block**: `compileSdk`, platforms, `buildTypes`, `sourceSets` and `packaging`, all
   inside `python { }`.
-- 📦 **Real dependency installs** — `implementation("pkg")` and `integration("pkg")` become a real
+- 📦 **Real dependency installs**: `implementation("pkg")` and `integration("pkg")` become a real
   `uv add` through `pypackpack`.
-- 🚀 **A task per variant** — every platform variant × build type gets its own
+- 🚀 **A task per variant**: every platform variant × build type gets its own
   `buildPython<Variant><BuildType>` / `packagePython<Variant><BuildType>`, and an unsupported one
   fails alone.
-- 🔌 **Lands in the artifact** — the bundle is staged into the desktop jar's resources and the
+- 🔌 **Lands in the artifact**: the bundle is staged into the desktop jar's resources and the
   APK's `assets/`.
-- 🧪 **Loud, not silent** — an unknown version string, an unmapped platform or an unsupported
+- 🧪 **Loud, not silent**: an unknown version string, an unmapped platform or an unsupported
   compile level is rejected with a message saying why, instead of compiling and doing nothing.
-- 🐍 **`tcl` for Python users** — `tcl install <package>`, no Gradle project needed.
+- 🐍 **`tcl` for Python users**: `tcl install <package>`, no Gradle project needed.
 
 ## 🚀 Quick start
 
@@ -128,7 +128,7 @@ flowchart LR
 
 ## 📊 Status
 
-An honest summary — the full contract, item by item, is on the guide's
+An honest summary: the full contract, item by item, is on the guide's
 [Status page](docs/guide/status.html).
 
 | Area | State |
@@ -139,17 +139,17 @@ An honest summary — the full contract, item by item, is on the guide's
 | `implementation` / `integration` dependencies via `uv`, per source set, installed for each variant's own triple into its bundle | ✅ implemented |
 | Bundling via `pypackpack` at the `instant` level | ✅ implemented |
 | `bytecode` compile level (`.pyc`; needs a `.venv` matching `compileSdk`) | ✅ implemented |
-| `native` / `mixed` compile levels | ⏳ planned — rejected loudly today |
-| Staging into the desktop jar and the APK | 🟡 partial — iOS is staged but not attached |
-| Hot reload | 🟡 partial — Android only, over `adb` |
-| Code push | 🟡 partial — validation only, no upload |
-| `buildFeatures { metaclass, compose }` | ✅ implemented — compose locations come from two Gradle properties |
+| `native` / `mixed` compile levels | ⏳ planned: rejected loudly today |
+| Staging into the desktop jar and the APK | 🟡 partial: iOS is staged but not attached |
+| Hot reload | 🟡 partial: Android only, over `adb` |
+| Code push | 🟡 partial: validation only, no upload |
+| `buildFeatures { metaclass, compose }` | ✅ implemented: compose locations come from two Gradle properties |
 | `embedLevel`, `projectFlavors`, `pip { }` | ⏳ planned |
 | `tcl install` | ✅ implemented |
 
 ## 📖 Documentation
 
-- **[Guide](docs/guide/index.html)** — concepts, task guides, status, in English and 한국어.
+- **[Guide](docs/guide/index.html)**: concepts, task guides, status, in English and 한국어.
 - **[한국어 README](docs/locale/README_ko.md)**
 
 ## 🤝 Contributing
@@ -160,4 +160,4 @@ is written and seen failing before the implementation. The guide's
 
 ## 📄 License
 
-[MIT](LICENSE) © 2024 thisisthepy
+[Apache-2.0](LICENSE) © 2024 thisisthepy
