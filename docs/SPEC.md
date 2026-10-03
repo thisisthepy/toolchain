@@ -55,10 +55,33 @@ when there is a package to bundle), not the configuration.
 **Status: implemented** — `plugin/dsl/PythonSdk.kt`; `ptest/dsl/PythonSdkTest.kt`,
 `ptest/bundle/BuildPythonSdkRejectionTest.kt`; `usage-example` uses `compileSdk = PY3_14_7`.
 
-The resolved version is handed to `buildPython` as `pythonVersion`, which only logs it: it does
-**not** choose which interpreter is bundled. → *Interpreter selection by `compileSdk`: **planned**
-(#18).* → *Automatic build of a version python-multiplatform does not provide: **planned**, past
-2026-11.*
+**Interpreter selection (#18).** The resolved version chooses the interpreter a variant carries.
+`planInterpreter(embedLevel, triple, resolvedSdk)` maps each variant's resolved `embedLevel`
+(§1.12) to a plan:
+
+| embedLevel | plan |
+|---|---|
+| 0 | nothing acquired, nothing recorded |
+| 1 | nothing bundled; the `compileSdk` release (`X.Y.Z`) is recorded as the expected external interpreter |
+| 2 | acquire the `compileSdk` release for the variant's triple and bundle it |
+| 2, no `compileSdk` or an unprovided one | refused: the reason fails that variant's `buildPython…` (only with a package) |
+
+At level 2 one `acquirePythonInterpreter<Triple>Py<X_Y_Z>` task exists per (version, triple),
+shared by every variant with that pair (build types, flavors). Its output directory is
+`build/pythonRuntime/<triple>/<X.Y.Z>/`, and the variant's `buildPython…` depends on it. The
+acquisition goes through pypackpack: the pair is checked against pypackpack's pinned table
+(`PythonDistributions.resolve`), so a pair it does not provide (3.13.0 for Android or iOS) fails that
+acquisition task with pypackpack's own message, and only the variants that need that pair fail.
+
+**Status: implemented** — the plan, the shared task, its wiring and the version reaching the
+installer for the variant's own triple (`ptest/InterpreterPlanTest.kt`,
+`ptest/PythonPluginInterpreterTest.kt`, with a fake installer: no network). The real installer calls
+pypackpack's `installPython(version, target, installDir)` (pypackpack#37), which verifies the pinned
+SHA-256 and extracts into `build/pythonRuntime/<triple>/<version>/`, never into a project found from
+the daemon's `user.dir`; that path is tested offline in pypackpack (`DefaultBackendTest`).
+→ *The bundle's `runtime/` does not reach the APK or the jar yet: staging copies only `python/`
+(§1.13).*
+→ *Automatic build of a version python-multiplatform does not provide: **planned**, past 2026-11.*
 
 ### 1.3 `defaultConfig { versionCode, versionName, pip { … } }`
 `pip { autoUpdate; repositories { central { setUrl(…) }; local { url = … }; jit { url; localRecipes { add(…) } } } }`,
@@ -296,12 +319,27 @@ of the variant's target; the host chain uses the host's family):
 The `python.embedLevel` property (`gradle.properties` or `-P`) overrides the DSL value and is then
 raised the same way. A value outside 0..2, or not a number, fails configuration naming the property.
 Each packaging task carries the resolved level as an `@Input`, logs it, and writes
-`<archive>.embed.json` (level, platform family, warning, `"interpreterBundled": false`) beside the zip.
+`<archive>.embed.json` beside the zip: level, platform family, warning, `interpreterVersion` (the
+`compileSdk` release at levels 1 and 2, otherwise `null`) and `interpreterBundled`.
 
-**Status: partial** — resolution, override, the warning and the record are implemented
-(`ptest/EmbedLevelTest.kt`, `ptest/PythonPluginEmbedLevelTest.kt`). Levels 1 and 2 do **not** yet
-change the payload: no interpreter is added or omitted, because acquiring one is #18 and
-pypackpack#21, which are not available. Until then the level is only recorded.
+What the level does to the payload (§1.2 for how the interpreter is chosen and acquired):
+
+- **0** — nothing.
+- **1** — nothing bundled; the expected version is recorded.
+- **2** — after pypackpack's bundler writes `python/` and `resource-manifest.json`, `buildPython…`
+  copies the acquired `build/pythonRuntime/<triple>/<X.Y.Z>/` tree into `<bundle>/runtime/`
+  (symbolic links kept) and writes `<bundle>/runtime-manifest.json`
+  (`{"pythonVersion", "target", "root": "runtime"}`). The zip therefore holds `python/` and
+  `runtime/` side by side, and `interpreterBundled` is `true` when `runtime/` is in what was zipped.
+
+Staging (§1.13) still copies only `python/`; carrying `runtime/` into the APK, the desktop jar or
+iOS is python-multiplatform's loading question and is not done here.
+
+**Status: partial** — resolution, override, the warning, the record and the `runtime/` layout are
+implemented (`ptest/EmbedLevelTest.kt`, `ptest/PythonPluginEmbedLevelTest.kt`,
+`ptest/InterpreterPlanTest.kt`, `ptest/PythonPluginInterpreterTest.kt`, which zips a variant bundle
+with `runtime/` and reads its record). Level 2 cannot yet produce a real interpreter: the acquisition
+waits on a pypackpack `installPython` that takes an explicit directory (§1.2).
 
 ### 1.13 Staging into the app — `stagePythonBundle{Android,Ios,Desktop}`
 Copies the bundle's `python/` subtree (never the manifest) into
