@@ -13,7 +13,7 @@ on:
       - "sample/build.gradle.kts"
       - "sample/gradle/**"
       - "toolchain-gradle-plugin/src/main/kotlin/org/thisisthepy/python/multiplatform/toolchain/bundle/**"
-      - ".github/workflows/ios-e2e.yml"
+      - ".github/workflows/test-ios.yml"
   workflow_dispatch:
 
 permissions:
