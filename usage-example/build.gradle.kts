@@ -5,21 +5,19 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig
 
 
-group = rootProject.group
-version = rootProject.version
+group = "org.thisisthepy.python.multiplatform"
+version = "1.0.0-alpha"
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
-    // Versioned explicitly, not via `includeBuild`: `:toolchain` is a regular subproject of this
-    // same build (`ToolchainProject`), not a nested build with its own settings file, so it cannot
-    // be its own composite-build plugin source the way `python-multiplatform-gradle-plugin` is for
-    // PythonMultiplatform's root build. Resolving by Maven coordinate through `mavenLocal()`
-    // (already in `pluginManagement.repositories`) is what makes this work today; it requires
-    // `./gradlew :toolchain:publishToMavenLocal` to have been run at least once first.
-    id("org.thisisthepy.python.multiplatform") version "1.0.0-alpha"
+    // usage-example is its own build (settings.gradle.kts here). The toolchain plugin is resolved by
+    // coordinate from mavenLocal (`./gradlew :toolchain:publishToMavenLocal` in ../), as is
+    // python-multiplatform's bindings plugin, which stages and packages the CPython stdlib (#22).
+    alias(libs.plugins.toolchain)
+    alias(libs.plugins.python.multiplatform.bindings)
 }
 
 // Exercises the target DSL surface end to end -- until now `usage-example` did not apply the
@@ -36,6 +34,13 @@ python {
     // contains Python" unfalsifiable. `example_py` deliberately includes a non-`.py` file, because
     // `ResourceBundler` carries data files next to modules and staging has to preserve that.
     localLibraryPath = "python"
+    // One real dependency, so a bundle and the packaged desktop app prove that installed packages
+    // arrive (CI's consumer and desktop-e2e jobs; the --python-smoke mode imports it).
+    sourceSets {
+        val commonMain by getting {
+            dependencies { implementation("iniconfig") }
+        }
+    }
     // The example build file's pip block, minus `jit` (rejected until pypackpack builds recipes).
     // PyPI repeated as the default index changes nothing, but it makes the wiring part of a real build.
     defaultConfig {
@@ -119,6 +124,8 @@ kotlin {
             implementation(libs.androidx.lifecycle.runtime.compose)
         }
         desktopMain.dependencies {
+            // CPython for the desktop app; `--python-smoke` (PythonSmoke.kt) runs it headless.
+            implementation(libs.python.multiplatform)
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.swing)
         }

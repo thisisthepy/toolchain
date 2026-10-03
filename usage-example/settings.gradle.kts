@@ -1,7 +1,10 @@
-enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
-
+// usage-example is its own Gradle build (toolchain#22). It consumes python-multiplatform, which is
+// built with Kotlin 2.4, so it uses that toolchain (gradle/libs.versions.toml here); the toolchain
+// plugin in ../toolchain stays on its own Kotlin for its consumers. Both plugins and the
+// python-multiplatform library come from mavenLocal: publish them first (see AGENTS.md §16).
 pluginManagement {
     repositories {
+        mavenLocal()
         google {
             mavenContent {
                 includeGroupAndSubgroups("androidx")
@@ -9,7 +12,6 @@ pluginManagement {
                 includeGroupAndSubgroups("com.google")
             }
         }
-        mavenLocal()
         mavenCentral()
         gradlePluginPortal()
     }
@@ -17,6 +19,7 @@ pluginManagement {
 
 dependencyResolutionManagement {
     repositories {
+        mavenLocal()
         google {
             mavenContent {
                 includeGroupAndSubgroups("androidx")
@@ -24,14 +27,8 @@ dependencyResolutionManagement {
                 includeGroupAndSubgroups("com.google")
             }
         }
-        mavenLocal()
         mavenCentral()
     }
 }
 
-rootProject.name = "ToolchainProject"
-
-include(":toolchain")
-// usage-example is its own build, with its own wrapper: (cd usage-example && ./gradlew …). It uses
-// python-multiplatform's Kotlin; the plugin here stays on its own for its consumers (toolchain#22).
-include(":tcl")
+rootProject.name = "usage-example"

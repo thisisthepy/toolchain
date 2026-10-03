@@ -67,8 +67,9 @@ python {
 
 <section>
 <h2><span data-lang="en">4. Run it</span><span data-lang="ko">4. 실행</span></h2>
-<pre><code class="language-shell">./gradlew :usage-example:packagePython       # installPythonDependencies → buildPython → zip
-./gradlew :usage-example:stagePythonBundle   # copy python/ where each platform packages from
+<pre><code class="language-shell">cd usage-example                             # its own build / 별도 빌드
+./gradlew packagePython                      # installPythonDependencies → buildPython → zip
+./gradlew stagePythonBundle                  # copy python/ where each platform packages from
 ./gradlew tasks --group python               # everything the plugin registered</code></pre>
 </section>
 

@@ -75,8 +75,9 @@ python {
 ```
 
 ```shell
-./gradlew :usage-example:packagePython        # 설치 → 번들 → zip
-./gradlew :usage-example:stagePythonBundle    # android, ios, desktop 용 python/ 스테이징
+cd usage-example                              # 별도 빌드 (python-multiplatform 의 Kotlin 사용)
+./gradlew packagePython                       # 설치 → 번들 → zip
+./gradlew stagePythonBundle                   # android, ios, desktop 용 python/ 스테이징
 ```
 
 타깃마다 번들을 따로 만들고 싶다면 플랫폼과 빌드 타입을 선언합니다.
