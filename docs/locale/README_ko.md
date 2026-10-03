@@ -6,7 +6,7 @@
 
 **Kotlin Multiplatform 앱의 Python 절반을 Gradle 에 선언하고, 그대로 배포하세요.**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-0f9d76.svg)](../../LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-0f9d76.svg)](../../LICENSE)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7f52ff.svg?logo=kotlin&logoColor=white)
 ![Gradle](https://img.shields.io/badge/Gradle-8.9-02303a.svg?logo=gradle&logoColor=white)
 ![Targets](https://img.shields.io/badge/targets-Android%20%7C%20iOS%20%7C%20Desktop-0f9d76.svg)
@@ -21,8 +21,8 @@
 ## 💡 왜 필요한가
 
 Python 을 내장한 Kotlin Multiplatform 앱에는 맞물려 돌아가야 하는 빌드가 둘 있습니다. Gradle 이
-이미 아는 Kotlin 빌드, 그리고 Gradle 이 모르는 Python 빌드 — 인터프리터 버전, 패키지, 플랫폼별
-번들, 에셋 — 입니다. `toolchain` 은 그 간극을 메우는 Gradle 플러그인입니다. `kotlin { }` 블록 옆에
+이미 아는 Kotlin 빌드, 그리고 Gradle 이 모르는 Python 빌드(인터프리터 버전, 패키지, 플랫폼별
+번들, 에셋)입니다. `toolchain` 은 그 간극을 메우는 Gradle 플러그인입니다. `kotlin { }` 블록 옆에
 `python { }` 블록 하나를 쓰면, 빌드가 Python 의존성을 설치하고, 타깃마다 코드를 번들링하고, 각
 플랫폼의 패키징 단계가 가져갈 자리에 페이로드를 놓습니다.
 
@@ -33,17 +33,17 @@ Python 을 내장한 Kotlin Multiplatform 앱에는 맞물려 돌아가야 하�
 
 ## ✨ 기능
 
-- 🧩 **DSL 블록 하나** — `compileSdk`, 플랫폼, `buildTypes`, `sourceSets`, `packaging` 을 모두
+- 🧩 **DSL 블록 하나**: `compileSdk`, 플랫폼, `buildTypes`, `sourceSets`, `packaging` 을 모두
   `python { }` 안에.
-- 📦 **실제 의존성 설치** — `implementation("pkg")` 와 `integration("pkg")` 가 `pypackpack` 을 거쳐
+- 📦 **실제 의존성 설치**: `implementation("pkg")` 와 `integration("pkg")` 가 `pypackpack` 을 거쳐
   실제 `uv add` 가 됩니다.
-- 🚀 **변형마다 태스크 하나** — 플랫폼 변형 × 빌드 타입마다
+- 🚀 **변형마다 태스크 하나**: 플랫폼 변형 × 빌드 타입마다
   `buildPython<Variant><BuildType>` / `packagePython<Variant><BuildType>` 가 생기고, 지원되지 않는
   변형은 그것만 실패합니다.
-- 🔌 **산출물에 실제로 들어감** — 번들이 데스크톱 jar 의 리소스와 APK 의 `assets/` 로 스테이징됩니다.
-- 🧪 **조용히 넘어가지 않음** — 알 수 없는 버전 문자열, 매핑되지 않는 플랫폼, 지원되지 않는 컴파일
+- 🔌 **산출물에 실제로 들어감**: 번들이 데스크톱 jar 의 리소스와 APK 의 `assets/` 로 스테이징됩니다.
+- 🧪 **조용히 넘어가지 않음**: 알 수 없는 버전 문자열, 매핑되지 않는 플랫폼, 지원되지 않는 컴파일
   레벨은 컴파일만 되고 아무 일도 안 하는 대신, 이유를 밝히며 거부됩니다.
-- 🐍 **Python 사용자를 위한 `tcl`** — Gradle 프로젝트 없이 `tcl install <package>`.
+- 🐍 **Python 사용자를 위한 `tcl`**: Gradle 프로젝트 없이 `tcl install <package>`.
 
 ## 🚀 빠른 시작
 
@@ -137,17 +137,17 @@ flowchart LR
 | `uv` 를 통한 `implementation` / `integration` 의존성, 소스셋별로 변형마다 그 트리플용으로 설치해 번들에 포함 | ✅ 구현됨 |
 | `instant` 레벨의 `pypackpack` 번들링 | ✅ 구현됨 |
 | `bytecode` 컴파일 레벨 (`.pyc`, `compileSdk` 와 맞는 `.venv` 필요) | ✅ 구현됨 |
-| `native` / `mixed` 컴파일 레벨 | ⏳ 계획 — 현재는 명시적으로 거부 |
-| 데스크톱 jar 와 APK 로의 스테이징 | 🟡 부분 — iOS 는 스테이징만 되고 연결되지 않음 |
-| 핫 리로드 | 🟡 부분 — Android 전용, `adb` 경유 |
-| 코드 푸시 | 🟡 부분 — 검증만, 업로드 없음 |
-| `buildFeatures { metaclass, compose }` | ✅ 구현됨 — compose 위치는 Gradle 속성 두 개로 지정 |
+| `native` / `mixed` 컴파일 레벨 | ⏳ 계획: 현재는 명시적으로 거부 |
+| 데스크톱 jar 와 APK 로의 스테이징 | 🟡 부분: iOS 는 스테이징만 되고 연결되지 않음 |
+| 핫 리로드 | 🟡 부분: Android 전용, `adb` 경유 |
+| 코드 푸시 | 🟡 부분: 검증만, 업로드 없음 |
+| `buildFeatures { metaclass, compose }` | ✅ 구현됨: compose 위치는 Gradle 속성 두 개로 지정 |
 | `embedLevel`, `projectFlavors`, `pip { }` | ⏳ 계획 |
 | `tcl install` | ✅ 구현됨 |
 
 ## 📖 문서
 
-- **[가이드](../guide/index.html)** — 개념, 작업별 가이드, 상태. 영어와 한국어.
+- **[가이드](../guide/index.html)**: 개념, 작업별 가이드, 상태. 영어와 한국어.
 - **[English README](../../README.md)**
 
 ## 🤝 기여
@@ -158,4 +158,4 @@ flowchart LR
 
 ## 📄 라이선스
 
-[MIT](../../LICENSE) © 2024 thisisthepy
+[Apache-2.0](../../LICENSE) © 2024 thisisthepy
