@@ -366,7 +366,15 @@ Hand-off to the platform's packaging step:
   `main` asset source directory. Not tested: the `preBuild` / `merge*Assets` → `stagePythonBundleAndroid`
   dependency (AGP creates those tasks only when the project is evaluated against an Android SDK,
   which `:toolchain:test` does not require), and the built APK.
-- iOS: staged but **not attached** to the Xcode project. **planned.**
+- iOS: toolchain stages and exposes the path; python-multiplatform (#59) owns the Xcode build phase
+  that attaches it. `stagePythonBundleIosForXcode` (group `python`) depends on `stagePythonBundleIos`
+  and prints exactly one line `PYTHON_PAYLOAD_DIR=<absolute path>` (stdout, visible under `--quiet`).
+  It fails with a reason when no iOS variant of the active build type exists, or the staged
+  `build/pythonStaging/ios/python/` is missing or empty (no package configured). It never copies into
+  the `.app`. The phase script is `tools/xcode/stage-python-payload.sh` (`set -euo pipefail`, checks
+  the directory exists before `rsync -a --delete "$dir/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/python/"`).
+  **partial** — `xcodePayloadLine`, `ptest/bundle/StagePythonBundleIosForXcodeTaskTest.kt`,
+  `ptest/bundle/StagePythonPayloadScriptTest.kt`. Not tested: an actual Xcode build.
 - Putting the staged `python/` on `sys.path` at run time is `python-multiplatform`'s side.
 
 ### 1.14 Hot reload — `hotReloadPython`

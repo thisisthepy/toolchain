@@ -57,7 +57,7 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
 **부분**
 - APK 로의 스테이징 연결: `android.sourceSets.main.assets` 등록은 실제 AGP 로 테스트됨
   (`PythonPluginAttachmentTest`), `preBuild`/`merge*Assets` 의존성은 Android SDK 가 있어야 생기므로 테스트 없음
-- iOS: 스테이징만 되고 Xcode 프로젝트에 연결되지 않음
+- iOS: `stagePythonBundleIosForXcode` 가 스테이징 후 `PYTHON_PAYLOAD_DIR=<경로>` 한 줄을 출력(`tools/xcode/stage-python-payload.sh`). `.app` 으로 복사하는 Xcode 단계는 python-multiplatform(#59) 소유
 - 핫 리로드: Android 전용 `adb push` + 브로드캐스트. `serverHost`, `cert` 는 검증만
 - 코드 푸시: 검증과 안내 태스크만, 업로드 없음
 - `installPythonDependencies`(`uv add`)는 여전히 모든 소스셋을 호스트용으로 설치하므로, 호스트 wheel 이 없는

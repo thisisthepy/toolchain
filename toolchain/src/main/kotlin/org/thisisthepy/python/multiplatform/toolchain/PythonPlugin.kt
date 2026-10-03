@@ -82,6 +82,9 @@ class PythonPlugin : Plugin<Project> {
         // ---------------------------------------------------------------------------------------
         val stageTasks = registerStagingTasks(project)
         attachStagingToPackaging(project, stageTasks)
+        org.thisisthepy.python.multiplatform.toolchain.bundle.registerStagePythonBundleIosForXcode(
+            project, stageTasks.getValue(PythonStagingPlatform.IOS),
+        )
 
         project.afterEvaluate {
             // Blank stays a no-op skip, the same convention `packageDir == null` already uses below
