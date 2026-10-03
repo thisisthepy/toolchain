@@ -3,7 +3,9 @@ package org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python
 import kotlinx.coroutines.runBlocking
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendType
 import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendInterface as DependencyBackend
@@ -41,6 +43,14 @@ open class InstallDependenciesTask : DefaultTask() {
     var dependenciesList: List<String> = emptyList()
 
     /**
+     * The `integration(...)` subset of [dependenciesList] (which holds them too, installed like
+     * `implementation`). After installation each is checked for a `KLIBDEPENS` file
+     * ([findIntegrationsWithoutKlibDepens]). `@Internal`: it only drives a warning.
+     */
+    @get:Internal
+    var integrationsList: List<String> = emptyList()
+
+    /**
      * The `pypackpack` package directory dependencies are added to: must already contain a
      * `pyproject.toml` (`uv add` requires one). `null` mirrors `BuildPythonArtifactTask.packageDir`
      * -- no package configured yet means installation is skipped rather than failed.
@@ -48,11 +58,31 @@ open class InstallDependenciesTask : DefaultTask() {
     @get:Internal
     var packageDir: File? = null
 
+    /** `uv add` options from `defaultConfig { pip { … } }` ([resolvePipSettings]). */
+    @get:Input
+    var pipArguments: Map<String, String> = emptyMap()
+
+    /** Why the pip settings cannot be honoured; fails this task only when it has something to install. */
+    @get:Input
+    @get:Optional
+    var pipRejection: String? = null
+
+    /**
+     * Why `buildFeatures { compose = true }` cannot add `pythonx-compose` (a missing or unusable
+     * `python.compose.pythonxCompose`; `resolveComposePythonInstall`). Thrown from this task's action,
+     * not at configuration, so builds that never install still run.
+     */
+    @get:Input
+    @get:Optional
+    var composeRejection: String? = null
+
     @TaskAction
     fun installDependencies() {
         logger.lifecycle("Installing Python dependencies using uv...")
 
-        if (dependenciesList.isEmpty()) {
+        // A compose rejection means `pythonx-compose` should have been in the list: there is
+        // something to install, so an otherwise empty list is not a skip.
+        if (dependenciesList.isEmpty() && composeRejection == null) {
             logger.lifecycle("No dependencies specified, skipping.")
             return
         }
@@ -65,8 +95,24 @@ open class InstallDependenciesTask : DefaultTask() {
             return
         }
 
-        val output = installWithPackpack(dir, dependenciesList)
+        composeRejection?.let { throw GradleException(it) }
+        pipRejection?.let { throw GradleException(it) }
+
+        val output = installWithPackpack(dir, dependenciesList, pipArguments)
         logger.lifecycle("Installed ${dependenciesList.size} dependenc(y/ies) via packpack's uv backend: $output")
+
+        if (integrationsList.isNotEmpty()) {
+            val sitePackages = findSitePackages(File(dir, ".venv"))
+            if (sitePackages == null) {
+                logger.warn(
+                    "Cannot check integration() packages for $KLIBDEPENS_FILE_NAME: no site-packages " +
+                        "under ${File(dir, ".venv")}.",
+                )
+            } else {
+                findIntegrationsWithoutKlibDepens(sitePackages, integrationsList)
+                    .forEach { logger.warn(klibDepensWarning(it)) }
+            }
+        }
     }
 }
 
@@ -85,6 +131,7 @@ open class InstallDependenciesTask : DefaultTask() {
 fun installWithPackpack(
     packageDir: File,
     dependencies: List<String>,
+    extraArgs: Map<String, String> = emptyMap(),
 ): String {
     if (dependencies.isEmpty()) return ""
 
@@ -94,7 +141,7 @@ fun installWithPackpack(
         backend.addDependencies(
             packageName = null,
             dependencies = dependencies,
-            extraArgs = null,
+            extraArgs = extraArgs,
             workingDir = packageDir,
         )
     }.getOrElse { error ->

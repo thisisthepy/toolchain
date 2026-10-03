@@ -4,9 +4,12 @@ import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonExtension
 import org.thisisthepy.python.multiplatform.toolchain.dsl.BuildTypesContainer
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PlatformTargetMapping
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PlatformsExtension
-import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonVersion
+import org.thisisthepy.python.multiplatform.toolchain.dsl.ProjectFlavorsContainer
+import org.thisisthepy.python.multiplatform.toolchain.dsl.resolvePythonSdk
 import org.thisisthepy.python.multiplatform.toolchain.dsl.SourceSetConfig
 import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.InstallDependenciesTask
+import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.InstallTargetDependenciesTask
+import org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python.resolvePipSettings
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.tasks.TaskProvider
@@ -14,6 +17,7 @@ import org.gradle.kotlin.dsl.register
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
 import org.thisisthepy.python.multiplatform.packpack.utils.Platforms
+import org.thisisthepy.python.multiplatform.toolchain.bundle.AcquirePythonInterpreterTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.AssemblePythonPackageTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.BuildPythonArtifactTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.PythonStagingPlatform
@@ -66,14 +70,12 @@ class PythonPlugin : Plugin<Project> {
         val buildTask = project.tasks.register<BuildPythonArtifactTask>(BUILD_TASK) {
             group = TASK_GROUP
             description = "Builds Python bundle including interpreter and source files"
-            pythonVersion = extension.compileSdk
         }
         // `packageDir` is read lazily in `afterEvaluate` below, once `extension.localLibraryPath`
         // has its final value -- DSL blocks run before the plugin's own `afterEvaluate` callbacks.
         val packageTask = project.tasks.register<AssemblePythonPackageTask>(PACKAGE_TASK) {
             group = TASK_GROUP
             description = "Packages the Python application"
-            embedLevel = extension.packaging.embedLevel
             fileName = extension.packaging.fileName
         }
 
@@ -122,14 +124,44 @@ class PythonPlugin : Plugin<Project> {
             // string is a real configuration mistake and fails loudly. See `PythonVersion`/
             // `PythonReleaseChannel` (`dsl/PythonVersion.kt`) for the format and the Issue #2 item
             // ("Python version setup -- Version Enum (alpha, rc, normal)") this implements.
-            if (extension.compileSdk.isNotBlank()) {
-                val parsedVersion = PythonVersion.parse(extension.compileSdk)
+            //
+            // A version python-multiplatform does not provide is not a configuration failure: it is
+            // carried to the bundling tasks as `pythonSdkRejection` and fails them there (§14).
+            val pythonSdk = resolvePythonSdk(extension.compileSdk)
+            val embedOverride = project.findProperty(EMBED_LEVEL_PROPERTY)?.toString()
+            // A bad value is a configuration mistake with no valid task to register: fail here.
+            val hostEmbedFamily = Platforms.getPlatformFamily(Platforms.detectHostTarget())
+            val (hostEmbedLevel, hostEmbedWarning) =
+                resolveEmbedLevel(extension.packaging.embedLevel, embedOverride, hostEmbedFamily)
+            hostEmbedWarning?.let { project.logger.warn(it) }
+            // What the host chain does about its interpreter (SPEC §1.12, #18); wired below.
+            val hostInterpreterPlan = planInterpreter(hostEmbedLevel, Platforms.detectHostTarget(), pythonSdk)
+            packageTask.configure {
+                embedLevel = hostEmbedLevel
+                embedFamily = hostEmbedFamily
+                embedWarning = hostEmbedWarning
+                interpreterVersion = hostInterpreterPlan.recordedVersion
+                interpreterBundled = hostInterpreterPlan is InterpreterPlan.Embed
+            }
+            if (pythonSdk != null) {
                 project.logger.lifecycle(
                     "Configured Python compileSdk: ${extension.compileSdk} " +
-                        "(release ${parsedVersion.toReleaseString()}, channel ${parsedVersion.channel})",
+                        "(release ${pythonSdk.version.toReleaseString()}, channel ${pythonSdk.version.channel}" +
+                        (if (pythonSdk.fromConstant) ", named constant" else "") + ")",
                 )
             } else {
                 project.logger.lifecycle("Configured Python compileSdk: ${extension.compileSdk}")
+            }
+            val pythonVersionLabel = pythonSdk?.version?.toString() ?: "default"
+            val payloadVersionName = extension.defaultConfig.versionName
+            val payloadVersionCode = extension.defaultConfig.versionCode
+            val compileSdkLabel = pythonSdk?.version?.toString()
+            buildTask.configure {
+                pythonVersion = pythonVersionLabel
+                pythonSdkRejection = pythonSdk?.rejection
+                compileSdkVersion = compileSdkLabel
+                versionName = payloadVersionName
+                versionCode = payloadVersionCode
             }
 
             // Only wires the directory through today; it must already be a `pypackpack` package
@@ -146,10 +178,13 @@ class PythonPlugin : Plugin<Project> {
             // resolved once here and threaded into whichever build task(s) actually run below.
             val resolvedMetaDirs = resolveMetaDirs(project.projectDir, extension.sourceSets.allSourceSets())
             val resolvedLibDirs = resolveLibDirs(project.projectDir, extension.sourceSets.allSourceSets())
+            // `metaDirs` is set per bundle task below, once its build type is known:
+            // `buildFeatures { metaclass }` and that build type's `excludeMetaclass` decide whether
+            // they are forwarded (`resolveBundledMetaDirs`).
+            // `libDirs` is set per bundle task below: each one also takes its own dependency set's
+            // `build/pythonDeps/<set>/` (`InstallTargetDependenciesTask`).
             buildTask.configure {
                 packageDir = resolvedPackageDir
-                metaDirs = resolvedMetaDirs
-                libDirs = resolvedLibDirs
             }
             installTask.configure {
                 packageDir = resolvedPackageDir
@@ -215,8 +250,96 @@ class PythonPlugin : Plugin<Project> {
             // resource step) is a separate, not-yet-designed follow-up, not a like-for-like
             // replacement of this naive copy.
 
+            // `buildFeatures { compose = true }`, Python half: `pythonx-compose` joins the install
+            // list, a wheel directory joins pip's `find-links`, a missing property fails this task's
+            // action only (`resolveComposePythonInstall`).
+            val composePython = resolveComposePythonInstall(
+                extension.buildFeatures.compose,
+                project.findProperty(COMPOSE_PYTHON_PROPERTY)?.toString(),
+                project.projectDir,
+            )
+            val pip = resolvePipSettings(extension.defaultConfig.pip)
+            val pipArgumentsWithCompose = mergeComposeFindLinks(pip.arguments.orEmpty(), composePython.findLinks)
             installTask.configure {
-                dependenciesList = collectInstallDependencies(extension.sourceSets.allSourceSets())
+                dependenciesList = collectInstallDependencies(extension.sourceSets.allSourceSets()) +
+                    composePython.requirements
+                integrationsList = collectIntegrationDependencies(extension.sourceSets.allSourceSets())
+                pipArguments = pipArgumentsWithCompose
+                pipRejection = pip.rejection
+                composeRejection = composePython.rejection
+            }
+
+            // Per-target installation (SPEC §1.10, #16). `installPythonDependencies` above stays: its
+            // `uv add` records every source set's dependencies in the package's pyproject.toml and
+            // leaves the `<package>/.venv` that `compileLevel = "bytecode"` compiles with. What reaches
+            // a bundle is installed separately, per dependency set, for that set's own triple.
+            val projectBuildDir = project.layout.buildDirectory.get().asFile
+            val declaredSourceSets = extension.sourceSets.allSourceSets()
+            val sourceSetRejection =
+                unreachableSourceSetRejection(declaredSourceSets, extension.projectFlavors.all().map { it.name })
+            val targetArguments = targetInstallArguments(pythonSdk?.version, pipArgumentsWithCompose)
+            val hasPackage = resolvedPackageDir != null
+            fun registerTargetInstall(
+                taskSuffix: String,
+                dependencySet: String,
+                target: String,
+                flavorName: String?,
+            ): TaskProvider<InstallTargetDependenciesTask> {
+                val platform = PythonStagingPlatform.forTarget(target)
+                val setRequirements =
+                    collectTargetDependencies(declaredSourceSets, platform, flavorName) + composePython.requirements
+                return project.tasks.register<InstallTargetDependenciesTask>(INSTALL_TASK + taskSuffix) {
+                    group = TASK_GROUP
+                    description = "Installs the Python dependencies of " +
+                        dependencySourceSetNames(platform, flavorName).joinToString(", ") +
+                        " for $target into build/$TARGET_DEPENDENCIES_DIRECTORY/$dependencySet"
+                    requirements = setRequirements.distinct()
+                    pythonPlatform = target
+                    installArguments = targetArguments
+                    rejection = composePython.rejection ?: sourceSetRejection
+                    pipRejection = pip.rejection
+                    installDir = targetDependenciesDir(projectBuildDir, dependencySet)
+                    // No package means no bundle reads this directory (`BuildPythonArtifactTask` skips
+                    // too), so nothing is downloaded for it.
+                    onlyIf { hasPackage }
+                }
+            }
+
+            // embedLevel 2 (SPEC §1.12, #18): one acquisition per (compileSdk version, triple), shared
+            // by every variant with that pair, into build/pythonRuntime/<triple>/<version>/.
+            // Registered here, outside any task's configure block, and handed to the bundling task.
+            val interpreterAcquisitions = mutableMapOf<String, TaskProvider<AcquirePythonInterpreterTask>>()
+            fun acquisitionFor(plan: InterpreterPlan): TaskProvider<AcquirePythonInterpreterTask>? {
+                if (plan !is InterpreterPlan.Embed) return null
+                return interpreterAcquisitions.getOrPut(plan.taskName) {
+                    project.tasks.register<AcquirePythonInterpreterTask>(plan.taskName) {
+                        group = TASK_GROUP
+                        description = "Acquires Python ${plan.version} for ${plan.target} through pypackpack " +
+                            "into build/$INTERPRETER_RUNTIME_DIRECTORY/${plan.target}/${plan.version}"
+                        pythonVersion = plan.version
+                        target = plan.target
+                        runtimeDir = plan.runtimeDir(projectBuildDir)
+                        // As for the target installs: no package, no bundle, nothing to fetch.
+                        onlyIf { hasPackage }
+                    }
+                }
+            }
+
+            // Kotlin half: see `resolveComposeKotlinDependency` for why a missing coordinate fails
+            // configuration here and why a project without Kotlin Multiplatform only gets a warning.
+            when (
+                val composeKotlin = resolveComposeKotlinDependency(
+                    extension.buildFeatures.compose,
+                    kotlinExtension != null,
+                    project.findProperty(COMPOSE_KOTLIN_PROPERTY)?.toString(),
+                )
+            ) {
+                is ComposeKotlinDependency.Add ->
+                    kotlinExtension!!.sourceSets.getByName("commonMain").dependencies {
+                        implementation(composeKotlin.coordinate)
+                    }
+                is ComposeKotlinDependency.Skipped -> project.logger.warn(composeKotlin.reason)
+                ComposeKotlinDependency.None -> Unit
             }
 
             // ---------------------------------------------------------------------------------
@@ -280,13 +403,15 @@ class PythonPlugin : Plugin<Project> {
             // not one task looping variants; `<verb><PlatformVariant><BuildType>` naming; opt-in via
             // a declared platform variant so the existing chain is untouched).
             // ---------------------------------------------------------------------------------
-            val variants = resolveVariants(extension.platforms, extension.buildTypes)
+            val variants = resolveVariants(extension.platforms, extension.buildTypes, extension.projectFlavors)
             val bundleRoot = File(project.layout.buildDirectory.get().asFile, "pythonBundle")
             // Hoisted out of the `variants.isEmpty()` branch it used to live in: staging has to know
             // which build type is active in *both* cases -- to pick a variant's bundle in one, and
             // to name the one it staged in the other.
             val requestedBuildType = (project.findProperty("python.buildType") as? String) ?: DEFAULT_BUILD_TYPE
             val activeBuildTypeName = resolveActiveBuildType(extension.buildTypes, requestedBuildType)
+            val activeFlavorName = resolveActiveFlavor(extension.projectFlavors, project.findProperty("python.flavor") as? String)
+            buildTask.configure { flavorRejection = flavorsWithoutVariantsRejection(extension.projectFlavors, variants) }
 
             if (variants.isEmpty()) {
                 // No declared platform variant: exactly the pre-graph behavior, unchanged. One host
@@ -295,9 +420,23 @@ class PythonPlugin : Plugin<Project> {
                 // `"debug"`. `resolveActiveBuildType` fails loudly on an undeclared name rather than
                 // silently falling back, so a typo in `-P` surfaces immediately.
                 val activeBuildType = extension.buildTypes.all().firstOrNull { it.name == activeBuildTypeName }
+                // The host bundle carries the host triple's wheels: `commonMain` + `desktopMain`,
+                // installed for `Platforms.detectHostTarget()` -- the triple `buildTask.target`
+                // defaults to. Installed packages come first in `libDirs`, so a directory the
+                // consumer declares with `libDirs(...)` (a vendored tree) overrides them.
+                val hostInstall = registerTargetInstall("Host", HOST_DEPENDENCY_SET, Platforms.detectHostTarget(), null)
+                val hostAcquisition = acquisitionFor(hostInterpreterPlan)
                 buildTask.configure {
+                    applyInterpreterPlan(hostInterpreterPlan, projectBuildDir, hostAcquisition)
+                    libDirs = listOf(targetDependenciesDir(projectBuildDir, HOST_DEPENDENCY_SET)) + resolvedLibDirs
+                    dependsOn(hostInstall)
                     buildType = activeBuildTypeName
                     compileLevel = activeBuildType?.compileLevel ?: ""
+                    metaDirs = resolveBundledMetaDirs(
+                        resolvedMetaDirs,
+                        extension.buildFeatures.metaclass,
+                        activeBuildType?.excludeMetaclass ?: false,
+                    )
                 }
 
                 // Every destination gets the one host bundle, because that is the only bundle that
@@ -320,8 +459,25 @@ class PythonPlugin : Plugin<Project> {
                     }
                 }
             } else {
+                // One install per dependency set (platform variant x flavor), shared by its build types.
+                val targetInstalls = mutableMapOf<String, TaskProvider<InstallTargetDependenciesTask>>()
                 variants.forEach { variant ->
                     val variantBundleDir = File(bundleRoot, variant.dirName)
+                    val targetInstall = targetInstalls.getOrPut(variant.dependencySetName) {
+                        registerTargetInstall(
+                            variant.dependencyTaskSuffix,
+                            variant.dependencySetName,
+                            variant.target,
+                            variant.flavorName,
+                        )
+                    }
+
+                    val variantFamily = Platforms.getPlatformFamily(variant.target)
+                    val (variantEmbedLevel, variantEmbedWarning) =
+                        resolveEmbedLevel(extension.packaging.embedLevel, embedOverride, variantFamily)
+                    variantEmbedWarning?.let { project.logger.warn("${variant.dirName}: $it") }
+                    val variantInterpreterPlan = planInterpreter(variantEmbedLevel, variant.target, pythonSdk)
+                    val variantAcquisition = acquisitionFor(variantInterpreterPlan)
 
                     val variantBuildTask =
                         project.tasks.register<BuildPythonArtifactTask>(BUILD_TASK + variant.taskSuffix) {
@@ -329,10 +485,21 @@ class PythonPlugin : Plugin<Project> {
                             description =
                                 "Builds the Python bundle for ${variant.platformVariantName} " +
                                     "(${variant.target}, ${variant.buildTypeName})"
-                            pythonVersion = extension.compileSdk
+                            pythonVersion = pythonVersionLabel
+                            pythonSdkRejection = pythonSdk?.rejection
+                            compileSdkVersion = compileSdkLabel
+                            versionName = payloadVersionName
+                            versionCode = payloadVersionCode
                             packageDir = resolvedPackageDir
-                            metaDirs = resolvedMetaDirs
-                            libDirs = resolvedLibDirs
+                            metaDirs = resolveBundledMetaDirs(
+                                resolvedMetaDirs,
+                                extension.buildFeatures.metaclass,
+                                extension.buildTypes.all()
+                                    .firstOrNull { it.name == variant.buildTypeName }?.excludeMetaclass ?: false,
+                            )
+                            // Installed packages first, so a declared `libDirs(...)` overrides them.
+                            libDirs = listOf(targetDependenciesDir(projectBuildDir, variant.dependencySetName)) +
+                                resolvedLibDirs
                             target = variant.target
                             buildType = variant.buildTypeName
                             // Raw, not resolved: an unsupported level must fail this one task at
@@ -341,7 +508,8 @@ class PythonPlugin : Plugin<Project> {
                             compileLevel = variant.compileLevel
                             minSdk = variant.minSdk
                             bundleDir = variantBundleDir
-                            dependsOn(installTask, typedpythonCheckTask)
+                            dependsOn(installTask, targetInstall, typedpythonCheckTask)
+                            applyInterpreterPlan(variantInterpreterPlan, projectBuildDir, variantAcquisition)
                         }
 
                     val variantPackageTask =
@@ -350,7 +518,11 @@ class PythonPlugin : Plugin<Project> {
                             description =
                                 "Packages the Python bundle for ${variant.platformVariantName} " +
                                     "(${variant.buildTypeName})"
-                            embedLevel = extension.packaging.embedLevel
+                            embedLevel = variantEmbedLevel
+                            embedFamily = variantFamily
+                            embedWarning = variantEmbedWarning
+                            interpreterVersion = variantInterpreterPlan.recordedVersion
+                            interpreterBundled = variantInterpreterPlan is InterpreterPlan.Embed
                             fileName = extension.packaging.fileName
                             bundleDir = variantBundleDir
                             variantName = variant.dirName
@@ -381,7 +553,7 @@ class PythonPlugin : Plugin<Project> {
                 // see `selectStagingVariants` and `PythonPluginStagingTest` for the two rules and
                 // what they are grounded in. A destination with no eligible variant is left staging
                 // nothing rather than being handed a bundle built for a different platform.
-                val selected = selectStagingVariants(variants, activeBuildTypeName, Platforms.detectHostTarget())
+                val selected = selectStagingVariants(variants, activeBuildTypeName, Platforms.detectHostTarget(), activeFlavorName)
                 stageTasks.forEach { (platform, stageTask) ->
                     val variant = selected[platform]
                     if (variant == null) {
@@ -407,6 +579,24 @@ class PythonPlugin : Plugin<Project> {
             }
         }
     }
+}
+
+/**
+ * Hands a bundling task what its [plan] needs (SPEC §1.12, #18): at level 2 the version and the
+ * acquired runtime directory to carry into `runtime/`, and a dependency on [acquisition]; a refused
+ * plan's reason, which fails this task only.
+ */
+private fun BuildPythonArtifactTask.applyInterpreterPlan(
+    plan: InterpreterPlan,
+    buildDir: File,
+    acquisition: TaskProvider<AcquirePythonInterpreterTask>?,
+) {
+    interpreterRejection = (plan as? InterpreterPlan.Refused)?.reason
+    if (plan is InterpreterPlan.Embed) {
+        interpreterVersion = plan.version
+        interpreterDir = plan.runtimeDir(buildDir)
+    }
+    acquisition?.let { dependsOn(it) }
 }
 
 /**
@@ -574,8 +764,9 @@ fun selectStagingVariants(
     variants: List<PythonVariant>,
     activeBuildType: String,
     hostTarget: String,
+    activeFlavor: String? = null,
 ): Map<PythonStagingPlatform, PythonVariant> {
-    val eligible = variants.filter { it.buildTypeName == activeBuildType }
+    val eligible = variants.filter { it.buildTypeName == activeBuildType && (activeFlavor == null || it.flavorName == activeFlavor) }
     return PythonStagingPlatform.values().mapNotNull { platform ->
         val candidates = eligible.filter { PythonStagingPlatform.forTarget(it.target) == platform }
         val chosen = when (platform) {
@@ -607,6 +798,8 @@ data class PythonVariant(
     val compileLevel: String,
     /** Declared platform min SDK, or `null` when the platform declares none. */
     val minSdk: Int?,
+    /** The `projectFlavors` flavor, or `null` when none are declared. */
+    val flavorName: String? = null,
 ) {
     /**
      * Appended to `buildPython`/`packagePython` to name this variant's tasks:
@@ -619,7 +812,7 @@ data class PythonVariant(
      * cross-references.
      */
     val taskSuffix: String
-        get() = platformVariantName.capitalizeFirst() + buildTypeName.capitalizeFirst()
+        get() = platformVariantName.capitalizeFirst() + flavorName.orEmpty().capitalizeFirst() + buildTypeName.capitalizeFirst()
 
     /**
      * This variant's output directory name under `build/pythonBundle/`, and the suffix on its zip.
@@ -627,7 +820,20 @@ data class PythonVariant(
      * `build/pythonBundle/androidArm64-release/`, `build/distributions/app-androidArm64-release.zip`.
      */
     val dirName: String
-        get() = "$platformVariantName-$buildTypeName"
+        get() = listOfNotNull(platformVariantName, flavorName, buildTypeName).joinToString("-")
+
+    /**
+     * The dependency set this variant's bundle takes its installed packages from: [dirName] without
+     * the build type, because the build type changes neither the requirement list
+     * (`collectTargetDependencies`) nor the triple. `build/pythonDeps/androidArm64-free/`, shared by
+     * `androidArm64-free-debug` and `androidArm64-free-release`.
+     */
+    val dependencySetName: String
+        get() = listOfNotNull(platformVariantName, flavorName).joinToString("-")
+
+    /** Appended to `installPythonDependencies` to name the set's install task: `installPythonDependenciesAndroidArm64Free`. */
+    val dependencyTaskSuffix: String
+        get() = platformVariantName.capitalizeFirst() + flavorName.orEmpty().capitalizeFirst()
 }
 
 /**
@@ -651,6 +857,7 @@ data class PythonVariant(
 fun resolveVariants(
     platforms: PlatformsExtension,
     buildTypes: BuildTypesContainer,
+    flavors: ProjectFlavorsContainer = ProjectFlavorsContainer(),
 ): List<PythonVariant> {
     val platformVariants = declaredPlatformVariantsWithMinSdk(platforms)
     if (platformVariants.isEmpty()) return emptyList()
@@ -659,19 +866,54 @@ fun resolveVariants(
     val buildTypeNames =
         if (declaredBuildTypes.isEmpty()) listOf(DEFAULT_BUILD_TYPE) else declaredBuildTypes.map { it.name }
     val compileLevels = declaredBuildTypes.associate { it.name to it.compileLevel }
+    // No flavors is one `null` flavor, so the names stay exactly what they were before flavors.
+    val flavorNames: List<String?> = flavors.all().map { it.name }.ifEmpty { listOf(null) }
 
     return platformVariants.flatMap { (variantName, minSdk) ->
-        buildTypeNames.map { buildTypeName ->
-            PythonVariant(
-                platformVariantName = variantName,
-                buildTypeName = buildTypeName,
-                target = PlatformTargetMapping.canonicalTarget(variantName),
-                compileLevel = compileLevels[buildTypeName].orEmpty(),
-                minSdk = minSdk,
-            )
+        flavorNames.flatMap { flavorName ->
+            buildTypeNames.map { buildTypeName ->
+                PythonVariant(
+                    platformVariantName = variantName,
+                    buildTypeName = buildTypeName,
+                    target = PlatformTargetMapping.canonicalTarget(variantName),
+                    compileLevel = compileLevels[buildTypeName].orEmpty(),
+                    minSdk = minSdk,
+                    flavorName = flavorName,
+                )
+            }
         }
     }
 }
+
+/**
+ * The flavor staging uses: `-Ppython.flavor=<name>`, else the first declared, else `null` (no
+ * flavors). An undeclared name fails loudly, as [resolveActiveBuildType] does for build types.
+ */
+fun resolveActiveFlavor(
+    flavors: ProjectFlavorsContainer,
+    requestedName: String?,
+): String? {
+    val declared = flavors.all()
+    if (declared.isEmpty()) return null
+    if (requestedName == null) return declared.first().name
+    return flavors.getByName(requestedName).name
+}
+
+/**
+ * Flavors only name and select variants, so without a platform variant they can change nothing.
+ * That is refused rather than ignored (AGENTS.md §14), as a reason the host `buildPython` fails with.
+ */
+fun flavorsWithoutVariantsRejection(
+    flavors: ProjectFlavorsContainer,
+    variants: List<PythonVariant>,
+): String? =
+    if (flavors.all().isNotEmpty() && variants.isEmpty()) {
+        "python { projectFlavors { ${flavors.all().joinToString { it.name }} } } declares flavors but no " +
+            "platform variant (androidArm64(), iosArm64(), macosArm64(), ...), so there is nothing for " +
+            "a flavor to apply to."
+    } else {
+        null
+    }
 
 /**
  * Pairs each declared platform variant with the min SDK its platform block declares
@@ -810,16 +1052,18 @@ fun resolveLibDirs(
  * This makes an `integration()` dependency install exactly like an `implementation()` one, no more
  * and no less: `pypackpack`'s `uv` backend (`installWithPackpack` -> `DependencyBackend.addDependencies`)
  * takes one flat `List<String>` with no type parameter, so it cannot treat the two differently even if
- * asked to. `(플러그인예시)build.gradle.kts`'s comment on `integration()` describes more --
- * "kotlin dependent python package - requires KLIBDEPENS file in whl dist directory ... KLIBDEPENS
- * 파일 없으면 install을 그냥 쓰라고 워닝 표시" (warn instead of installing when the wheel has no
- * `KLIBDEPENS` file) -- but grepping `pypackpack` for `KLIBDEPENS` turns up nothing: no wheel
- * dist-info inspection exists anywhere in this repository or `pypackpack` to check against. Wiring
- * that check is left undone rather than guessed at from one code comment; what is wired is the part
- * that is unambiguous -- the dependency reaching installation instead of being silently dropped.
+ * asked to. The `KLIBDEPENS` check the example's comment describes runs after installation instead
+ * (`findIntegrationsWithoutKlibDepens`, fed by [collectIntegrationDependencies]); it only warns.
  */
 fun collectInstallDependencies(sourceSets: List<SourceSetConfig>): List<String> =
     sourceSets.flatMap { it.dependencies.implementations + it.dependencies.integrations }
+
+/**
+ * Only the `integration(...)` entries, handed to [InstallDependenciesTask.integrationsList] so that,
+ * after the flat install, each can be checked for a `KLIBDEPENS` file (`findIntegrationsWithoutKlibDepens`).
+ */
+fun collectIntegrationDependencies(sourceSets: List<SourceSetConfig>): List<String> =
+    sourceSets.flatMap { it.dependencies.integrations }
 
 /**
  * Resolves `python { buildTypes { getByName(...) { compileLevel = ... } } }` to the `buildLevel`
@@ -832,25 +1076,31 @@ fun collectInstallDependencies(sourceSets: List<SourceSetConfig>): List<String> 
  * configuration-time throw fails every variant, and Issue #2 asks for the unsupported variant alone
  * to be refused. See that task's `compileLevel` kdoc.
  *
- * `pypackpack`'s `ResourceBundler` (`bundle/resource/ResourceBundler.kt`) implements exactly one
- * build level: `require(request.buildLevel == "instant")` rejects everything else, because
- * `bytecode`/`native`/`mixed` all need the compile stage's output, which `build` does not yet hand to
- * `bundle`. `BuildType.compileLevel` defaults to `""` for both `DebugBuildType` and
- * `ReleaseBuildType`, which is why blank resolves to `"instant"` here -- that keeps `usage-example`
- * (which never sets `compileLevel`) building exactly as it did when this value was hard-coded. A
- * `compileLevel` naming anything else -- `(플러그인예시)build.gradle.kts`'s own reference DSL writes
- * `compileLevel = "bytecode"` -- now fails loudly instead of compiling and being silently ignored,
- * the same explicit-rejection shape [org.thisisthepy.python.multiplatform.toolchain.dsl.PlatformTargetMapping]
- * uses for target variants `pypackpack` cannot build for.
+ * `pypackpack`'s `ResourceBundler` (`bundle/resource/ResourceBundler.kt`, its `SUPPORTED_BUILD_LEVELS`)
+ * implements `instant` and `bytecode`, so both pass through (Issue #15). `bytecode` runs `compileall -b`
+ * with the interpreter at `<project>/.venv`; the task checks that interpreter first
+ * ([org.thisisthepy.python.multiplatform.toolchain.bundle.bytecodeInterpreterRejection]). `native`
+ * and `mixed` need the compile stage's output, whose interface is planned as pypackpack#19, so they
+ * are refused here -- per variant, because this runs in the task action (AGENTS.md §14). Anything
+ * else is refused as well rather than handed to `ResourceBundler` to refuse in its own words.
+ *
+ * `BuildType.compileLevel` defaults to `""` for both `DebugBuildType` and `ReleaseBuildType`, which
+ * is why blank resolves to `"instant"` -- that keeps `usage-example` (which never sets
+ * `compileLevel`) building exactly as it did when this value was hard-coded.
  */
 fun resolveBuildLevel(compileLevel: String): String {
     val normalized = compileLevel.ifBlank { "instant" }
-    if (normalized == "instant") return normalized
-
-    throw IllegalArgumentException(
-        "Python compileLevel '$normalized' is not implemented by pypackpack's resource bundler yet; " +
-            "only 'instant' is available today.",
-    )
+    return when (normalized) {
+        "instant", "bytecode" -> normalized
+        "native", "mixed" -> throw IllegalArgumentException(
+            "Python compileLevel '$normalized' needs pypackpack's native/mixed compile slot, which is " +
+                "planned (pypackpack#19) and not implemented yet; use 'instant' or 'bytecode'.",
+        )
+        else -> throw IllegalArgumentException(
+            "Python compileLevel '$normalized' is not a build level; use 'instant' or 'bytecode' " +
+                "('native' and 'mixed' are planned, pypackpack#19).",
+        )
+    }
 }
 
 /**

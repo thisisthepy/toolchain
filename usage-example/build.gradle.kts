@@ -29,15 +29,34 @@ plugins {
 // `integration()`. The rest of the DSL surface (`buildFeatures`) is declared but not wired to any
 // task yet -- see the plugin's own README/report for what is scaffolding versus live.
 python {
-    compileSdk = "3.13"
+    compileSdk = PY3_14_7
     // A real `pypackpack` package (`pyproject.toml` + `src/main/<pkg>`), so the chain has a payload
     // to carry. Without it `buildPython` skips `pypackpack` entirely and every step downstream of it
     // -- the zip, and now the staging tasks -- correctly produces nothing, which makes "the artifact
     // contains Python" unfalsifiable. `example_py` deliberately includes a non-`.py` file, because
     // `ResourceBundler` carries data files next to modules and staging has to preserve that.
     localLibraryPath = "python"
+    // The example build file's pip block, minus `jit` (rejected until pypackpack builds recipes).
+    // PyPI repeated as the default index changes nothing, but it makes the wiring part of a real build.
+    defaultConfig {
+        versionCode = 1
+        versionName = "1.0.0"
+        pip {
+            autoUpdate = false
+            repositories {
+                central {
+                    setUrl("https://pypi.org/simple", "https://pypi.org/simple")
+                }
+            }
+        }
+    }
     packaging {
         fileName = "usage-example"
+    }
+    // `compose = true` is left out: it needs `python.compose.pythonxCompose` and
+    // `python.compose.kotlinModule`, and neither artifact is published yet (docs/SPEC.md §1.16).
+    buildFeatures {
+        metaclass = true
     }
 }
 

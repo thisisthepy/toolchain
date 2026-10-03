@@ -126,13 +126,15 @@ An honest summary — the full contract, item by item, is on the guide's
 | `compileSdk` parsing (alpha / rc / normal) | ✅ implemented |
 | Platforms → target triples, Kotlin target cross-check, min SDK | ✅ implemented |
 | `debug` / `release` and the per-variant task graph | ✅ implemented |
-| `implementation` / `integration` dependencies via `uv` | ✅ implemented — not yet per source set |
+| `implementation` / `integration` dependencies via `uv`, per source set, installed for each variant's own triple into its bundle | ✅ implemented |
 | Bundling via `pypackpack` at the `instant` level | ✅ implemented |
-| `bytecode` / `native` / `mixed` compile levels | ⏳ planned — rejected loudly today |
+| `bytecode` compile level (`.pyc`; needs a `.venv` matching `compileSdk`) | ✅ implemented |
+| `native` / `mixed` compile levels | ⏳ planned — rejected loudly today |
 | Staging into the desktop jar and the APK | 🟡 partial — iOS is staged but not attached |
 | Hot reload | 🟡 partial — Android only, over `adb` |
 | Code push | 🟡 partial — validation only, no upload |
-| `embedLevel`, `buildFeatures`, `projectFlavors`, `pip { }` | ⏳ planned |
+| `buildFeatures { metaclass, compose }` | ✅ implemented — compose locations come from two Gradle properties |
+| `embedLevel`, `projectFlavors`, `pip { }` | ⏳ planned |
 | `tcl install` | ✅ implemented |
 
 ## 📖 Documentation

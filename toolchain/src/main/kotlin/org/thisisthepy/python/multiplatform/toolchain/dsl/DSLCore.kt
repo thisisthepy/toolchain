@@ -5,7 +5,10 @@ import javax.inject.Inject
 
 
 open class PythonExtension @Inject constructor(objects: ObjectFactory) {
-    var compileSdk: String = ""
+    /** `compileSdk = "3.14.7"` or `compileSdk = PY3_14_7`; see [PythonSdk]. */
+    val compileSdk: PythonSdk = PythonSdk()
+    val PY3_14_7: PythonSdkVersion = PythonSdkVersion.PY3_14_7
+    val PY3_13_0: PythonSdkVersion = PythonSdkVersion.PY3_13_0
     var localLibraryPath: String? = null
 
     val defaultConfig: DefaultConfig = DefaultConfig()
@@ -14,12 +17,14 @@ open class PythonExtension @Inject constructor(objects: ObjectFactory) {
     val buildFeatures: BuildFeaturesExtension = BuildFeaturesExtension()
     val sourceSets: SourceSetsExtension = objects.newInstance(SourceSetsExtension::class.java)
     val platforms: PlatformsExtension = PlatformsExtension()
+    val projectFlavors: ProjectFlavorsContainer = ProjectFlavorsContainer()
 
     fun defaultConfig(action: DefaultConfig.() -> Unit) = defaultConfig.apply(action)
     fun packaging(action: PackagingExtension.() -> Unit) = packaging.apply(action)
     fun buildTypes(action: BuildTypesContainer.() -> Unit) = buildTypes.apply(action)
     fun buildFeatures(action: BuildFeaturesExtension.() -> Unit) = buildFeatures.apply(action)
     fun sourceSets(action: SourceSetsExtension.() -> Unit) = sourceSets.apply(action)
+    fun projectFlavors(action: ProjectFlavorsContainer.() -> Unit) = projectFlavors.apply(action)
 
     // Platforms are declared directly inside `python { }`, as the example build file writes them
     // (see [PlatformsExtension]); there is no `platforms { }` block.
@@ -48,40 +53,69 @@ open class PythonExtension @Inject constructor(objects: ObjectFactory) {
 }
 
 open class DefaultConfig {
-    var versionCode: Int = 1
-    var versionName: String = "1.0.0"
+    /** The Python payload's version, written to the bundle manifest; `null` when undeclared. */
+    var versionCode: Int? = null
+    var versionName: String? = null
     val pip: PipExtension = PipExtension()
 
     fun pip(action: PipExtension.() -> Unit) = pip.apply(action)
 }
 
+/**
+ * `pip { autoUpdate; repositories { central / local / jit } }`, spelled as
+ * `(플러그인예시)build.gradle.kts` spells it. `resolvePipSettings`
+ * (`dependency/lang/python/PipRepositories.kt`) turns it into `uv add` options.
+ */
 open class PipExtension {
-    var autoUpdateImplicitDependencies: Boolean = false
+    /** Upgrade dependencies that are not pinned to a version (`uv add --upgrade`). */
+    var autoUpdate: Boolean = false
     val repositories: PipRepositories = PipRepositories()
 
     fun repositories(action: PipRepositories.() -> Unit) = repositories.apply(action)
 }
 
 open class PipRepositories {
-    var pipCentral: RepositoryConfig? = null
-    var pipLocal: RepositoryConfig? = null
-    var pipJit: RepositoryConfig? = null
+    var central: RepositoryConfig? = null
+    var local: RepositoryConfig? = null
+    var jit: JitRepositoryConfig? = null
 
-    fun pipCentral(action: RepositoryConfig.() -> Unit) {
-        pipCentral = RepositoryConfig().apply(action)
+    fun central(action: RepositoryConfig.() -> Unit) {
+        central = (central ?: RepositoryConfig()).apply(action)
     }
-    fun pipLocal(action: RepositoryConfig.() -> Unit) {
-        pipLocal = RepositoryConfig().apply(action)
+    fun local(action: RepositoryConfig.() -> Unit) {
+        local = (local ?: RepositoryConfig()).apply(action)
     }
-    fun pipJit(action: RepositoryConfig.() -> Unit) {
-        pipJit = RepositoryConfig().apply(action)
+    fun jit(action: JitRepositoryConfig.() -> Unit) {
+        jit = (jit ?: JitRepositoryConfig()).apply(action)
     }
 }
 
 open class RepositoryConfig {
     val urls: MutableList<String> = mutableListOf()
 
+    /** The first URL; assigning it replaces every URL declared so far. */
+    var url: String?
+        get() = urls.firstOrNull()
+        set(value) {
+            urls.clear()
+            if (value != null) urls.add(value)
+        }
+
     fun setUrl(vararg urls: String) {
         this.urls.addAll(urls)
+    }
+}
+
+open class JitRepositoryConfig : RepositoryConfig() {
+    val localRecipes: LocalRecipes = LocalRecipes()
+
+    fun localRecipes(action: LocalRecipes.() -> Unit) = localRecipes.apply(action)
+}
+
+open class LocalRecipes {
+    val paths: MutableList<String> = mutableListOf()
+
+    fun add(path: String) {
+        paths.add(path)
     }
 }

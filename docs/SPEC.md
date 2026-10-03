@@ -29,8 +29,12 @@ Plugin id `org.thisisthepy.python.multiplatform`, implementation class `PythonPl
 Consumers resolve it from `mavenLocal()` after `./gradlew :toolchain:publishToMavenLocal`; the plugin
 itself depends on `org.thisisthepy.python.multiplatform:packpack:0.1.0` from `mavenLocal()`.
 
-**Status: partial** — the wiring exists (`plugin/PythonPlugin.kt`), but no test in this repository
-applies the plugin to a Gradle `Project`; it is exercised only by building `usage-example`.
+**Status: implemented** — `plugin/PythonPlugin.kt`; `ptest/PythonPluginApplyTest.kt` applies the
+plugin id to a ProjectBuilder project and checks the extension, every task name and type
+(`installPythonDependencies`, `buildPython`, `packagePython`, `stagePythonBundle` and its
+`Android`/`Ios`/`Desktop` tasks; `hotReloadPython` and `codePushPython` after evaluation), the
+`python` group, and the `packagePython → buildPython → installPythonDependencies` chain. Resolving
+the plugin from `mavenLocal()` is still exercised only by building `usage-example`.
 
 ### 1.2 `compileSdk` — the Python version
 `compileSdk` accepts `X.Y`, `X.Y.Z`, `X.Y.Z-alpha[N]` or `X.Y.Z-rc[N]` and classifies it into
@@ -39,18 +43,68 @@ form `pypackpack` accepts. A blank value is a silent skip; a malformed one fails
 
 **Status: implemented** — `plugin/dsl/PythonVersion.kt`; `ptest/dsl/PythonVersionTest.kt`.
 
-The parsed version is logged and handed to `buildPython` as `pythonVersion`, which only logs it: it
-does **not** choose which interpreter is bundled. Named version constants such as
-`PY3_11_9_ALPHA` (example build file) do not exist. → *Interpreter selection by `compileSdk` and
-version constants: **planned**.* → *A string version the server lacks is built automatically; a
-named constant is restricted to server versions (INTENT §4.1, decided): **planned**.*
+`compileSdk` takes either form the example build file writes, both with `=` (Gradle's Kotlin
+assignment overloading on `PythonSdk`): a string, `compileSdk = "3.14.7"`, or a named constant,
+`compileSdk = PY3_14_7`. Constants exist only for versions python-multiplatform provides a runtime
+for — its pinned `pythonVersion` (3.14.7) and the older 3.13.0 archive — so the example's
+`PY3_11_9_ALPHA` does not compile (INTENT §4.1). A string resolves to a provided version (`X.Y`
+takes the newest `X.Y.*`). A string naming a version that is not provided would be built
+automatically (INTENT §4.1), which is not available yet: the reason fails `buildPython…` (only
+when there is a package to bundle), not the configuration.
+
+**Status: implemented** — `plugin/dsl/PythonSdk.kt`; `ptest/dsl/PythonSdkTest.kt`,
+`ptest/bundle/BuildPythonSdkRejectionTest.kt`; `usage-example` uses `compileSdk = PY3_14_7`.
+
+**Interpreter selection (#18).** The resolved version chooses the interpreter a variant carries.
+`planInterpreter(embedLevel, triple, resolvedSdk)` maps each variant's resolved `embedLevel`
+(§1.12) to a plan:
+
+| embedLevel | plan |
+|---|---|
+| 0 | nothing acquired, nothing recorded |
+| 1 | nothing bundled; the `compileSdk` release (`X.Y.Z`) is recorded as the expected external interpreter |
+| 2 | acquire the `compileSdk` release for the variant's triple and bundle it |
+| 2, no `compileSdk` or an unprovided one | refused: the reason fails that variant's `buildPython…` (only with a package) |
+
+At level 2 one `acquirePythonInterpreter<Triple>Py<X_Y_Z>` task exists per (version, triple),
+shared by every variant with that pair (build types, flavors). Its output directory is
+`build/pythonRuntime/<triple>/<X.Y.Z>/`, and the variant's `buildPython…` depends on it. The
+acquisition goes through pypackpack: the pair is checked against pypackpack's pinned table
+(`PythonDistributions.resolve`), so a pair it does not provide (3.13.0 for Android or iOS) fails that
+acquisition task with pypackpack's own message, and only the variants that need that pair fail.
+
+**Status: implemented** — the plan, the shared task, its wiring and the version reaching the
+installer for the variant's own triple (`ptest/InterpreterPlanTest.kt`,
+`ptest/PythonPluginInterpreterTest.kt`, with a fake installer: no network). The real installer calls
+pypackpack's `installPython(version, target, installDir)` (pypackpack#37), which verifies the pinned
+SHA-256 and extracts into `build/pythonRuntime/<triple>/<version>/`, never into a project found from
+the daemon's `user.dir`; that path is tested offline in pypackpack (`DefaultBackendTest`).
+→ *The bundle's `runtime/` does not reach the APK or the jar yet: staging copies only `python/`
+(§1.13).*
+→ *Automatic build of a version python-multiplatform does not provide: **planned**, past 2026-11.*
 
 ### 1.3 `defaultConfig { versionCode, versionName, pip { … } }`
-The DSL classes exist (`plugin/dsl/DSLCore.kt`) with different names from the example
-(`autoUpdateImplicitDependencies` for `autoUpdate`; `pipCentral`/`pipLocal`/`pipJit` for
-`central`/`local`/`jit`; no `url =` property and no `localRecipes`). Nothing reads any of it.
+`pip { autoUpdate; repositories { central { setUrl(…) }; local { url = … }; jit { url; localRecipes { add(…) } } } }`,
+spelled as the example build file spells it (INTENT §4.3), becomes options of the `uv add` that
+`installPythonDependencies` runs and of every per-target `uv pip install` (§1.10):
 
-**Status: planned.**
+| DSL | `uv add` option |
+|---|---|
+| `central { setUrl(a, b, …) }` | `--default-index a`; the other URLs, minus repeats of `a`, as `--index` |
+| `local { url = … }` | `--find-links <dir>`; a `file:` URI becomes a path |
+| `autoUpdate = true` | `--upgrade` |
+| `jit { … }` | **rejected**: pypackpack has no recipe build. The rejection fails `installPythonDependencies` and the per-target install tasks, each only when it has something to install. |
+
+**Status: implemented** — `resolvePipArguments` / `resolvePipSettings` in
+`plugin/dependency/lang/python/PipRepositories.kt`; `ptest/dependency/lang/python/PipRepositoriesTest.kt`
+(including a real `uv add` sent to the declared index).
+→ *`jit` / `localRecipes`: **planned**, needs a recipe build in pypackpack.*
+`versionCode` / `versionName` are the Python payload's version (decided 2026-10-03): handed to every
+`buildPython…` task and forwarded to pypackpack's `BundleRequest`, which records them in
+`resource-manifest.json` as `"versionName"` / `"versionCode"` beside the package's own `"version"`.
+Undeclared stays `null`: nothing is written, and no default is invented. Code push reads them later.
+**Status: implemented** — `ptest/PythonPluginPayloadVersionTest.kt` (host and variant tasks),
+`ptest/bundle/BuildPythonArtifactTaskTest.kt` (the real manifest).
 
 ### 1.4 Platforms
 Declared directly inside `python { }`, as the example build file writes them:
@@ -97,16 +151,46 @@ by `-Ppython.buildType=<name>` (default `debug`); an undeclared name fails loudl
 `ptest/PythonPluginBuildTypeTest.kt`. (The debug-only setter rejections have no test: partial.)
 
 ### 1.6 `compileLevel`
-Blank resolves to `instant`; `instant` passes. `bytecode`, `native` and `mixed` are rejected with
-"not implemented by pypackpack's resource bundler yet" — **inside the variant's task action**, so
+Blank resolves to `instant`. `instant` and `bytecode` pass through to `BundleRequest.buildLevel`.
+`native` and `mixed` are rejected with a message naming the planned compile slot (pypackpack#19);
+any other value is rejected too. Rejection happens **inside the variant's task action**, so
 `--continue` still builds every other variant.
 
-**Status: implemented** (the rejection) — `resolveBuildLevel`; `ptest/PythonPluginBuildLevelTest.kt`,
-`ptest/PythonPluginVariantGraphTest.kt`.
-→ *Building at `bytecode` / `native` / `mixed`: **planned**, blocked on `pypackpack`.*
+`bytecode` is `pypackpack`'s `ResourceBundler`: `compileall -b` writes `foo.pyc` beside `foo.py`;
+`debug` keeps the `.py`, `release` deletes it and ships only `.pyc`. It compiles with the interpreter
+at `<dir>/.venv/{bin/python3,bin/python,Scripts/python.exe}`, the first found walking up from the
+package directory. Before calling it, the task checks that interpreter
+(`bytecodeInterpreterRejection`) and fails that variant when:
+
+- **no `.venv` is found** — the message names the directory searched and two ways to make one:
+  declare a dependency, so `installPythonDependencies` (`uv add`) creates `<package>/.venv`, or run
+  `uv venv --python <X.Y>` there. toolchain does not create the venv itself: choosing and acquiring
+  an interpreter is `pypackpack`'s work, and `uv venv` would replace a `.venv` that `uv add` made.
+- **its minor version differs from `compileSdk`'s** — a `.pyc`'s magic number changes with every
+  CPython minor release, so a 3.13 `.pyc` does not load on a 3.14 runtime. The venv's version is read
+  from its `pyvenv.cfg` (`version =` from the stdlib `venv`, `version_info =` from `uv`/`virtualenv`).
+
+**Status: implemented** — `resolveBuildLevel` in `plugin/PythonPlugin.kt`, `bytecodeInterpreterRejection`
+in `plugin/bundle/BuildPythonArtifactTask.kt`; `ptest/PythonPluginBuildLevelTest.kt`,
+`ptest/PythonPluginVariantGraphTest.kt`, `ptest/bundle/BytecodeLevelTest.kt` (real `compileall`:
+debug has `.py` + `.pyc`, release has `.pyc` only; needs `python3` on `PATH`),
+`ptest/dependency/lang/python/InstallDependenciesTaskTest.kt` (the `uv add` venv is found and read).
+
+Known limits of the version check: it is skipped when `compileSdk` is not declared (nothing to
+compare with), and when the venv has no readable `pyvenv.cfg` (a hand-made `.venv/bin/python3`
+symlink, for example). In both cases the `.venv`'s own interpreter decides the magic number.
+→ *Building at `native` / `mixed`: **planned**, blocked on pypackpack#19.*
 
 ### 1.7 `useCodeMinifier`, `excludeMetaclass`
-Declared on `ReleaseBuildType`; nothing reads them. **Status: planned.**
+Both are declared on `ReleaseBuildType` (`debug`'s setters throw, §1.5).
+
+`excludeMetaclass = true` leaves `commonMain`'s `metaDirs` out of that build type's bundle tasks
+only: `buildPython<Variant><BuildType>` for each variant of it, and the host `buildPython` when it is
+the active build type (`-Ppython.buildType`). Other build types keep them (§1.16 `metaclass` aside).
+
+**Status: implemented** (`excludeMetaclass`) — `resolveBundledMetaDirs` in `plugin/BuildFeatures.kt`;
+`ptest/BuildFeaturesTest.kt`, `ptest/PythonPluginBuildFeaturesTest.kt`.
+→ *`useCodeMinifier`: declared, read by nothing. **planned**, blocked on `pypackpack` (no minifier).*
 
 ### 1.8 Per-variant task graph
 When at least one platform variant is declared, every variant is crossed with every declared build
@@ -125,29 +209,89 @@ host-target chain, as before.
 directory functions are accepted only on `commonMain` and throw elsewhere. The package directory is
 `localLibraryPath` if set, else the **first** `commonMain.srcDirs` entry, else none (bundling and
 installation are skipped). Every `metaDirs` and `libDirs` entry is forwarded to `pypackpack` as
-`BundleRequest.metaDirs` / `libDirs`.
+`BundleRequest.metaDirs` / `libDirs` — `metaDirs` subject to `buildFeatures { metaclass }` and
+`excludeMetaclass` (§1.16, §1.7).
+
+The `by getting { … }` block is applied at declaration (`provideDelegate`), so it takes effect even if
+the property is never read (issue #35); see `SourceSetGettingDelegateTest`.
 
 **Status: implemented** — `resolvePackageDir`, `resolveMetaDirs`, `resolveLibDirs`;
 `ptest/PythonPluginSourceSetTest.kt`, `ptest/bundle/BuildPythonArtifactTaskTest.kt`.
 
 ### 1.10 Dependencies and `installPythonDependencies`
-`dependencies { implementation("pkg"); integration("pkg") }` in any source set. All source sets'
-`implementation` **and** `integration` entries are flattened into one list and installed into the
-package directory through `pypackpack`:
-`BackendInterface.create(BackendType.UV)` → `addDependencies(…, workingDir = packageDir)` (a real
-`uv add`). An empty list or no package directory is a skip, not a failure.
+`dependencies { implementation("pkg"); integration("pkg") }` in a source set. Two installations
+read these declarations.
 
-**Status: implemented** — `plugin/dependency/lang/python/InstallDependenciesTask.kt`;
-`ptest/PythonPluginDependencyTest.kt`, `ptest/dependency/lang/python/InstallDependenciesTaskTest.kt`
-(needs `uv` and network).
-→ *Per-source-set targeting (an `androidMain` dependency only for Android): **planned** — today
-every dependency is installed for every target.*
-→ *`integration()` checking the wheel for `KLIBDEPENS` and warning when absent: **planned**.*
+**Into the package's venv — `installPythonDependencies`.** All source sets' `implementation` **and**
+`integration` entries are flattened into one list and installed into the package directory through
+`pypackpack`: `BackendInterface.create(BackendType.UV)` → `addDependencies(…, workingDir = packageDir)`
+(a real `uv add`). This records the dependencies in the package's `pyproject.toml` and leaves the
+`<package>/.venv` that `compileLevel = "bytecode"` compiles with (§1.6). It does not feed a bundle. An
+empty list or no package directory is a skip, not a failure.
+
+**Per target — `installPythonDependencies<Set>`.** What reaches a bundle is installed separately,
+once per *dependency set*: a platform variant crossed with a flavor (§1.17). The build type is not
+part of it, because it changes neither the requirement list nor the triple, so `debug` and `release`
+share one install.
+
+- A set reads `commonMain`, then its family's source set — `androidMain`, `iosMain` or `desktopMain`
+  (macOS, Linux and Windows are one `desktopMain`, as they are one staging destination, §1.13) —
+  then `<flavor>Main`. Entries keep that order; repeats are dropped. `buildFeatures { compose }` adds
+  `pythonx-compose` to every set (§1.16).
+- The task (`installPythonDependenciesAndroidArm64`, `…AndroidArm64Free`) clears
+  `build/pythonDeps/<set>/` (`androidArm64`, `androidArm64-free`) and calls `pypackpack`'s
+  `UVBackend.installDependenciesToTarget(targetDir, pythonPlatform = <the variant's triple>, extraArgs,
+  workingDir)` — `uv pip install -r pyproject.toml --target <dir> --python-platform <triple>`. That
+  call reads only a `pyproject.toml` in `workingDir`, so the task writes one listing the set's
+  requirements into its temporary directory (`build/tmp/<task>/`) and passes that directory.
+- Options: the `pip { }` repositories (§1.3), `python-version` = `compileSdk`'s `major.minor` (wheel
+  tags carry the CPython ABI), and `only-binary = :all:` (no sdist is built with the host compiler).
+  A requirement with no wheel for the triple fails that set's task with uv's message, which names it.
+- Every bundle task of the set (§1.11) lists `build/pythonDeps/<set>/` **first** in `libDirs` and
+  depends on the task, so a declared `libDirs(…)` tree overrides an installed file.
+- Without a platform variant the host chain does the same: `installPythonDependenciesHost`,
+  `commonMain` + `desktopMain`, the host triple, `build/pythonDeps/host/`.
+- Dependencies in a source set no set reads (`androidArm64Main`, `fooMain`, or `<flavor>Main` with no
+  such flavor) fail every per-target task with a message naming it, instead of reaching no bundle.
+- Task inputs are the requirement list, triple, options and rejections; the output is the directory.
+  `pip { autoUpdate = true }` makes the task never up to date. No package directory skips the task.
+
+**Status: implemented** — `plugin/dependency/lang/python/InstallDependenciesTask.kt`,
+`plugin/dependency/lang/python/InstallTargetDependenciesTask.kt`, `plugin/TargetDependencies.kt`;
+`ptest/PythonPluginDependencyTest.kt`, `ptest/TargetDependenciesTest.kt` (source-set selection per
+family and flavor, options, rejection), `ptest/PythonPluginTargetDependenciesTest.kt` (tasks,
+install directories, `libDirs` and dependencies on an applied plugin),
+`ptest/dependency/lang/python/InstallDependenciesTaskTest.kt` and
+`ptest/dependency/lang/python/InstallTargetDependenciesTaskTest.kt` (a real install of `six` for
+`aarch64-linux-android`; both need `uv` and network). CI's consumer job checks that usage-example's
+`iniconfig` is in the bundle and the zip.
+→ *Known limits: without `compileSdk` no `python-version` is passed and uv uses the interpreter it
+finds. `installPythonDependencies` still `uv add`s every source set for the host, so a package with
+no host wheel fails it even if only `androidMain` declares it. `pypackpack`'s `ResourceBundler` drops
+`.pyd` files and directories named `build`/`dist`, so a Windows extension module does not reach a
+`mingwX64` bundle.*
+
+**`KLIBDEPENS` check.** `installPythonDependencies` also carries the `integration` entries on their own (`integrationsList`). After the install it
+looks in the package directory's venv (`<package dir>/.venv`: `lib/python3.X/site-packages`, or
+`Lib/site-packages` on Windows) for each integration's `<name>-<version>.dist-info/` directory, matching
+the name under PEP 503 normalization (case-insensitive; runs of `-`, `_`, `.` equal; version specifiers,
+extras and markers in the spec are ignored). A package whose dist-info has no `KLIBDEPENS` file (or that
+is not found) gets a warning naming it and suggesting `implementation(...)`; it is never a failure. If no
+`site-packages` exists the task warns that it cannot check.
+*Assumption:* no repository defines `KLIBDEPENS`; it is taken to be a file of that name inside the
+wheel's `*.dist-info/` directory, and only its presence is checked, not its content.
+
+KLIBDEPENS check — **Status: implemented** — `plugin/dependency/lang/python/InstallDependenciesTask.kt`;
+`plugin/dependency/lang/python/KlibDepens.kt`; `ptest/PythonPluginDependencyTest.kt`,
+`ptest/PythonPluginIntegrationListTest.kt`, `ptest/dependency/lang/python/KlibDepensTest.kt` (fake
+site-packages trees), `ptest/dependency/lang/python/InstallDependenciesTaskTest.kt` (needs `uv` and network).
 
 ### 1.11 Bundling — `buildPython`
 Builds a `pypackpack` `BundleRequest` (package dir, target triple, build type, build level, output
 dir, `overwrite = true`, minSdk, metaDirs, libDirs) and calls
-`BundlerInterface.create(BundleType.RESOURCE).bundle(request)`. The result is `python/` plus a
+`BundlerInterface.create(BundleType.RESOURCE).bundle(request)`. `libDirs` is the task's
+dependency set's `build/pythonDeps/<set>/` (§1.10) followed by the declared `libDirs(…)` (§1.9), so
+the installed packages land in `python/` beside the app's modules. The result is `python/` plus a
 `resource-manifest.json`. A failure becomes a `GradleException`. No package directory: the output
 directory is created empty and `pypackpack` is not called.
 
@@ -158,9 +302,44 @@ directory is created empty and `pypackpack` is not called.
 Zips the bundle directory to `build/distributions/<fileName>.zip` (or `<fileName>-<variant>.zip`).
 Fails if the bundle directory does not exist.
 
-**Status: partial** — `plugin/bundle/AssemblePythonPackageTask.kt`; no test here.
-→ *`embedLevel` (0 no interpreter / 1 external / 2 embedded, auto-raised with a warning where a
-platform cannot honour it, overridable from `gradle.properties`): **planned** — it is only logged.*
+**Status: implemented** — `plugin/bundle/AssemblePythonPackageTask.kt`;
+`ptest/bundle/AssemblePythonPackageTaskTest.kt` runs the real task's action: the archive name and
+location for the aggregate and a variant task, the zip entries, and the failure when the bundle
+directory is missing.
+`packaging { embedLevel }` — 0 no interpreter bundled, 1 the app uses an external interpreter, 2 the
+interpreter is bundled inside the app. The level is resolved per packaging task by
+`resolveEmbedLevel(declared, override, platformFamily)` (the family is `Platforms.getPlatformFamily`
+of the variant's target; the host chain uses the host's family):
+
+| family | 0 | 1 | 2 |
+|---|---|---|---|
+| macos, linux, windows | 0 | 1 | 2 |
+| android, ios (sandboxed, no system Python) | raised to 2, warning | raised to 2, warning | 2 |
+
+The `python.embedLevel` property (`gradle.properties` or `-P`) overrides the DSL value and is then
+raised the same way. A value outside 0..2, or not a number, fails configuration naming the property.
+Each packaging task carries the resolved level as an `@Input`, logs it, and writes
+`<archive>.embed.json` beside the zip: level, platform family, warning, `interpreterVersion` (the
+`compileSdk` release at levels 1 and 2, otherwise `null`) and `interpreterBundled`.
+
+What the level does to the payload (§1.2 for how the interpreter is chosen and acquired):
+
+- **0** — nothing.
+- **1** — nothing bundled; the expected version is recorded.
+- **2** — after pypackpack's bundler writes `python/` and `resource-manifest.json`, `buildPython…`
+  copies the acquired `build/pythonRuntime/<triple>/<X.Y.Z>/` tree into `<bundle>/runtime/`
+  (symbolic links kept) and writes `<bundle>/runtime-manifest.json`
+  (`{"pythonVersion", "target", "root": "runtime"}`). The zip therefore holds `python/` and
+  `runtime/` side by side, and `interpreterBundled` is `true` when `runtime/` is in what was zipped.
+
+Staging (§1.13) still copies only `python/`; carrying `runtime/` into the APK, the desktop jar or
+iOS is python-multiplatform's loading question and is not done here.
+
+**Status: partial** — resolution, override, the warning, the record and the `runtime/` layout are
+implemented (`ptest/EmbedLevelTest.kt`, `ptest/PythonPluginEmbedLevelTest.kt`,
+`ptest/InterpreterPlanTest.kt`, `ptest/PythonPluginInterpreterTest.kt`, which zips a variant bundle
+with `runtime/` and reads its record). Level 2 cannot yet produce a real interpreter: the acquisition
+waits on a pypackpack `installPython` that takes an explicit directory (§1.2).
 
 ### 1.13 Staging into the app — `stagePythonBundle{Android,Ios,Desktop}`
 Copies the bundle's `python/` subtree (never the manifest) into
@@ -176,9 +355,17 @@ stages nothing.
 Hand-off to the platform's packaging step:
 
 - Desktop: the staged root is added to the JVM target's `<target>ProcessResources`, so the payload
-  is in the desktop jar. **partial** — untested here.
+  is in the desktop jar. **implemented** — `ptest/PythonPluginAttachmentTest.kt` (Kotlin
+  Multiplatform with `jvm("desktop")`: `stagePythonBundleDesktop` is a dependency of
+  `desktopProcessResources` and the staged file is among its sources). Not tested: the fallback for
+  a `<target>ProcessResources` that is not a `Copy` task (dependency plus warning), and the built jar
+  itself.
 - Android: the staged root is added to `android.sourceSets.main.assets` (reflectively), so the
-  payload is in the APK's `assets/`. **partial** — untested here.
+  payload is in the APK's `assets/`. **partial** — `ptest/PythonPluginAttachmentTest.kt` applies the
+  real `com.android.application` (AGP 8.5.2, test classpath only) and checks the staged root is a
+  `main` asset source directory. Not tested: the `preBuild` / `merge*Assets` → `stagePythonBundleAndroid`
+  dependency (AGP creates those tasks only when the project is evaluated against an Android SDK,
+  which `:toolchain:test` does not require), and the built APK.
 - iOS: staged but **not attached** to the Xcode project. **planned.**
 - Putting the staged `python/` on `sys.path` at run time is `python-multiplatform`'s side.
 
@@ -205,10 +392,50 @@ upload client exists.
 `ptest/PythonPluginCodePushTest.kt`. → *Upload: **planned**.*
 
 ### 1.16 `buildFeatures { metaclass, compose }`
-Declared (`BuildFeaturesExtension`); nothing reads them. **Status: planned.**
+**`metaclass`** (default `true`): `true` forwards `commonMain`'s `metaDirs` to `BundleRequest.metaDirs`
+as §1.9 describes; `false` forwards none, from every bundle task. A build type's `excludeMetaclass`
+(§1.7) also drops them, for that build type only.
+
+**`compose`** (default `false`): `true` wires the Compose wrapper in two halves. Neither artifact is
+published to a remote yet, so their locations come from Gradle project properties (`gradle.properties`
+or `-P`) with no default:
+
+| Property | Value | Effect |
+|---|---|---|
+| `python.compose.pythonxCompose` | a pip requirement naming `pythonx-compose` (`pythonx-compose==0.1.0`), or an existing directory of wheels (absolute, relative to the project directory, or a `file:` URI) | The requirement — or `pythonx-compose` for a directory — is appended to `installPythonDependencies`' list and to every per-target list (§1.10). A directory is appended to the `find-links` option `pip { repositories { local } }` produces, comma-separated after it (uv splits `--find-links` on commas). |
+| `python.compose.kotlinModule` | a Maven coordinate `group:artifact:version` of `python-multiplatform-compose` | Added to Kotlin Multiplatform `commonMain`'s `implementation` when `org.jetbrains.kotlin.multiplatform` is applied. |
+
+Failures, each naming the property and what it is for:
+- `pythonxCompose` missing, or neither a directory nor a `pythonx-compose` requirement: carried to
+  `installPythonDependencies` and the per-target install tasks and thrown from their actions (§14), so
+  tasks that install nothing still run.
+- `kotlinModule` missing or not `group:artifact:version`, with the Kotlin Multiplatform plugin
+  applied: fails configuration. A dependency has no task action to carry a rejection to, and every
+  Kotlin compilation includes `commonMain`, so there is no narrower valid place.
+- Kotlin Multiplatform not applied: the Kotlin half is skipped with a warning and `kotlinModule` is
+  not required; `pythonx-compose` is still installed.
+
+**Status: implemented** — `resolveBundledMetaDirs`, `resolveComposePythonInstall`,
+`mergeComposeFindLinks`, `resolveComposeKotlinDependency` in `plugin/BuildFeatures.kt`;
+`ptest/BuildFeaturesTest.kt`, `ptest/PythonPluginBuildFeaturesTest.kt` (task wiring on a ProjectBuilder
+project, the Kotlin dependency with `org.jetbrains.kotlin.multiplatform` applied). Installing a real
+`pythonx-compose` is not exercised: the package is not published.
 
 ### 1.17 `projectFlavors { }`
-Present in the example build file; absent from the DSL. **Status: planned.**
+`projectFlavors { create("free"); create("paid") }`, AGP-style (decided 2026-10-03; the example
+build file declares the block empty). Each flavor is crossed into the per-variant graph (§1.8)
+between platform and build type: `buildPythonAndroidArm64FreeDebug`,
+`build/pythonBundle/androidArm64-free-debug/`. A flavor name is lower-camel, unique and not a build
+type's name; anything else fails configuration. Staging (§1.13) takes the variants of one flavor:
+`-Ppython.flavor=<name>`, else the first declared; an undeclared name fails loudly. Flavors with
+no platform variant could change nothing, so the host `buildPython` fails with that reason. A
+flavor's own dependencies go in a `<flavor>Main` source set and are installed only for that
+flavor's variants (§1.10).
+
+**Status: implemented** — `plugin/dsl/DSLFlavors.kt`, `resolveVariants`, `resolveActiveFlavor`,
+`flavorsWithoutVariantsRejection` in `plugin/PythonPlugin.kt`; `ptest/PythonPluginFlavorsTest.kt`
+(including task registration on an applied plugin).
+→ *Per-flavor properties: **planned**.*
 
 ### 1.18 TypedPython check — `typedpythonCheck`
 Source: issue [`toolchain#23`](https://github.com/thisisthepy/toolchain/issues/23) (TypedPython step
