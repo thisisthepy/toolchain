@@ -76,8 +76,9 @@ python {
 ```
 
 ```shell
-./gradlew :usage-example:packagePython        # install → bundle → zip
-./gradlew :usage-example:stagePythonBundle    # stage python/ for android, ios and desktop
+cd usage-example                              # its own build, on python-multiplatform's Kotlin
+./gradlew packagePython                       # install → bundle → zip
+./gradlew stagePythonBundle                   # stage python/ for android, ios and desktop
 ```
 
 Want one bundle per target? Declare platforms and build types:

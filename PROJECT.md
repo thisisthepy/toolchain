@@ -99,7 +99,8 @@ Python 코드와 의존성이 실려 빌드·실행되는 상태. 기한을 맞�
 ```
 toolchain/       Gradle 플러그인  (dsl/, bundle/, dependency/, hotreload/)
 tcl/             toolchain-lite CLI
-usage-example/   플러그인을 적용한 Compose Multiplatform 앱 + python/ (pypackpack 패키지)
+usage-example/   별도 Gradle 빌드: 플러그인과 python-multiplatform 을 적용한 Compose Multiplatform 앱 + python/
+                 (python-multiplatform 의 Kotlin 2.4.20-Beta2 / Compose 1.11.1 / AGP 8.10.1, 자체 wrapper)
 docs/            INTENT.md, SPEC.md, locale/, guide/ (GitHub Pages)
 ```
 
@@ -112,11 +113,18 @@ docs/            INTENT.md, SPEC.md, locale/, guide/ (GitHub Pages)
 ./gradlew :tcl:test --rerun --console=plain > .tmp/tcl-test.log 2>&1; echo "EXIT=$?"
 ./gradlew :toolchain:publishToMavenLocal     # usage-example 빌드 전에 반드시
 python3 docs/guide/check_guide.py            # 가이드 검사
+# usage-example 은 별도 빌드: python-multiplatform 체크아웃에서 ./gradlew publishAllToMavenLocal 후
+(cd usage-example && ./gradlew packagePython)
+(cd usage-example && ./gradlew createDistributable) # 데스크톱 앱; 실행 시 --python-smoke 로 헤드리스 확인
 ```
 
 Python 테스트는 없다. 루트 `pyproject.toml` 이 가리키는 Python 패키지도 존재하지 않는다.
 
 ## 결정 사항
+
+- **usage-example 은 별도 빌드** (#22, 리드 결정 2026-10-03): python-multiplatform 은 Kotlin 2.4.20-Beta2 로 빌드되고 Kotlin 2.1
+  컴파일러는 그 klib 을 읽지 못한다. 소비자인 usage-example 이 의존성의 툴체인에 맞추고, 플러그인 자체는 소비자를 위해
+  지금의 Kotlin 에 둔다.
 
 - **위임**: 의존성은 `BackendInterface.create(BackendType.UV)`, 번들은
   `BundlerInterface.create(BundleType.RESOURCE)`. 둘 다 `workingDir` 를 명시적으로 받는 백엔드 계층을

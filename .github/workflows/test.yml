@@ -6,9 +6,8 @@ name: Test
 #
 # Both modules depend on org.thisisthepy.python.multiplatform:packpack:0.1.0 from
 # mavenLocal, so each job first publishes it from pypackpack's develop branch.
-# --configure-on-demand keeps Gradle from configuring :usage-example, which
-# resolves this plugin from mavenLocal and so cannot configure before it is
-# published.
+# usage-example is its own build (toolchain#22, python-multiplatform's Kotlin), run
+# by the consumer and desktop-e2e jobs with its own wrapper.
 on:
   pull_request:
   push:
@@ -57,7 +56,7 @@ jobs:
         run: ./gradlew :packpack:publishToMavenLocal --console=plain
 
       - name: Test ${{ matrix.module }}
-        run: ./gradlew :${{ matrix.module }}:test --rerun --configure-on-demand --console=plain
+        run: ./gradlew :${{ matrix.module }}:test --rerun --console=plain
 
       - name: Count results
         if: always()
@@ -79,61 +78,126 @@ jobs:
           path: ${{ matrix.module }}/build/reports/tests/test/
 
   # Unit tests run on Kotlin 2.x's stdlib, but a consumer runs the plugin on the kotlin-stdlib Gradle
-  # embeds (1.9.23 for Gradle 8.9). pypackpack#31 broke every suspend call that way and no unit test
-  # could see it. This job is a real consumer: it publishes packpack and the plugin, gives
-  # usage-example one real pip dependency (CI only), then installs, bundles and zips.
+  # embeds. pypackpack#31 broke every suspend call that way and no unit test could see it. This job is
+  # a real consumer: usage-example (its own build) with a real pip dependency installs, bundles, zips.
   consumer:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/checkout@v4
         with:
           repository: thisisthepy/pypackpack
           ref: develop
           path: .ci/pypackpack
-
+      - uses: actions/checkout@v4
+        with:
+          repository: thisisthepy/python-multiplatform
+          ref: develop
+          path: .ci/python-multiplatform
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
-
       - uses: gradle/actions/setup-gradle@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
-
       - uses: astral-sh/setup-uv@v6
 
-      - name: Publish packpack and the plugin to mavenLocal
+      # usage-example applies three things from mavenLocal: packpack (through the plugin), the
+      # toolchain plugin, and python-multiplatform's library and bindings plugin. Versions pinned in
+      # usage-example/gradle/libs.versions.toml (library 3.14.7-alpha01, plugin 3.13.0 until
+      # python-multiplatform#70).
+      - name: Publish packpack, the toolchain plugin and python-multiplatform to mavenLocal
         run: |
           (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)
-          ./gradlew :toolchain:publishToMavenLocal --configure-on-demand --console=plain
-
-      - name: Give usage-example one real dependency
-        run: |
-          python3 - <<'PY'
-          f = "usage-example/build.gradle.kts"
-          s = open(f).read()
-          anchor = '    localLibraryPath = "python"\n'
-          assert anchor in s, "usage-example no longer sets localLibraryPath; update this step"
-          s = s.replace(anchor, anchor + '    sourceSets { getByName("commonMain").dependencies { implementation("iniconfig") } }\n', 1)
-          open(f, "w").write(s)
-          PY
+          ./gradlew :toolchain:publishToMavenLocal --console=plain
+          # Targeted, not publishAllToMavenLocal: that currently fails on the Android release Java
+          # resources (generatePythonProperties has no declared consumer; reported to the lead).
+          (cd .ci/python-multiplatform && ./gradlew \
+            :python-multiplatform:publishDesktopPublicationToMavenLocal \
+            :python-multiplatform:publishKotlinMultiplatformPublicationToMavenLocal \
+            :python-multiplatform-ksp:publishToMavenLocal --console=plain)
+          (cd .ci/python-multiplatform && ./gradlew -p python-multiplatform-gradle-plugin publishToMavenLocal --console=plain)
 
       - name: Install, bundle and zip as a consumer
+        working-directory: usage-example
         run: |
-          ./gradlew :usage-example:installPythonDependencies :usage-example:buildPython :usage-example:packagePython \
+          ./gradlew installPythonDependencies buildPython packagePython \
             --console=plain > consumer.log 2>&1 || { cat consumer.log; exit 1; }
           cat consumer.log
           grep -q "iniconfig" consumer.log || { echo "the dependency was not installed"; exit 1; }
-          ls -la usage-example/build/distributions/
+          ls -la build/distributions/
           # #16: the dependency is installed for the host triple and reaches the payload, not only the venv.
-          test -f usage-example/build/pythonDeps/host/iniconfig/__init__.py || { echo "iniconfig was not installed for the host triple"; exit 1; }
-          test -f usage-example/build/pythonBundle/python/iniconfig/__init__.py || { echo "iniconfig is not in the bundle"; exit 1; }
-          unzip -l usage-example/build/distributions/*.zip | grep -q "python/iniconfig/__init__.py" || { echo "iniconfig is not in the zip"; exit 1; }
+          test -f build/pythonDeps/host/iniconfig/__init__.py || { echo "iniconfig was not installed for the host triple"; exit 1; }
+          test -f build/pythonBundle/python/iniconfig/__init__.py || { echo "iniconfig is not in the bundle"; exit 1; }
+          unzip -l build/distributions/*.zip | grep -q "python/iniconfig/__init__.py" || { echo "iniconfig is not in the zip"; exit 1; }
+
+  # toolchain#22, desktop: the packaged app (createDistributable) runs Python with no PYTHONHOME --
+  # python-multiplatform's stdlib from python-multiplatform-home/ (its SPEC L-9, #60) plus this
+  # plugin's python/ payload (example_py and the bundled iniconfig). `--python-smoke` exits before
+  # the window opens, so this runs headless.
+  # TODO(python-multiplatform#60): remove continue-on-error once #60 is on its develop.
+  desktop-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: thisisthepy/pypackpack
+          ref: develop
+          path: .ci/pypackpack
+      - uses: actions/checkout@v4
+        with:
+          repository: thisisthepy/python-multiplatform
+          ref: develop
+          path: .ci/python-multiplatform
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Publish packpack, the toolchain plugin and python-multiplatform to mavenLocal
+        run: |
+          (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)
+          ./gradlew :toolchain:publishToMavenLocal --console=plain
+          # Targeted, not publishAllToMavenLocal: that currently fails on the Android release Java
+          # resources (generatePythonProperties has no declared consumer; reported to the lead).
+          (cd .ci/python-multiplatform && ./gradlew \
+            :python-multiplatform:publishDesktopPublicationToMavenLocal \
+            :python-multiplatform:publishKotlinMultiplatformPublicationToMavenLocal \
+            :python-multiplatform-ksp:publishToMavenLocal --console=plain)
+          (cd .ci/python-multiplatform && ./gradlew -p python-multiplatform-gradle-plugin publishToMavenLocal --console=plain)
+
+      - name: Package the desktop app
+        working-directory: usage-example
+        run: ./gradlew createDistributable --console=plain
+
+      - name: Run the packaged app's Python, headless and without PYTHONHOME
+        working-directory: usage-example
+        run: |
+          set -euo pipefail
+          app=$(find build/compose/binaries/main/app -maxdepth 3 -type f -path '*/bin/*' | head -n 1)
+          [ -n "$app" ] || { echo "no packaged launcher under build/compose/binaries/main/app"; exit 1; }
+          appdir=$(cd "$(dirname "$app")/.." && pwd -P)
+          # A scrubbed environment: no PYTHONHOME, and no LD_LIBRARY_PATH / PATH leading to the runner's
+          # own CPython (setup-python installs one), so only what the app carries can be used.
+          out=$(env -i HOME="$HOME" PATH=/usr/bin:/bin "$app" --python-smoke 2>&1) || { echo "$out"; exit 1; }
+          echo "$out"
+          printf '%s\n' "$out" | grep -q '^PYTHON_SMOKE_OK ' || { echo "no PYTHON_SMOKE_OK line"; exit 1; }
+          stdlib=$(printf '%s\n' "$out" | sed -n 's/^PYTHON_SMOKE_STDLIB //p')
+          case "$stdlib" in
+            "$appdir"/*) echo "stdlib from the packaged app: $stdlib" ;;
+            *) echo "stdlib not from the packaged app ($appdir): '$stdlib'"; exit 1 ;;
+          esac
 
   guide:
     runs-on: ubuntu-latest

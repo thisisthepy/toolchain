@@ -165,7 +165,7 @@ GitHub issues `thisisthepy/toolchain#2` (plugin checklist) and `#1` (`tcl`), it 
 |---|---|
 | `:toolchain` | The Gradle plugin (`org.thisisthepy.python.multiplatform`, class `PythonPlugin`). DSL in `dsl/`, tasks in `bundle/`, `dependency/`, `hotreload/`. |
 | `:tcl` | toolchain-lite, a CLI application (`tcl install <package>`). |
-| `:usage-example` | A Compose Multiplatform app that applies the plugin. |
+| `usage-example/` | **Its own Gradle build** (own settings, catalog and wrapper; toolchain#22): a Compose Multiplatform app applying this plugin and python-multiplatform, on python-multiplatform's Kotlin/Compose/AGP. Run it with its own wrapper: `(cd usage-example && ./gradlew …)`. |
 
 `pyproject.toml` at the root describes a Python package `toolchain` that does not exist; nothing
 builds it. Do not add Python code to satisfy it without asking (`docs/SPEC.md`, "Outside intent").
@@ -214,13 +214,17 @@ history removing.
 - `usage-example` resolves the plugin **by Maven coordinate from `mavenLocal()`**, not through
   `includeBuild`. After changing `:toolchain`, run `:toolchain:publishToMavenLocal` before building
   `usage-example`, or you are testing the previous plugin.
+- `usage-example` is a separate build on python-multiplatform's toolchain (Kotlin 2.4.20-Beta2, Compose
+  1.11.1, AGP 8.10.1, Gradle 8.11.1), because a Kotlin 2.1 compiler cannot read python-multiplatform's
+  klibs. The plugin itself stays on this build's Kotlin for its consumers; do not bump it to match.
 
 ## 16. Building and testing
 
 Prerequisites: `org.thisisthepy.python.multiplatform:packpack:0.1.0` in `~/.m2` (published from the
 `pypackpack` repository), `uv` on `PATH`, and network access — `InstallDependenciesTaskTest` and
 `InstallerTest` run a real `uv add` against PyPI. `usage-example` additionally needs an Android SDK
-(`ANDROID_HOME`).
+(`ANDROID_HOME`) and python-multiplatform in `~/.m2`: from a python-multiplatform checkout,
+`./gradlew publishAllToMavenLocal` (library `3.14.7-alpha01`, bindings plugin `3.13.0` until its #70).
 
 Run each module separately (rule 8), with output to a file under `.tmp/`:
 

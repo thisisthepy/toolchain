@@ -516,7 +516,7 @@ commands, skip warning, mode, exit-code interpretation). The TestKit tests in
 `pyrefly` wheels) and `uv`; without it they are **skipped** with that reason, as on CI.
 Not covered by a test here: exit 2 end to end (only `interpretTypedpythonResult`), and the install
 in a *consumer's* classpath — `withPluginClasspath()` bypasses the Kotlin DSL's `kotlin-stdlib` pin;
-that was verified by building `:usage-example:buildPython`.
+that was verified by building usage-example's `buildPython`.
 → *Until `typedpython` is on PyPI, a build without `-Ptypedpython.wheelDir` skips the check with a warning.*
 → *Platform overlays (`src/<family>`) are checked as files but only `src/main` is an import root:
 **partial**.*
