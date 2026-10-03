@@ -107,7 +107,7 @@ class PythonPlugin : Plugin<Project> {
         // destination roots are derived from the build directory alone (`PythonStagingPlatform.
         // rootIn`): an AGP asset source root has to be declared while the consumer's build script is
         // still being evaluated, because AGP reads its source sets in its own `afterEvaluate` and
-        // this plugin -- applied last in a `plugins { }` block, as `usage-example` applies it --
+        // this plugin -- applied last in a `plugins { }` block, as `sample` applies it --
         // registers its `afterEvaluate` callback after AGP's and therefore runs after it. A
         // `srcDir` added at that point is added to a source set nothing will look at again.
         //
@@ -266,8 +266,8 @@ class PythonPlugin : Plugin<Project> {
             // second code path doing the same job -- `buildTask` (`BuildPythonArtifactTask`) already
             // delegates the real work to `pypackpack`'s `ResourceBundler` into `build/pythonBundle`
             // (this task's own report; `docs/ecosystem.md` §1, §5). Confirmed nothing depended on
-            // it before deleting: no source under `usage-example/` reads `src/main/assets/python` or
-            // `build/pythonLibraries`, `usage-example` itself never sets `python.localLibraryPath`
+            // it before deleting: no source under `sample/` reads `src/main/assets/python` or
+            // `build/pythonLibraries`, `sample` itself never sets `python.localLibraryPath`
             // today, and `copyPythonLibrariesToAssets`/`preBuild` wiring existed only inside this
             // now-removed block, so nothing outside it could have depended on that task by name
             // either. Wiring the real bundle output into Android assets (or any other platform's
@@ -620,7 +620,7 @@ private fun registerStagingTasks(project: Project): Map<PythonStagingPlatform, T
  *   which is what the deleted `afterEvaluate` copy did.
  * - **iOS is staged but not attached.** A Kotlin/Native framework has no Gradle-side resource
  *   mechanism to add files to: resources reach an iOS app through an Xcode "Copy Bundle Resources"
- *   build phase, in a project file this plugin does not own (`usage-example`'s is
+ *   build phase, in a project file this plugin does not own (`sample`'s is
  *   `src/iosMain/app.xcodeproj`, hand-maintained). The staged directory is produced and its path is
  *   logged so the phase can point at it; automating the `.pbxproj` edit is a separate piece of work
  *   and is not pretended to be done here.
@@ -824,7 +824,7 @@ data class PythonVariant(
  * `PythonPluginVariantGraphTest` for the design record, and `PythonPlugin.apply` for the wiring.
  *
  * Empty when no platform variant is declared, which is deliberately the case for every consumer
- * that exists today (`usage-example` declares no platform variant). The graph is opt-in: the
+ * that exists today (`sample` declares no platform variant). The graph is opt-in: the
  * platform block is what creates more than one target, and without it there is exactly one -- the
  * host -- built by the single `buildPython` task exactly as before.
  *
@@ -937,7 +937,7 @@ private fun String.capitalizeFirst(): String = replaceFirstChar { it.uppercaseCh
  * [PythonPlugin.apply] so it can be exercised without a Gradle [org.gradle.api.Project] -- see
  * `PythonPluginBuildTypeTest`.
  *
- * No declared build types at all (the common case today -- `usage-example` does not use the
+ * No declared build types at all (the common case today -- `sample` does not use the
  * `buildTypes { }` block) passes [requestedName] straight through, so `buildType` keeps behaving
  * exactly as it did before this DSL block was wired up. Once at least one build type is declared,
  * [requestedName] must name one of them; an unmatched name throws rather than silently defaulting,
@@ -967,7 +967,7 @@ fun resolveActiveBuildType(
  * `PythonPluginSourceSetTest`.
  *
  * `localLibraryPath` is the explicit override and wins whenever it is declared, matching its
- * existing pre-graph behavior exactly (`usage-example` sets only `localLibraryPath`, no
+ * existing pre-graph behavior exactly (`sample` sets only `localLibraryPath`, no
  * `sourceSets` block, and keeps resolving the same way). `commonMain.srcDirs` -- `DSLBuild.kt`'s
  * `SourceSetConfig.srcDirs`, declared but read by nothing until now -- is the fallback: its first
  * entry, resolved against [projectDir]. A [SourceSetConfig] carries a list because a Kotlin source
@@ -1067,7 +1067,7 @@ fun collectIntegrationDependencies(sourceSets: List<SourceSetConfig>): List<Stri
  * else is refused as well rather than handed to `ResourceBundler` to refuse in its own words.
  *
  * `BuildType.compileLevel` defaults to `""` for both `DebugBuildType` and `ReleaseBuildType`, which
- * is why blank resolves to `"instant"` -- that keeps `usage-example` (which never sets
+ * is why blank resolves to `"instant"` -- that keeps `sample` (which never sets
  * `compileLevel`) building exactly as it did when this value was hard-coded.
  */
 fun resolveBuildLevel(compileLevel: String): String {

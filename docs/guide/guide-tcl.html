@@ -28,7 +28,11 @@
 
 <section>
 <h2><span data-lang="en">Install a package</span><span data-lang="ko">패키지 설치</span></h2>
-<pre><code class="language-shell">./gradlew :tcl:run --args=&quot;install pythonx-compose&quot;</code></pre>
+<pre><code class="language-shell">uv tool install toolchain-lite    # once 0.1.0 is on PyPI
+tcl install pythonx-compose
+tcl --version
+
+./gradlew :toolchain:runTcl --args=&quot;install pythonx-compose&quot;    # from a checkout</code></pre>
 <p data-lang="en"><code>tcl install &lt;package&gt;</code> looks for a <code>pyproject.toml</code> in the current directory and its parents. If there is none it runs <code>uv init --bare</code> first; then it adds the package with <code>uv add</code>, through the same pypackpack backend the Gradle plugin uses.</p><p data-lang="ko"><code>tcl install &lt;package&gt;</code> 는 현재 디렉터리와 그 상위에서 <code>pyproject.toml</code> 을 찾습니다. 없으면 먼저 <code>uv init --bare</code> 를 실행하고, Gradle 플러그인과 같은 pypackpack 백엔드로 <code>uv add</code> 를 해서 패키지를 추가합니다.</p>
 <div class="table-wrap"><table><thead><tr><th><span data-lang="en">Invocation</span><span data-lang="ko">호출</span></th><th><span data-lang="en">Result</span><span data-lang="ko">결과</span></th></tr></thead><tbody><tr><td><code>tcl install pkg</code></td><td><span data-lang="en">exit 0, <code>uv</code> output on stdout</span><span data-lang="ko">종료 코드 0, stdout 에 <code>uv</code> 출력</span></td></tr><tr><td><code>tcl</code></td><td><span data-lang="en">exit 1, <code>Usage: tcl install &lt;package&gt;</code></span><span data-lang="ko">종료 코드 1, <code>Usage: tcl install &lt;package&gt;</code></span></td></tr><tr><td><code>tcl install</code></td><td><span data-lang="en">exit 1, missing argument</span><span data-lang="ko">종료 코드 1, 인자 누락</span></td></tr><tr><td><code>tcl other</code></td><td><span data-lang="en">exit 1, unknown command</span><span data-lang="ko">종료 코드 1, 알 수 없는 명령</span></td></tr></tbody></table></div>
 <div class="note"><p data-lang="en"><code>install</code> is the only command, matching issue #1. <code>tcl</code> needs <code>uv</code> on <code>PATH</code> and network access to PyPI.</p><p data-lang="ko">명령은 이슈 #1 그대로 <code>install</code> 하나뿐입니다. <code>tcl</code> 은 <code>PATH</code> 의 <code>uv</code> 와 PyPI 네트워크 접근이 필요합니다.</p></div>
@@ -37,7 +41,7 @@
 </main>
 <footer class="site-footer"><div class="wrap">
 <nav aria-label="All pages" data-label-en="All pages" data-label-ko="모든 페이지"><a href="index.html"><span data-lang="en">Home</span><span data-lang="ko">홈</span></a><a href="getting-started.html"><span data-lang="en">Getting started</span><span data-lang="ko">시작하기</span></a><a href="concepts.html"><span data-lang="en">Concepts</span><span data-lang="ko">개념</span></a><a href="guide-variants.html"><span data-lang="en">Platforms & build types</span><span data-lang="ko">플랫폼과 빌드 타입</span></a><a href="guide-dependencies.html"><span data-lang="en">Source sets & dependencies</span><span data-lang="ko">소스셋과 의존성</span></a><a href="guide-staging.html"><span data-lang="en">Into the app</span><span data-lang="ko">앱 안으로</span></a><a href="guide-tcl.html"><span data-lang="en">tcl for Python users</span><span data-lang="ko">Python 사용자를 위한 tcl</span></a><a href="ecosystem.html"><span data-lang="en">Ecosystem</span><span data-lang="ko">생태계</span></a><a href="status.html"><span data-lang="en">Status & FAQ</span><span data-lang="ko">상태와 FAQ</span></a></nav>
-<p data-lang="en">Part of the <a href="ecosystem.html">thisisthepy</a> ecosystem. MIT licensed. Source: <a href="https://github.com/thisisthepy/toolchain">github.com/thisisthepy/toolchain</a>.</p><p data-lang="ko"><a href="ecosystem.html">thisisthepy</a> 생태계의 일부입니다. MIT 라이선스. 소스: <a href="https://github.com/thisisthepy/toolchain">github.com/thisisthepy/toolchain</a>.</p>
+<p data-lang="en">Part of the <a href="ecosystem.html">thisisthepy</a> ecosystem. Apache-2.0 licensed. Source: <a href="https://github.com/thisisthepy/toolchain">github.com/thisisthepy/toolchain</a>.</p><p data-lang="ko"><a href="ecosystem.html">thisisthepy</a> 생태계의 일부입니다. Apache-2.0 라이선스. 소스: <a href="https://github.com/thisisthepy/toolchain">github.com/thisisthepy/toolchain</a>.</p>
 </div></footer>
 </body>
 </html>

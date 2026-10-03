@@ -1,18 +1,18 @@
-English | [한국어](docs/locale/README_ko.md)
+English | [한국어](https://github.com/thisisthepy/toolchain/blob/develop/docs/locale/README_ko.md)
 
 <div align="center">
 
 # toolchain
 
-**Declare the Python half of your Kotlin Multiplatform app in Gradle — and ship it.**
+**Declare the Python half of your Kotlin Multiplatform app in Gradle, and ship it.**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-0f9d76.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-0f9d76.svg)](https://github.com/thisisthepy/toolchain/blob/develop/LICENSE)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7f52ff.svg?logo=kotlin&logoColor=white)
 ![Gradle](https://img.shields.io/badge/Gradle-8.9-02303a.svg?logo=gradle&logoColor=white)
 ![Targets](https://img.shields.io/badge/targets-Android%20%7C%20iOS%20%7C%20Desktop-0f9d76.svg)
 ![Status](https://img.shields.io/badge/status-alpha-orange.svg)
 
-[Guide](docs/guide/index.html) · [Getting started](docs/guide/getting-started.html) · [Status](docs/guide/status.html) · [Ecosystem](docs/guide/ecosystem.html)
+[Guide](https://thisisthepy.github.io/toolchain/index.html) · [Getting started](https://thisisthepy.github.io/toolchain/getting-started.html) · [Status](https://thisisthepy.github.io/toolchain/status.html) · [Ecosystem](https://thisisthepy.github.io/toolchain/ecosystem.html)
 
 </div>
 
@@ -21,8 +21,8 @@ English | [한국어](docs/locale/README_ko.md)
 ## 💡 Why
 
 A Kotlin Multiplatform app that embeds Python has two builds to keep in step: the Kotlin one Gradle
-already understands, and a Python one — interpreter version, packages, per-platform bundles,
-assets — that it does not. `toolchain` is the Gradle plugin that closes the gap. You write one
+already understands, and a Python one (interpreter version, packages, per-platform bundles,
+assets) that it does not. `toolchain` is the Gradle plugin that closes the gap. You write one
 `python { }` block next to your `kotlin { }` block; the build installs your Python dependencies,
 bundles your code per target, and puts the payload where each platform's packaging step picks it up.
 
@@ -33,18 +33,18 @@ owns the Gradle vocabulary in between.
 
 ## ✨ Features
 
-- 🧩 **One DSL block** — `compileSdk`, platforms, `buildTypes`, `sourceSets` and `packaging`, all
+- 🧩 **One DSL block**: `compileSdk`, platforms, `buildTypes`, `sourceSets` and `packaging`, all
   inside `python { }`.
-- 📦 **Real dependency installs** — `implementation("pkg")` and `integration("pkg")` become a real
+- 📦 **Real dependency installs**: `implementation("pkg")` and `integration("pkg")` become a real
   `uv add` through `pypackpack`.
-- 🚀 **A task per variant** — every platform variant × build type gets its own
+- 🚀 **A task per variant**: every platform variant × build type gets its own
   `buildPython<Variant><BuildType>` / `packagePython<Variant><BuildType>`, and an unsupported one
   fails alone.
-- 🔌 **Lands in the artifact** — the bundle is staged into the desktop jar's resources and the
+- 🔌 **Lands in the artifact**: the bundle is staged into the desktop jar's resources and the
   APK's `assets/`.
-- 🧪 **Loud, not silent** — an unknown version string, an unmapped platform or an unsupported
+- 🧪 **Loud, not silent**: an unknown version string, an unmapped platform or an unsupported
   compile level is rejected with a message saying why, instead of compiling and doing nothing.
-- 🐍 **`tcl` for Python users** — `tcl install <package>`, no Gradle project needed.
+- 🐍 **`tcl` for Python users**: `tcl install <package>`, no Gradle project needed.
 
 ## 🚀 Quick start
 
@@ -56,8 +56,14 @@ owns the Gradle vocabulary in between.
 ./gradlew :toolchain:publishToMavenLocal
 ```
 
+| Coordinates | What |
+|---|---|
+| plugin id `org.thisisthepy.python.multiplatform` | the Gradle plugin; apply it by id (unchanged) |
+| `org.thisisthepy.python.multiplatform:toolchain` | the plugin's implementation artifact |
+| PyPI `toolchain-lite` | `tcl`, the command line for Python users (`uv tool install toolchain-lite`) |
+
 Apply the plugin next to Kotlin Multiplatform and point it at a `pypackpack` package. This is
-`usage-example/build.gradle.kts`, trimmed:
+`sample/build.gradle.kts`, trimmed:
 
 ```kotlin
 plugins {
@@ -68,20 +74,19 @@ plugins {
 
 python {
     compileSdk = "3.13"
-    localLibraryPath = "python"      // a pypackpack package: pyproject.toml + src/main/<pkg>
+    localLibraryPath = "src/commonMain/python"  // a pypackpack package: pyproject.toml + src/main/<pkg>
     packaging {
-        fileName = "usage-example"
+        fileName = "sample"
     }
 }
 ```
 
 ```shell
-cd usage-example                              # its own build, on python-multiplatform's Kotlin
-./gradlew packagePython                       # install → bundle → zip
-./gradlew stagePythonBundle                   # stage python/ for android, ios and desktop
+./gradlew -p sample packagePython             # install → bundle → zip (sample/ is its own build)
+./gradlew -p sample stagePythonBundle         # stage python/ for android, ios and desktop
 ```
 
-> **iOS, interim:** usage-example's Xcode phase (`usage-example/src/iosMain/install-python-phase.sh`) needs
+> **iOS, interim:** sample's Xcode phase (`sample/src/iosMain/install-python-phase.sh`) needs
 > `PYTHON_MULTIPLATFORM_DIR` pointing at a python-multiplatform checkout for `Python.xcframework` and the
 > stdlib, until python-multiplatform#90 ships that wiring in its published plugin.
 
@@ -103,7 +108,7 @@ python {
 Python only? Skip Gradle builds entirely:
 
 ```shell
-./gradlew :tcl:run --args="install pythonx-compose"
+./gradlew :toolchain:runTcl --args="install pythonx-compose"
 ```
 
 ## 🧭 Architecture at a glance
@@ -123,8 +128,8 @@ flowchart LR
 
 ## 📊 Status
 
-An honest summary — the full contract, item by item, is on the guide's
-[Status page](docs/guide/status.html).
+An honest summary: the full contract, item by item, is on the guide's
+[Status page](https://thisisthepy.github.io/toolchain/status.html).
 
 | Area | State |
 |---|---|
@@ -134,25 +139,25 @@ An honest summary — the full contract, item by item, is on the guide's
 | `implementation` / `integration` dependencies via `uv`, per source set, installed for each variant's own triple into its bundle | ✅ implemented |
 | Bundling via `pypackpack` at the `instant` level | ✅ implemented |
 | `bytecode` compile level (`.pyc`; needs a `.venv` matching `compileSdk`) | ✅ implemented |
-| `native` / `mixed` compile levels | ⏳ planned — rejected loudly today |
-| Staging into the desktop jar and the APK | 🟡 partial — iOS is staged but not attached |
-| Hot reload | 🟡 partial — Android only, over `adb` |
-| Code push | 🟡 partial — validation only, no upload |
-| `buildFeatures { metaclass, compose }` | ✅ implemented — compose locations come from two Gradle properties |
+| `native` / `mixed` compile levels | ⏳ planned: rejected loudly today |
+| Staging into the desktop jar and the APK | 🟡 partial: iOS is staged but not attached |
+| Hot reload | 🟡 partial: Android only, over `adb` |
+| Code push | 🟡 partial: validation only, no upload |
+| `buildFeatures { metaclass, compose }` | ✅ implemented: compose locations come from two Gradle properties |
 | `embedLevel`, `projectFlavors`, `pip { }` | ⏳ planned |
 | `tcl install` | ✅ implemented |
 
 ## 📖 Documentation
 
-- **[Guide](docs/guide/index.html)** — concepts, task guides, status, in English and 한국어.
-- **[한국어 README](docs/locale/README_ko.md)**
+- **[Guide](https://thisisthepy.github.io/toolchain/index.html)**: concepts, task guides, status, in English and 한국어.
+- **[한국어 README](https://github.com/thisisthepy/toolchain/blob/develop/docs/locale/README_ko.md)**
 
 ## 🤝 Contributing
 
 Work here runs intent → spec → test → code: a behaviour change starts as a spec change, and its test
 is written and seen failing before the implementation. The guide's
-[contributing notes](docs/guide/status.html#contributing) say how to run the tests.
+[contributing notes](https://thisisthepy.github.io/toolchain/status.html#contributing) say how to run the tests.
 
 ## 📄 License
 
-[MIT](LICENSE) © 2024 thisisthepy
+[Apache-2.0](https://github.com/thisisthepy/toolchain/blob/develop/LICENSE) © 2024 thisisthepy

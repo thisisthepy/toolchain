@@ -1,13 +1,13 @@
 name: Test
 
-# Every pull request and every push to develop runs the plugin's and tcl's tests,
+# Every pull request and every push to develop runs the plugin's and the CLI's tests,
 # each in its own job (AGENTS.md section 8). Results are counted from the JUnit
 # XML, not from the log.
 #
 # Both modules depend on org.thisisthepy.python.multiplatform:packpack:0.1.0 from
 # mavenLocal, so each job first publishes it from pypackpack's develop branch.
-# usage-example is its own build (toolchain#22, python-multiplatform's Kotlin), run
-# by the consumer and desktop-e2e jobs with its own wrapper.
+# sample/ is its own build (toolchain#22, #62; python-multiplatform's Kotlin), run by the
+# consumer and e2e jobs with this repository's wrapper (../gradlew from sample/ = ./gradlew -p sample).
 on:
   pull_request:
   push:
@@ -22,13 +22,17 @@ concurrency:
 
 jobs:
   test:
-    name: ${{ matrix.module }}
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        module: [toolchain, tcl]
+        # Both live in :toolchain (#78): the plugin's `test` and tcl's `cliTest`, run as separate
+        # invocations (AGENTS.md section 8).
+        include:
+          - { name: toolchain, task: test }
+          - { name: tcl, task: cliTest }
     steps:
       - uses: actions/checkout@v4
 
@@ -55,8 +59,19 @@ jobs:
         working-directory: .ci/pypackpack
         run: ./gradlew :packpack:publishToMavenLocal --console=plain
 
-      - name: Test ${{ matrix.module }}
-        run: ./gradlew :${{ matrix.module }}:test --rerun --console=plain
+      - name: Test ${{ matrix.name }}
+        run: ./gradlew :toolchain:${{ matrix.task }} --rerun --console=plain
+
+      - name: The plugin's publication carries no tcl
+        if: matrix.task == 'test'
+        run: |
+          ./gradlew :toolchain:jar :toolchain:generatePomFileForPluginMavenPublication --console=plain
+          jar=$(ls toolchain/build/libs/toolchain-*.jar | grep -v -- '-sources\|-javadoc' | head -1)
+          pom=toolchain/build/publications/pluginMaven/pom-default.xml
+          ls -la "$jar" "$pom"
+          if unzip -l "$jar" | grep -n "multiplatform/tcl/\|toolchain_lite"; then echo "::error::tcl classes are in the plugin jar (#78)"; exit 1; fi
+          if grep -n "<artifactId>tcl\|toolchain-lite\|clikt" "$pom"; then echo "::error::the plugin POM depends on tcl (#78)"; exit 1; fi
+          echo "plugin jar and POM carry no tcl"
 
       - name: Count results
         if: always()
@@ -64,7 +79,7 @@ jobs:
           python3 - <<'PY'
           import glob, re
           t = f = e = s = 0
-          for x in glob.glob("${{ matrix.module }}/build/test-results/test/*.xml"):
+          for x in glob.glob("toolchain/build/test-results/${{ matrix.task }}/*.xml"):
               m = re.search(r'tests="(\d+)" skipped="(\d+)" failures="(\d+)" errors="(\d+)"', open(x).read(4000))
               t += int(m[1]); s += int(m[2]); f += int(m[3]); e += int(m[4])
           print(f"tests={t} skipped={s} failures={f} errors={e}")
@@ -74,12 +89,12 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.module }}-test-reports
-          path: ${{ matrix.module }}/build/reports/tests/test/
+          name: ${{ matrix.name }}-test-reports
+          path: toolchain/build/reports/tests/${{ matrix.task }}/
 
   # Unit tests run on Kotlin 2.x's stdlib, but a consumer runs the plugin on the kotlin-stdlib Gradle
   # embeds. pypackpack#31 broke every suspend call that way and no unit test could see it. This job is
-  # a real consumer: usage-example (its own build) with a real pip dependency installs, bundles, zips.
+  # a real consumer: sample (its own build) with a real pip dependency installs, bundles, zips.
   consumer:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -105,9 +120,9 @@ jobs:
           python-version: "3.14"
       - uses: astral-sh/setup-uv@v6
 
-      # usage-example applies three things from mavenLocal: packpack (through the plugin), the
+      # sample applies three things from mavenLocal: packpack (through the plugin), the
       # toolchain plugin, and python-multiplatform's library and bindings plugin. Versions pinned in
-      # usage-example/gradle/libs.versions.toml (library 3.14.7-alpha01, plugin 3.13.0 until
+      # sample/gradle/libs.versions.toml (library 3.14.7-alpha01, plugin 3.13.0 until
       # python-multiplatform#70).
       - name: Publish packpack, the toolchain plugin and python-multiplatform to mavenLocal
         run: |
@@ -122,9 +137,9 @@ jobs:
           (cd .ci/python-multiplatform && ./gradlew -p python-multiplatform-gradle-plugin publishToMavenLocal --console=plain)
 
       - name: Install, bundle and zip as a consumer
-        working-directory: usage-example
+        working-directory: sample
         run: |
-          ./gradlew installPythonDependencies buildPython packagePython \
+          ../gradlew installPythonDependencies buildPython packagePython \
             --console=plain > consumer.log 2>&1 || { cat consumer.log; exit 1; }
           cat consumer.log
           grep -q "iniconfig" consumer.log || { echo "the dependency was not installed"; exit 1; }
@@ -179,11 +194,11 @@ jobs:
           (cd .ci/python-multiplatform && ./gradlew -p python-multiplatform-gradle-plugin publishToMavenLocal --console=plain)
 
       - name: Package the desktop app
-        working-directory: usage-example
-        run: ./gradlew createDistributable --console=plain
+        working-directory: sample
+        run: ../gradlew createDistributable --console=plain
 
       - name: Run the packaged app's Python, headless and without PYTHONHOME
-        working-directory: usage-example
+        working-directory: sample
         run: |
           set -euo pipefail
           app=$(find build/compose/binaries/main/app -maxdepth 3 -type f -path '*/bin/*' | head -n 1)
@@ -238,8 +253,8 @@ jobs:
           (cd .ci/python-multiplatform && ./gradlew -p python-multiplatform-gradle-plugin publishToMavenLocal --console=plain)
 
       - name: Build the debug APK
-        working-directory: usage-example
-        run: ./gradlew assembleDebug --console=plain
+        working-directory: sample
+        run: ../gradlew assembleDebug --console=plain
 
       - name: Enable KVM for the emulator
         run: |
@@ -255,7 +270,7 @@ jobs:
           target: google_apis
           disable-animations: true
           script: |
-            set -eu; apk=$(find usage-example/build/outputs/apk/debug -name '*.apk' | head -n 1); [ -n "$apk" ]; adb install -r "$apk"; adb logcat -c; adb shell am start -W -n org.thisisthepy.python.multiplatform.toolchain.example/.MainActivity --ez python-smoke true; sleep 20; adb logcat -d -s PythonSmoke:V > smoke.log; cat smoke.log; grep -q 'PYTHON_SMOKE_OK ' smoke.log; grep 'PYTHON_SMOKE_OK ' smoke.log | grep -q '/data/'
+            set -eu; apk=$(find sample/build/outputs/apk/debug -name '*.apk' | head -n 1); [ -n "$apk" ]; adb install -r "$apk"; adb logcat -c; adb shell am start -W -n org.thisisthepy.python.multiplatform.toolchain.example/.MainActivity --ez python-smoke true; sleep 20; adb logcat -d -s PythonSmoke:V > smoke.log; cat smoke.log; grep -q 'PYTHON_SMOKE_OK ' smoke.log; grep 'PYTHON_SMOKE_OK ' smoke.log | grep -q '/data/'
 
   guide:
     runs-on: ubuntu-latest

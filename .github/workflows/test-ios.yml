@@ -1,0 +1,107 @@
+name: iOS e2e
+
+# toolchain#22, iOS: sample's app on an arm64 iOS simulator runs Python with the stdlib and
+# Python.framework python-multiplatform puts into the .app, plus this plugin's python/ payload.
+# macOS minutes cost ~10x, so this runs only for iOS wiring changes, on develop and by hand, and is
+# informational (not a required check). Lead decision, 2026-10-03.
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    paths:
+      - "sample/src/iosMain/**"
+      - "sample/build.gradle.kts"
+      - "sample/gradle/**"
+      - "toolchain/src/main/kotlin/org/thisisthepy/python/multiplatform/toolchain/bundle/**"
+      - ".github/workflows/test-ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-e2e:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: thisisthepy/pypackpack
+          ref: develop
+          path: .ci/pypackpack
+      - uses: actions/checkout@v4
+        with:
+          repository: thisisthepy/python-multiplatform
+          ref: develop
+          path: .ci/python-multiplatform
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('sample/gradle/libs.versions.toml') }}
+
+      - name: Publish packpack, the toolchain plugin and python-multiplatform (iOS simulator)
+        run: |
+          (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)
+          ./gradlew :toolchain:publishToMavenLocal --console=plain
+          (cd .ci/python-multiplatform && ./gradlew \
+            :python-multiplatform:publishIosSimulatorArm64PublicationToMavenLocal \
+            :python-multiplatform:publishKotlinMultiplatformPublicationToMavenLocal \
+            :python-multiplatform-ksp:publishToMavenLocal \
+            :python-multiplatform:downloadPython_ios --console=plain)
+          (cd .ci/python-multiplatform && ./gradlew -p python-multiplatform-gradle-plugin publishToMavenLocal --console=plain)
+
+      - name: Build the app for the arm64 simulator
+        run: |
+          set -euo pipefail
+          pmd="$GITHUB_WORKSPACE/.ci/python-multiplatform"
+          slice="$pmd/python-multiplatform/build/python-standalone/extracted/3.14.7/ios/Python.xcframework/ios-arm64_x86_64-simulator"
+          # TODO(python-multiplatform#90): PYTHON_MULTIPLATFORM_DIR and the -framework Python link flags
+          # are interim; the published plugin will stage Python.xcframework and its link options.
+          xcodebuild -project sample/src/iosMain/app.xcodeproj -target iosApp \
+            -sdk iphonesimulator -configuration Debug \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
+            SYMROOT="$GITHUB_WORKSPACE/build-ios" \
+            PYTHON_MULTIPLATFORM_DIR="$pmd" \
+            FRAMEWORK_SEARCH_PATHS="\$(inherited) $slice" \
+            OTHER_LDFLAGS="\$(inherited) -framework Python" \
+            build
+          ls -la "$GITHUB_WORKSPACE/build-ios/Debug-iphonesimulator/"
+
+      - name: Check the .app's contents
+        run: |
+          set -euo pipefail
+          app=$(find "$GITHUB_WORKSPACE/build-ios/Debug-iphonesimulator" -maxdepth 1 -name '*.app' | head -n 1)
+          [ -n "$app" ] || { echo "no .app built"; exit 1; }
+          echo "APP=$app" >> "$GITHUB_ENV"
+          test -f "$app/python/example_py/__init__.py" || { echo "no python/example_py in the app"; exit 1; }
+          test -f "$app/python/iniconfig/__init__.py" || { echo "no python/iniconfig in the app"; exit 1; }
+          test -d "$app/python-multiplatform-home/lib" || { echo "no python-multiplatform-home in the app"; exit 1; }
+          test -d "$app/Frameworks/Python.framework" || { echo "no Python.framework in the app"; exit 1; }
+
+      - name: Run the app's Python on a simulator
+        run: |
+          set -euo pipefail
+          udid=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone")))')
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl install "$udid" "$APP"
+          bundle=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
+          out=$(xcrun simctl launch --console-pty --terminate-running-process "$udid" "$bundle" --python-smoke 2>&1) || true
+          echo "$out"
+          printf '%s\n' "$out" | grep -q 'PYTHON_SMOKE_OK ' || { echo "no PYTHON_SMOKE_OK line"; exit 1; }
+          stdlib=$(printf '%s\n' "$out" | sed -n 's/.*PYTHON_SMOKE_STDLIB //p' | tr -d '\r')
+          case "$stdlib" in
+            *.app/python-multiplatform-home/*) echo "stdlib from the app: $stdlib" ;;
+            *) echo "stdlib not from the app: '$stdlib'"; exit 1 ;;
+          esac

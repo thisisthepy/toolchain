@@ -20,3 +20,6 @@ captures
 # Agent working areas (AGENTS.md §2)
 .worktrees/
 .tmp/
+
+# IDE (JetBrains Fleet)
+.fleet/
