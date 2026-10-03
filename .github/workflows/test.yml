@@ -22,13 +22,17 @@ concurrency:
 
 jobs:
   test:
-    name: ${{ matrix.module }}
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        module: [toolchain-gradle-plugin, tcl]
+        # Both live in :toolchain (#78): the plugin's `test` and tcl's `cliTest`, run as separate
+        # invocations (AGENTS.md section 8).
+        include:
+          - { name: toolchain, task: test }
+          - { name: tcl, task: cliTest }
     steps:
       - uses: actions/checkout@v4
 
@@ -55,8 +59,19 @@ jobs:
         working-directory: .ci/pypackpack
         run: ./gradlew :packpack:publishToMavenLocal --console=plain
 
-      - name: Test ${{ matrix.module }}
-        run: ./gradlew :${{ matrix.module }}:test --rerun --console=plain
+      - name: Test ${{ matrix.name }}
+        run: ./gradlew :toolchain:${{ matrix.task }} --rerun --console=plain
+
+      - name: The plugin's publication carries no tcl
+        if: matrix.task == 'test'
+        run: |
+          ./gradlew :toolchain:jar :toolchain:generatePomFileForPluginMavenPublication --console=plain
+          jar=$(ls toolchain/build/libs/toolchain-*.jar | grep -v -- '-sources\|-javadoc' | head -1)
+          pom=toolchain/build/publications/pluginMaven/pom-default.xml
+          ls -la "$jar" "$pom"
+          if unzip -l "$jar" | grep -n "multiplatform/tcl/\|toolchain_lite"; then echo "::error::tcl classes are in the plugin jar (#78)"; exit 1; fi
+          if grep -n "<artifactId>tcl\|toolchain-lite\|clikt" "$pom"; then echo "::error::the plugin POM depends on tcl (#78)"; exit 1; fi
+          echo "plugin jar and POM carry no tcl"
 
       - name: Count results
         if: always()
@@ -64,7 +79,7 @@ jobs:
           python3 - <<'PY'
           import glob, re
           t = f = e = s = 0
-          for x in glob.glob("${{ matrix.module }}/build/test-results/test/*.xml"):
+          for x in glob.glob("toolchain/build/test-results/${{ matrix.task }}/*.xml"):
               m = re.search(r'tests="(\d+)" skipped="(\d+)" failures="(\d+)" errors="(\d+)"', open(x).read(4000))
               t += int(m[1]); s += int(m[2]); f += int(m[3]); e += int(m[4])
           print(f"tests={t} skipped={s} failures={f} errors={e}")
@@ -74,8 +89,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.module }}-test-reports
-          path: ${{ matrix.module }}/build/reports/tests/test/
+          name: ${{ matrix.name }}-test-reports
+          path: toolchain/build/reports/tests/${{ matrix.task }}/
 
   # Unit tests run on Kotlin 2.x's stdlib, but a consumer runs the plugin on the kotlin-stdlib Gradle
   # embeds. pypackpack#31 broke every suspend call that way and no unit test could see it. This job is
@@ -112,7 +127,7 @@ jobs:
       - name: Publish packpack, the toolchain plugin and python-multiplatform to mavenLocal
         run: |
           (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)
-          ./gradlew :toolchain-gradle-plugin:publishToMavenLocal --console=plain
+          ./gradlew :toolchain:publishToMavenLocal --console=plain
           # Targeted, not publishAllToMavenLocal: that currently fails on the Android release Java
           # resources (generatePythonProperties has no declared consumer; reported to the lead).
           (cd .ci/python-multiplatform && ./gradlew \
@@ -169,7 +184,7 @@ jobs:
       - name: Publish packpack, the toolchain plugin and python-multiplatform to mavenLocal
         run: |
           (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)
-          ./gradlew :toolchain-gradle-plugin:publishToMavenLocal --console=plain
+          ./gradlew :toolchain:publishToMavenLocal --console=plain
           # Targeted, not publishAllToMavenLocal: that currently fails on the Android release Java
           # resources (generatePythonProperties has no declared consumer; reported to the lead).
           (cd .ci/python-multiplatform && ./gradlew \
@@ -230,7 +245,7 @@ jobs:
       - name: Publish packpack, the toolchain plugin and python-multiplatform (Android too)
         run: |
           (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)
-          ./gradlew :toolchain-gradle-plugin:publishToMavenLocal --console=plain
+          ./gradlew :toolchain:publishToMavenLocal --console=plain
           (cd .ci/python-multiplatform && ./gradlew \
             :python-multiplatform:publishAndroidReleasePublicationToMavenLocal \
             :python-multiplatform:publishKotlinMultiplatformPublicationToMavenLocal \

@@ -178,15 +178,14 @@ GitHub issues `thisisthepy/toolchain#2` (plugin checklist) and `#1` (`tcl`), it 
 
 | Module | What it is |
 |---|---|
-| `toolchain-gradle-plugin/` (`:toolchain-gradle-plugin`) | The Gradle plugin (id `org.thisisthepy.python.multiplatform`, class `PythonPlugin`). DSL in `dsl/`, tasks in `bundle/`, `dependency/`, `hotreload/`. |
-| `tcl/` (`:tcl`) | toolchain-lite, a CLI application (`tcl install <package>`). |
+| `toolchain/` (`:toolchain`) | The Gradle plugin (id `org.thisisthepy.python.multiplatform`, class `PythonPlugin`; source set `main`). DSL in `dsl/`, tasks in `bundle/`, `dependency/`, `hotreload/`. The same module holds toolchain-lite, the `tcl install <package>` CLI, in its own source sets (`src/cliMain`, `src/cliTest`; #78): they depend on packpack and coroutines only, never on `main`, and the plugin's publication carries none of them. |
 | `sample/` | **Its own Gradle build** (own settings and catalog; toolchain#22): a Compose Multiplatform app applying this plugin and python-multiplatform, on python-multiplatform's Kotlin/Compose/AGP. Run it with this repository's wrapper: `./gradlew -p sample …`. Its Python package is `sample/src/commonMain/python/`. |
 | `.github/scripts/release/` | The develop → release → main sync (rule 4). |
 
 `pyproject.toml` at the root is toolchain-lite, the PyPI distribution of `tcl` (#69): one platform
 wheel per OS carrying the native `tcl` binary, plus the launcher package `toolchain_lite`
-(`tcl/src/main/python/`). `.github/workflows/publish-pypi.yml` builds, smoke-tests and uploads the
-wheels; its version must equal `tcl/build.gradle.kts`'s, and `docs/pypi/README.md` is its PyPI page.
+(`toolchain/src/cliMain/python/`). `.github/workflows/publish-pypi.yml` builds, smoke-tests and uploads the
+wheels; its version must equal `toolchain/build.gradle.kts`'s `tclVersion`, and `docs/pypi/README.md` is its PyPI page.
 Keep the launcher a launcher: the work stays in Kotlin.
 
 Nothing else belongs at the root (#62): no IDE directories, no lock-file directories (the sample's wasm
@@ -235,7 +234,7 @@ history removing.
 - `-Xskip-metadata-version-check` exists because `packpack` is built with a newer Kotlin than this
   build. Bumping Kotlin build-wide is a decision for the maintainer, not a fix.
 - `sample` resolves the plugin **by Maven coordinate from `mavenLocal()`**, not through
-  `includeBuild`. After changing `:toolchain-gradle-plugin`, run `:toolchain-gradle-plugin:publishToMavenLocal` before building
+  `includeBuild`. After changing `:toolchain`, run `:toolchain:publishToMavenLocal` before building
   `sample`, or you are testing the previous plugin.
 - `sample` is a separate build on python-multiplatform's toolchain (Kotlin 2.4.20-Beta2, Compose
   1.11.1, AGP 8.10.1, Gradle 8.11.1), because a Kotlin 2.1 compiler cannot read python-multiplatform's
@@ -252,10 +251,10 @@ Prerequisites: `org.thisisthepy.python.multiplatform:packpack:0.1.0` in `~/.m2` 
 Run each module separately (rule 8), with output to a file under `.tmp/`:
 
 ```bash
-rm -rf toolchain-gradle-plugin/build/test-results
-./gradlew :toolchain-gradle-plugin:test --rerun --console=plain > .tmp/toolchain-test.log 2>&1; echo "EXIT=$?"
-rm -rf tcl/build/test-results
-./gradlew :tcl:test --rerun --console=plain > .tmp/tcl-test.log 2>&1; echo "EXIT=$?"
+rm -rf toolchain/build/test-results
+./gradlew :toolchain:test --rerun --console=plain > .tmp/toolchain-test.log 2>&1; echo "EXIT=$?"
+rm -rf toolchain/build/test-results/cliTest
+./gradlew :toolchain:cliTest --rerun --console=plain > .tmp/tcl-test.log 2>&1; echo "EXIT=$?"
 ```
 
 Count results from `<module>/build/test-results/test/*.xml`, not from the log.

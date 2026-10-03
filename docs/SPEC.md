@@ -12,11 +12,11 @@ Each item carries a status:
 - **planned**: the example build file or an issue asks for it; the code does not do it (or only
   declares a DSL property that nothing reads).
 
-Status was assigned on 2026-10-02 by reading `toolchain-gradle-plugin/src` (then `toolchain/src`), `tcl/src` and their tests. No status
+Status was assigned on 2026-10-02 by reading `toolchain/src`, `tcl/src` (now `toolchain/src/cliMain`, #78) and their tests. No status
 here comes from a roadmap, a commit message or an issue checkbox.
 
-Paths below are abbreviated: `plugin/` = `toolchain-gradle-plugin/src/main/kotlin/org/thisisthepy/python/multiplatform/toolchain/`,
-`ptest/` = the matching `toolchain-gradle-plugin/src/test/kotlin/...` directory, `tcl/` = `tcl/src/{main,test}/kotlin/org/thisisthepy/python/multiplatform/tcl/`.
+Paths below are abbreviated: `plugin/` = `toolchain/src/main/kotlin/org/thisisthepy/python/multiplatform/toolchain/`,
+`ptest/` = the matching `toolchain/src/test/kotlin/...` directory, `tcl/` = `toolchain/src/{cliMain,cliTest}/kotlin/org/thisisthepy/python/multiplatform/tcl/`.
 
 ---
 
@@ -24,9 +24,9 @@ Paths below are abbreviated: `plugin/` = `toolchain-gradle-plugin/src/main/kotli
 
 ### 1.1 Applying the plugin
 Plugin id `org.thisisthepy.python.multiplatform`, implementation class `PythonPlugin`
-(`toolchain-gradle-plugin/build.gradle.kts` `gradlePlugin { }`). Applying it creates the `python` extension
+(`toolchain/build.gradle.kts` `gradlePlugin { }`). Applying it creates the `python` extension
 (`PythonExtension`) and registers the tasks of §1.10–§1.15 and §1.18, all in group `python`.
-Consumers resolve it from `mavenLocal()` after `./gradlew :toolchain-gradle-plugin:publishToMavenLocal`; the plugin
+Consumers resolve it from `mavenLocal()` after `./gradlew :toolchain:publishToMavenLocal`; the plugin
 itself depends on `org.thisisthepy.python.multiplatform:packpack:0.1.0` from `mavenLocal()`.
 
 **Status: implemented**. `plugin/PythonPlugin.kt`; `ptest/PythonPluginApplyTest.kt` applies the
@@ -378,7 +378,7 @@ Hand-off to the platform's packaging step:
   real `com.android.application` (AGP 8.5.2, test classpath only) and checks the staged root is a
   `main` asset source directory. Not tested: the `preBuild` / `merge*Assets` → `stagePythonBundleAndroid`
   dependency (AGP creates those tasks only when the project is evaluated against an Android SDK,
-  which `:toolchain-gradle-plugin:test` does not require), and the built APK.
+  which `:toolchain:test` does not require), and the built APK.
 - iOS: toolchain stages and exposes the path; python-multiplatform (#59) owns the Xcode build phase
   that attaches it. `stagePythonBundleIosForXcode` (group `python`) depends on `stagePythonBundleIos`
   and prints exactly one line `PYTHON_PAYLOAD_DIR=<absolute path>` (stdout, visible under `--quiet`).
@@ -535,11 +535,11 @@ message on stderr for a missing argument, an unknown command or a failed install
 prints `Usage: tcl install <package>`.
 
 **Status: implemented**. `tcl/Cli.kt`, `tcl/Installer.kt`; `tcl/CliArgsTest.kt`,
-`tcl/InstallerTest.kt` (needs `uv` and network). Run with `./gradlew :tcl:run --args="install <pkg>"`.
+`tcl/InstallerTest.kt` (needs `uv` and network). Run with `./gradlew :toolchain:runTcl --args="install <pkg>"`.
 
 ### 2.2 `tcl --help` and `tcl --version`
 `--help` (or `-h`) prints the usage line on stdout and exits 0. `--version` prints `tcl <version>`
-and exits 0. The version is tcl's own (`tcl/build.gradle.kts`, 0.1.0), separate from the plugin's,
+and exits 0. The version is tcl's own (`tclVersion` in `toolchain/build.gradle.kts`, 0.1.0), separate from the plugin's,
 written by the build into `build-info.properties` and read by `BuildInfo`.
 
 **Status: implemented**. `tcl/Cli.kt`, `tcl/BuildInfo.kt`; `tcl/CliArgsTest.kt` (the version test
@@ -552,13 +552,13 @@ tcl --help
 ```
 - One wheel per platform, `py3-none-<platform>`: Linux x86_64 and aarch64 (manylinux), macOS arm64
   (11+), Windows x86_64. Each carries the GraalVM native image `tcl` as a script, plus the launcher
-  package `toolchain_lite` (`tcl/src/main/python/`) for `python -m toolchain_lite`.
+  package `toolchain_lite` (`toolchain/src/cliMain/python/`) for `python -m toolchain_lite`.
 - The platform tag is read from the binary (`.github/scripts/pypi/build_wheel.py`). No sdist:
   building needs a JDK and GraalVM.
 - `.github/workflows/publish-pypi.yml` runs on a published GitHub Release only and uploads through
   trusted publishing (environment `pypi`, which accepts only `toolchain-lite-v*` tags). Before uploading
   it requires the tag to be `toolchain-lite-v<version>` (bare `v*` tags are the Gradle plugin's, #71),
-  `pyproject.toml` and `tcl/build.gradle.kts` to carry that version, the version to be new on PyPI,
+  `pyproject.toml` and `toolchain/build.gradle.kts`'s `tclVersion` to carry that version, the version to be new on PyPI,
   and every wheel to pass `smoke_wheel.py` in a fresh venv (`tcl --help`, `tcl --version`,
   `python -m toolchain_lite --version`, and `tcl install six` writing a `pyproject.toml`).
   Pull requests that touch these files run everything but the upload.
