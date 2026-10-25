@@ -10,8 +10,8 @@ import java.util.Properties
 import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
-/** python-multiplatform's Maven group (thisisthepy/python-multiplatform#61). */
-const val PYTHON_MULTIPLATFORM_GROUP = "io.github.thisisthepy"
+/** python-multiplatform's Maven group (thisisthepy/python-multiplatform#95). */
+const val PYTHON_MULTIPLATFORM_GROUP = "org.thisisthepy"
 
 /** Every python-multiplatform runtime module's name starts with this. */
 const val PYTHON_MULTIPLATFORM_MODULE_PREFIX = "python-multiplatform"

@@ -22,8 +22,8 @@ import kotlin.test.assertTrue
 class TypedpythonGateArtifactTest {
     private val mavenLocalZip = File(
         System.getProperty("user.home"),
-        ".m2/repository/io/github/thisisthepy/python-multiplatform-ksp/3.13.0/" +
-            "python-multiplatform-ksp-3.13.0-typedpython-gate.zip",
+        ".m2/repository/org/thisisthepy/python-multiplatform-ksp/3.15.0-alpha01/" +
+            "python-multiplatform-ksp-3.15.0-alpha01-typedpython-gate.zip",
     )
 
     @BeforeTest
@@ -76,7 +76,7 @@ class TypedpythonGateArtifactTest {
     fun `a gate the repositories do not have is a skip with the warning, not a failure`() {
         val dir = project("gate-missing", "    mavenLocal()")
 
-        val result = runner(dir, "-P$TYPEDPYTHON_GATE_PROPERTY=io.github.thisisthepy:python-multiplatform-ksp:0.0.0-none").build()
+        val result = runner(dir, "-P$TYPEDPYTHON_GATE_PROPERTY=org.thisisthepy:python-multiplatform-ksp:0.0.0-none").build()
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":typedpythonCheck")?.outcome, result.output)
         assertTrue("typedpythonCheck SKIPPED" in result.output, result.output)
@@ -88,7 +88,7 @@ class TypedpythonGateArtifactTest {
     fun `a pyrefly that matches none of the manifest's hashes fails the task`() {
         val repo = File("build/typedpython-testkit/tampered-repo").absoluteFile
         repo.deleteRecursively()
-        val target = File(repo, "io/github/thisisthepy/python-multiplatform-ksp/9.9.9/python-multiplatform-ksp-9.9.9-typedpython-gate.zip")
+        val target = File(repo, "org/thisisthepy/python-multiplatform-ksp/9.9.9/python-multiplatform-ksp-9.9.9-typedpython-gate.zip")
         target.parentFile.mkdirs()
         ZipFile(mavenLocalZip).use { source ->
             ZipOutputStream(target.outputStream()).use { out ->
@@ -110,7 +110,7 @@ class TypedpythonGateArtifactTest {
             "    maven {\n        url = uri(\"${repo.toURI()}\")\n        metadataSources { artifact() }\n    }",
         )
 
-        val result = runner(dir, "-P$TYPEDPYTHON_GATE_PROPERTY=io.github.thisisthepy:python-multiplatform-ksp:9.9.9").buildAndFail()
+        val result = runner(dir, "-P$TYPEDPYTHON_GATE_PROPERTY=org.thisisthepy:python-multiplatform-ksp:9.9.9").buildAndFail()
 
         assertTrue("--require-hashes" in result.output, result.output)
         assertFalse(File(dir, "build/typedpython/report.txt").exists())
