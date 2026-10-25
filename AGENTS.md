@@ -20,7 +20,7 @@ files) lives **inside this repository's root directory.**
 | What | Where |
 |---|---|
 | Worktrees | `.worktrees/<name>` (git-ignored) |
-| Temporary files | `.tmp/` (git-ignored); delete when done |
+| Temporary files | the session scratchpad directory, or `.cache/` (git-ignored); delete when done |
 | CI-only scripts | `.github/scripts/` |
 
 Before writing a file, check that its absolute path starts with this repository's root. If it does
@@ -35,7 +35,7 @@ Writing to *another* repository is not an exception either. Do it only when told
 **Never add a new directory (or a new file) at the repository root on your own.** The root layout is
 the maintainer's: source modules, `docs/`, `gradle/`, `.github/` and the files that tools require
 there. Work belongs inside an existing module or directory: sources under `src/<sourceSet>/`,
-CI-only scripts under `.github/scripts/`, temporary files under the git-ignored `.tmp/`. If you think
+CI-only scripts under `.github/scripts/`, temporary files under the git-ignored `.cache/`. If you think
 a new top-level entry is needed, propose it (what, why, which alternatives inside existing
 directories you ruled out) and wait for approval. This was added after unapproved root folders
 (`ksp-fixtures/`, `tools/`, `kotlin-js-store/`, `iosApp/`, `usage-example/python`) had to be dismantled.
@@ -248,13 +248,13 @@ Prerequisites: `org.thisisthepy.python.multiplatform:packpack:0.1.0` in `~/.m2` 
 (`ANDROID_HOME`) and python-multiplatform in `~/.m2`: from a python-multiplatform checkout,
 `./gradlew publishAllToMavenLocal` (`org.thisisthepy:python-multiplatform*` and bindings plugin `3.15.0-alpha01`).
 
-Run each module separately (rule 8), with output to a file under `.tmp/`:
+Run each module separately (rule 8), with output to a file under `.cache/`:
 
 ```bash
 rm -rf toolchain/build/test-results
-./gradlew :toolchain:test --rerun --console=plain > .tmp/toolchain-test.log 2>&1; echo "EXIT=$?"
+./gradlew :toolchain:test --rerun --console=plain > .cache/toolchain-test.log 2>&1; echo "EXIT=$?"
 rm -rf toolchain/build/test-results/cliTest
-./gradlew :toolchain:cliTest --rerun --console=plain > .tmp/tcl-test.log 2>&1; echo "EXIT=$?"
+./gradlew :toolchain:cliTest --rerun --console=plain > .cache/tcl-test.log 2>&1; echo "EXIT=$?"
 ```
 
 Count results from `<module>/build/test-results/test/*.xml`, not from the log.
