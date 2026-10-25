@@ -111,8 +111,8 @@ Where `pythonMultiplatformVersion` comes from, in order (`selectPythonMultiplatf
    extension's `pythonVersion` (type `python.multiplatform.gradle.EmbeddedPythonVersion`,
    python-multiplatform#61), read reflectively by name; that project is made to evaluate first
    (`evaluationDependsOn`);
-3. otherwise, for a consumer of the **published** artifact (`io.github.thisisthepy:python-multiplatform*`,
-   python-multiplatform#61): the first resolvable runtime classpath that declares it is resolved, and
+3. otherwise, for a consumer of the **published** artifact (`org.thisisthepy:python-multiplatform*`,
+   python-multiplatform#61, #95): the first resolvable runtime classpath that declares it is resolved, and
    the version is the resolved variant's module-metadata attribute `org.thisisthepy.python.version`,
    else the jar resource `META-INF/python-multiplatform/python.properties` (`pythonVersion`; inside
    an AAR's `classes.jar`). This resolves a configuration, so it runs only when 1 and 2 give nothing,
@@ -540,7 +540,7 @@ bundled. Every `buildPython<Variant><BuildType>` and the single host `buildPytho
      --find-links <dir> typedpython==<v> pyrefly==<v>` (`@Input` versions, defaults `0.1.0` and `1.3.2`).
      `<dir>` must hold both wheels for the platform; nothing comes from an index.
   2. The **gate artifact**, by default: the `typedpython-gate` zip python-multiplatform-ksp publishes beside
-     its processor jar, `io.github.thisisthepy:python-multiplatform-ksp:3.13.0:typedpython-gate@zip`
+     its processor jar, `org.thisisthepy:python-multiplatform-ksp:3.15.0-alpha01:typedpython-gate@zip`
      (`DEFAULT_TYPEDPYTHON_GATE`, the one place its group and version are written; `-Ptypedpython.gate=
      <group:artifact:version>` overrides it). It is resolved leniently from the project's own
      repositories (python-multiplatform's `publishToMavenLocal` puts it in `mavenLocal()`), unzipped into
