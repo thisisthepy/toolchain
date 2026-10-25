@@ -9,6 +9,7 @@ android-targetSdk = "34"
 androidx-activityCompose = "1.12.4"
 androidx-lifecycle = "2.11.0-beta01"
 compose-multiplatform = "1.11.1-ext.2"
+compose-plugin = "1.11.1-ext.3"
 kotlin = "2.4.20-Beta2"
 kotlinx-coroutines = "1.10.1"
 # python-multiplatform's coordinates today (its #70 will unify the plugin's version with the library's).
@@ -26,8 +27,8 @@ python-multiplatform = { module = "io.github.thisisthepy:python-multiplatform", 
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-compose-multiplatform = { id = "org.thisisthepy.compose", version.ref = "compose-multiplatform" }
-kotlin-native-desktop = { id = "org.thisisthepy.kotlin.native.desktop", version.ref = "compose-multiplatform" }
+compose-multiplatform = { id = "org.thisisthepy.compose", version.ref = "compose-plugin" }
+kotlin-native-desktop = { id = "org.thisisthepy.kotlin.native.desktop", version.ref = "compose-plugin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 python-multiplatform-bindings = { id = "io.github.thisisthepy.python.multiplatform.bindings", version.ref = "python-multiplatform-plugin" }
