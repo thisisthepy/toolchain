@@ -41,11 +41,12 @@ class PublishedPythonVersionTest {
 
     @Test
     fun `only python-multiplatform runtime modules count`() {
-        assertTrue(isPythonMultiplatformModule("io.github.thisisthepy", "python-multiplatform"))
-        assertTrue(isPythonMultiplatformModule("io.github.thisisthepy", "python-multiplatform-desktop"))
-        assertTrue(isPythonMultiplatformModule("io.github.thisisthepy", "python-multiplatform-android"))
-        assertFalse(isPythonMultiplatformModule("io.github.thisisthepy", "python-multiplatform-gradle-plugin"))
-        assertFalse(isPythonMultiplatformModule("io.github.thisisthepy", "python-multiplatform-ksp"))
+        assertTrue(isPythonMultiplatformModule("org.thisisthepy", "python-multiplatform"))
+        assertTrue(isPythonMultiplatformModule("org.thisisthepy", "python-multiplatform-desktop"))
+        assertTrue(isPythonMultiplatformModule("org.thisisthepy", "python-multiplatform-android"))
+        assertFalse(isPythonMultiplatformModule("org.thisisthepy", "python-multiplatform-gradle-plugin"))
+        assertFalse(isPythonMultiplatformModule("org.thisisthepy", "python-multiplatform-ksp"))
+        assertFalse(isPythonMultiplatformModule("io.github.thisisthepy", "python-multiplatform"))
         assertFalse(isPythonMultiplatformModule("org.example", "python-multiplatform"))
     }
 

@@ -4,9 +4,11 @@ plugins {
     alias(libs.plugins.android.application).apply(false)
     alias(libs.plugins.android.library).apply(false)
     alias(libs.plugins.compose.multiplatform).apply(false)
+    alias(libs.plugins.kotlin.native.desktop).apply(false)
     alias(libs.plugins.compose.compiler).apply(false)
     alias(libs.plugins.kotlin.multiplatform).apply(false)
 }
 
-group = "org.thisisthepy.python.multiplatform"
-version = "1.0.0-alpha"
+// Both come from gradle.properties, the one place the coordinates are written (#99).
+group = providers.gradleProperty("mavenGroup").get()
+version = providers.gradleProperty("toolchainVersion").get()
