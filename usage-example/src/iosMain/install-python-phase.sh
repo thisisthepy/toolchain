@@ -39,7 +39,15 @@ if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
     codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --timestamp=none "$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/Python.framework"
 fi
 
-# 3. The stdlib prefix and the payload, by python-multiplatform's own phase script.
-# TODO(python-multiplatform#90): run from this project's Gradle root, not the checkout.
-cd "$PYTHON_MULTIPLATFORM_DIR"
-/bin/bash python-multiplatform-gradle-plugin/src/main/resources/xcode/install-python.sh
+# 3. The stdlib prefix and the payload, by python-multiplatform's phase script. Since
+#    python-multiplatform#320 that script only runs as the copy installPythonXcodeScript writes to
+#    build/python-multiplatform/xcode/, with this project's stageIosPythonHomeForXcode baked in.
+#    usage-example is its own build under the toolchain wrapper, so the script's Gradle calls go
+#    through a shim that adds -p usage-example.
+./gradlew -q -p usage-example installPythonXcodeScript
+: "${DERIVED_FILE_DIR:?Xcode must set DERIVED_FILE_DIR}"
+mkdir -p "$DERIVED_FILE_DIR"
+shim="$DERIVED_FILE_DIR/gradlew-usage-example"
+printf '#!/bin/sh\nexec "%s/gradlew" -p "%s/usage-example" "$@"\n' "$PWD" "$PWD" > "$shim"
+chmod +x "$shim"
+GRADLEW="$shim" /bin/bash usage-example/build/python-multiplatform/xcode/install-python.sh
