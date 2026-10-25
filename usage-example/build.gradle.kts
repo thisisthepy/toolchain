@@ -12,6 +12,7 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.kotlin.native.desktop).apply(false)
     alias(libs.plugins.compose.compiler)
     // usage-example is its own build (settings.gradle.kts here). The toolchain plugin is resolved by
     // coordinate from mavenLocal (`./gradlew :toolchain:publishToMavenLocal` in ../), as is
@@ -128,7 +129,14 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
-            implementation(compose.components.resources)
+            // `components-resources` stays at 1.11.1 under `org.jetbrains.compose.components`
+            // (not published under `org.thisisthepy.compose`), so exclude its transitive upstream
+            // `org.jetbrains.compose.{runtime,foundation,ui}` to avoid pulling a second Compose copy.
+            implementation(compose.components.resources) {
+                exclude(group = "org.jetbrains.compose.runtime")
+                exclude(group = "org.jetbrains.compose.foundation")
+                exclude(group = "org.jetbrains.compose.ui")
+            }
             implementation(compose.components.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.runtime.compose)
