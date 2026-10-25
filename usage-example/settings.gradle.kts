@@ -5,7 +5,12 @@
 // python-multiplatform library come from mavenLocal: publish them first (see AGENTS.md §16).
 pluginManagement {
     repositories {
-        mavenLocal()
+        mavenLocal {
+            content {
+                excludeGroupAndSubgroups("org.thisisthepy.compose")
+                excludeGroupAndSubgroups("org.thisisthepy.kotlin")
+            }
+        }
         google {
             mavenContent {
                 includeGroupAndSubgroups("androidx")
@@ -13,14 +18,27 @@ pluginManagement {
                 includeGroupAndSubgroups("com.google")
             }
         }
-        mavenCentral()
+        mavenCentral {
+            // `org.thisisthepy.compose.*:1.11.1-ext.2` POMs on Maven Central omit Gradle's
+            // `published-with-gradle-metadata` marker comment, so Gradle must be told to read `.module`
+            // metadata alongside `.pom` to resolve KMP platform variants and plugin runtime elements.
+            metadataSources {
+                gradleMetadata()
+                mavenPom()
+            }
+        }
         gradlePluginPortal()
     }
 }
 
 dependencyResolutionManagement {
     repositories {
-        mavenLocal()
+        mavenLocal {
+            content {
+                excludeGroupAndSubgroups("org.thisisthepy.compose")
+                excludeGroupAndSubgroups("org.thisisthepy.kotlin")
+            }
+        }
         google {
             mavenContent {
                 includeGroupAndSubgroups("androidx")
@@ -28,7 +46,15 @@ dependencyResolutionManagement {
                 includeGroupAndSubgroups("com.google")
             }
         }
-        mavenCentral()
+        mavenCentral {
+            // `org.thisisthepy.compose.*:1.11.1-ext.2` POMs on Maven Central omit Gradle's
+            // `published-with-gradle-metadata` marker comment, so Gradle must be told to read `.module`
+            // metadata alongside `.pom` to resolve KMP platform variants and plugin runtime elements.
+            metadataSources {
+                gradleMetadata()
+                mavenPom()
+            }
+        }
     }
 }
 
