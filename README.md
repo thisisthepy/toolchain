@@ -48,17 +48,29 @@ owns the Gradle vocabulary in between.
 
 ## 🚀 Quick start
 
-> `toolchain` is pre-release and published to Maven Local only. Publish `pypackpack`'s `packpack`
-> artifact and this plugin locally first, and have `uv` on your `PATH`.
+> `toolchain` is published to Maven Central (with its Gradle plugin marker, so add `mavenCentral()` to
+> `pluginManagement.repositories` in `settings.gradle.kts`). While pre-release, publish `pypackpack`'s
+> `packpack` artifact and this plugin to `mavenLocal()` first, and have `uv` on your `PATH`.
 
 ```shell
 # in pypackpack:  ./gradlew :packpack:publishToMavenLocal
 ./gradlew :toolchain:publishToMavenLocal
 ```
 
+```kotlin
+// settings.gradle.kts
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+        mavenLocal() // while using an unreleased local build
+    }
+}
+```
+
 | Coordinates | What |
 |---|---|
-| plugin id `org.thisisthepy.python.multiplatform` | the Gradle plugin; apply it by id (unchanged) |
+| plugin id `org.thisisthepy.python.multiplatform` | the Gradle plugin; resolved via its marker on Maven Central |
 | `org.thisisthepy.python.multiplatform:toolchain` | the plugin's implementation artifact |
 | PyPI `toolchain-lite` | `tcl`, the command line for Python users (`uv tool install toolchain-lite`) |
 
