@@ -47,17 +47,29 @@ Python 을 내장한 Kotlin Multiplatform 앱에는 맞물려 돌아가야 하�
 
 ## 🚀 빠른 시작
 
-> `toolchain` 은 정식 출시 전이며 Maven Local 에만 배포됩니다. `pypackpack` 의 `packpack`
-> 아티팩트와 이 플러그인을 먼저 로컬에 배포하고, `PATH` 에 `uv` 가 있어야 합니다.
+> `toolchain` 은 Gradle 플러그인 마커와 함께 Maven Central 에 배포됩니다(`settings.gradle.kts` 의
+> `pluginManagement.repositories` 에 `mavenCentral()` 을 두세요). 정식 출시 전에는 `pypackpack` 의
+> `packpack` 아티팩트와 이 플러그인을 먼저 `mavenLocal()` 에 배포하고, `PATH` 에 `uv` 가 있어야 합니다.
 
 ```shell
 # pypackpack 에서:  ./gradlew :packpack:publishToMavenLocal
 ./gradlew :toolchain:publishToMavenLocal
 ```
 
+```kotlin
+// settings.gradle.kts
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+        mavenLocal() // 출시 전 로컬 빌드를 쓸 때
+    }
+}
+```
+
 | 좌표 | 무엇 |
 |---|---|
-| 플러그인 id `org.thisisthepy.python.multiplatform` | Gradle 플러그인; id 로 적용 (변경 없음) |
+| 플러그인 id `org.thisisthepy.python.multiplatform` | Gradle 플러그인; Maven Central 의 마커로 해석 |
 | `org.thisisthepy.python.multiplatform:toolchain` | 플러그인 구현 아티팩트 |
 | PyPI `toolchain-lite` | Python 사용자를 위한 명령줄 도구 `tcl` (`uv tool install toolchain-lite`) |
 
