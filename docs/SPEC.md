@@ -26,9 +26,11 @@ Paths below are abbreviated: `plugin/` = `toolchain/src/main/kotlin/org/thisisth
 Plugin id `org.thisisthepy.python.multiplatform`, implementation class `PythonPlugin`
 (`toolchain/build.gradle.kts` `gradlePlugin { }`). Applying it creates the `python` extension
 (`PythonExtension`) and registers the tasks of §1.10–§1.15 and §1.18, all in group `python`.
-Consumers resolve it from `mavenLocal()` after `./gradlew :toolchain:publishToMavenLocal` until it is
-published (§1.19). The plugin depends on `org.thisisthepy.python.multiplatform:packpack:0.1.0`, which this
-build looks for on Maven Central first and then in `mavenLocal()`, limited to the `org.thisisthepy` groups.
+Consumers resolve the plugin and its marker (`org.thisisthepy.python.multiplatform:org.thisisthepy.python.multiplatform.gradle.plugin`)
+from Maven Central (`mavenCentral()` in `pluginManagement.repositories`), falling back to `mavenLocal()`
+after `./gradlew :toolchain:publishToMavenLocal` until a version is published (§1.19). The plugin depends on
+`org.thisisthepy.python.multiplatform:packpack:0.1.0`, which this build looks for on Maven Central first
+and then in `mavenLocal()`, limited to the `org.thisisthepy` groups.
 
 **Status: implemented**. `plugin/PythonPlugin.kt`; `ptest/PythonPluginApplyTest.kt` applies the
 plugin id to a ProjectBuilder project and checks the extension, every task name and type
@@ -595,35 +597,37 @@ with a warning.*
 **partial**.*
 
 ### 1.19 Publishing the plugin
-Source: toolchain#97. **Status: partial**: prepared and rehearsed; nothing is uploaded, which is the user's
+Source: toolchain#97, #116. **Status: partial**: prepared and rehearsed; nothing is uploaded, which is the user's
 decision.
 
-- The plugin is `org.thisisthepy.python.multiplatform:toolchain:<version>` with its marker
+- The plugin is distributed through Maven Central (not the Gradle Plugin Portal), matching `pypackpack` and
+  `python-multiplatform`. It publishes `org.thisisthepy.python.multiplatform:toolchain:<version>` with its marker
   `org.thisisthepy.python.multiplatform:org.thisisthepy.python.multiplatform.gradle.plugin:<version>`
-  (`java-gradle-plugin`). `com.gradle.plugin-publish` 1.3.1 adds the sources and javadoc jars and the
-  `publishPlugins` task for the Gradle Plugin Portal; `gradlePlugin { }` carries the website, VCS URL,
-  display name, description and tags. Both POMs carry url, Apache-2.0, developer and SCM (Maven Central's
-  requirements too).
+  (`java-gradle-plugin` + `maven-publish`). `java { withSourcesJar(); withJavadocJar() }` adds the sources and
+  javadoc jars Maven Central requires; `gradlePlugin { }` carries the plugin id, implementation class, display name
+  and description. Both POMs carry url, Apache-2.0, developer and SCM.
 - Signing uses an in-memory PGP key from `-PsigningInMemoryKey` / `-PsigningInMemoryKeyPassword` (or the
   `ORG_GRADLE_PROJECT_` environment variables); without one nothing is signed and nothing fails.
-- `./gradlew :toolchain:publishAllPublicationsToStagingRepository` writes `toolchain/build/staging-deploy`;
+- `./gradlew :toolchain:publishAllPublicationsToStagingRepository` writes `toolchain/build/staging-deploy`, and
+  `./gradlew :toolchain:centralBundle` zips it (excluding `**/maven-metadata*`) into
+  `toolchain/build/central/central-bundle-<version>.zip` for the Sonatype Central Portal;
   `.github/scripts/maven/check_central_bundle.py <dir> org.thisisthepy.python.multiplatform toolchain <version>
   --plugin-id org.thisisthepy.python.multiplatform` checks it. It failed on the earlier publication (24
   problems: no sources or javadoc jar, no POM metadata on either POM) and passes on a signed rehearsal
   (2026-10-17, a throwaway key; `gpg --verify` good).
 - The plugin's POM depends on packpack, so packpack must be on Maven Central before the plugin is
-  published (pypackpack's SPEC, *Distribution through Maven Central*): the Plugin Portal resolves a plugin's
-  dependencies from Maven Central.
+  published (pypackpack's SPEC, *Distribution through Maven Central*).
 - The coordinates are written once, in `gradle.properties` (#99): `mavenGroup`, `toolchainVersion`, `pluginId`,
   `packpackModule`, `packpackVersion`. A group unification (python-multiplatform #95) changes those lines only;
   the plugin's implementation class is its Kotlin package and does not follow the id.
-- Releasing (#99): a GitHub Release tagged `v<version>` runs `.github/workflows/publish-gradle-plugin.yml` in the
-  `gradle-plugin-portal` environment (to be restricted to `v*` tags). It checks that the tag names
-  `toolchainVersion`, that `packpackVersion` is on Maven Central and that the version is not on the Portal yet;
-  stops naming a missing `GRADLE_PUBLISH_KEY` or `GRADLE_PUBLISH_SECRET` (`SIGNING_KEY` and
-  `SIGNING_KEY_PASSWORD` are optional: the Portal does not require signatures); stages and checks the plugin and
-  its marker; and runs `publishPlugins`. A manual run does all of it except the upload, building packpack from
-  pypackpack's develop when Central does not have it yet.
+- Releasing (#99, #116): a GitHub Release tagged `v<version>` runs `.github/workflows/publish-gradle-plugin.yml` in the
+  `maven-central` environment (to be restricted to `v*` tags). It checks that the tag names
+  `toolchainVersion`, that `packpackVersion` is on Maven Central and that neither `toolchain` nor its
+  `.gradle.plugin` marker is on Maven Central yet; stops naming any missing `SIGNING_KEY`, `SIGNING_KEY_PASSWORD`,
+  `CENTRAL_PORTAL_USERNAME` or `CENTRAL_PORTAL_PASSWORD`; builds `centralBundle` and checks the plugin and its
+  marker; and uploads the bundle to the Sonatype Central Portal (`publishingType=USER_MANAGED`), where a person
+  presses Publish. A manual run does all of it except the upload, building packpack from pypackpack's develop
+  when Central does not have it yet.
 
 ## 2. `tcl`: toolchain-lite
 
