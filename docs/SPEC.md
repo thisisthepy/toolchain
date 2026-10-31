@@ -61,7 +61,7 @@ Test: `PythonSdkTest` (`a CPython before 3_15 is refused as a GIL build, inside 
 
 **Temporary exception: `3.15.0` without `t` (`PY3_15_0`).** It names python-multiplatform's GIL build,
 which is what python-multiplatform publishes today: its `gradle.properties` has `pythonFreeThreaded=false`,
-its artifact version (`3.15.0-alpha01`) carries no flavour, and Android and iOS have no 3.15t build yet
+its artifact version (`3.15.0-alpha02`) carries no flavour, and Android and iOS have no 3.15t build yet
 (python-multiplatform #163). Selecting `cp315t` wheels for that runtime would install wheels it cannot
 load. The exception is removed, and `3.15.0` then means `3.15.0t`, when python-multiplatform publishes
 free-threaded as its default with the flavour in its version or metadata, and #163 lands; #76 tracks it.
@@ -542,7 +542,7 @@ bundled. Every `buildPython<Variant><BuildType>` and the single host `buildPytho
      --find-links <dir> typedpython==<v> pyrefly==<v>` (`@Input` versions, defaults `0.1.0` and `1.3.2`).
      `<dir>` must hold both wheels for the platform; nothing comes from an index.
   2. The **gate artifact**, by default: the `typedpython-gate` zip python-multiplatform-ksp publishes beside
-     its processor jar, `org.thisisthepy:python-multiplatform-ksp:3.15.0-alpha01:typedpython-gate@zip`
+     its processor jar, `org.thisisthepy:python-multiplatform-ksp:3.15.0-alpha02:typedpython-gate@zip`
      (`DEFAULT_TYPEDPYTHON_GATE`, the one place its group and version are written; `-Ptypedpython.gate=
      <group:artifact:version>` overrides it). It is resolved leniently from the project's own
      repositories (python-multiplatform's `publishToMavenLocal` puts it in `mavenLocal()`), unzipped into
