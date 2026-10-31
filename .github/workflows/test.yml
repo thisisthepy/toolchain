@@ -123,7 +123,7 @@ jobs:
 
       # usage-example applies three things from mavenLocal: packpack (through the plugin), the
       # toolchain plugin, and python-multiplatform's library and bindings plugin. Versions pinned in
-      # usage-example/gradle/libs.versions.toml (3.15.0-alpha01).
+      # usage-example/gradle/libs.versions.toml (3.15.0-alpha02).
       - name: Publish packpack, the toolchain plugin and python-multiplatform to mavenLocal
         run: |
           (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)

@@ -41,9 +41,9 @@ class TypedpythonGateTest {
 
     @Test
     fun `the gate is the typedpython-gate zip of python-multiplatform-ksp, from one constant`() {
-        assertEquals("org.thisisthepy:python-multiplatform-ksp:3.15.0-alpha01", DEFAULT_TYPEDPYTHON_GATE)
+        assertEquals("org.thisisthepy:python-multiplatform-ksp:3.15.0-alpha02", DEFAULT_TYPEDPYTHON_GATE)
         assertEquals(
-            "org.thisisthepy:python-multiplatform-ksp:3.15.0-alpha01:typedpython-gate@zip",
+            "org.thisisthepy:python-multiplatform-ksp:3.15.0-alpha02:typedpython-gate@zip",
             typedpythonGateNotation(DEFAULT_TYPEDPYTHON_GATE),
         )
         assertEquals("typedpython.gate", TYPEDPYTHON_GATE_PROPERTY)
