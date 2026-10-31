@@ -10,7 +10,7 @@ import java.io.File
  * uses the same). This is the one place both are written; `-Ptypedpython.gate=<group:artifact:version>`
  * overrides it.
  */
-const val DEFAULT_TYPEDPYTHON_GATE = "org.thisisthepy:python-multiplatform-ksp:3.15.0-alpha01"
+const val DEFAULT_TYPEDPYTHON_GATE = "org.thisisthepy:python-multiplatform-ksp:3.15.0-alpha02"
 
 /** Project property overriding [DEFAULT_TYPEDPYTHON_GATE]. */
 const val TYPEDPYTHON_GATE_PROPERTY = "typedpython.gate"

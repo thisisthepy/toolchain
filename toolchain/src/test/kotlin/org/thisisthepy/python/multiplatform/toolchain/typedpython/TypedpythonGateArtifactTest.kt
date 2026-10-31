@@ -22,8 +22,8 @@ import kotlin.test.assertTrue
 class TypedpythonGateArtifactTest {
     private val mavenLocalZip = File(
         System.getProperty("user.home"),
-        ".m2/repository/org/thisisthepy/python-multiplatform-ksp/3.15.0-alpha01/" +
-            "python-multiplatform-ksp-3.15.0-alpha01-typedpython-gate.zip",
+        ".m2/repository/org/thisisthepy/python-multiplatform-ksp/3.15.0-alpha02/" +
+            "python-multiplatform-ksp-3.15.0-alpha02-typedpython-gate.zip",
     )
 
     @BeforeTest
