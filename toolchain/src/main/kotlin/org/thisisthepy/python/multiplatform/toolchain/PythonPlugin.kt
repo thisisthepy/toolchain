@@ -143,6 +143,7 @@ class PythonPlugin : Plugin<Project> {
         org.thisisthepy.python.multiplatform.toolchain.bundle.registerStagePythonBundleIosForXcode(
             project, stageTasks.getValue(PythonStagingPlatform.IOS),
         )
+        org.thisisthepy.python.multiplatform.toolchain.wasm.configureWasmCrossOriginIsolation(project)
 
         // python-multiplatform's `pythonVersion` is read from its extension in `afterEvaluate` below
         // (SPEC §1.12, #42), so a `:python-multiplatform` project of this build is evaluated first.

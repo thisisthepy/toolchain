@@ -527,11 +527,9 @@ bundled. Every `buildPython<Variant><BuildType>` and the single host `buildPytho
   `.py` re-runs the check, a change to any other file leaves it `UP-TO-DATE`. No package directory,
   or no `.py` file in it: the check is skipped with a log line and the gate is not installed.
 - **Gate.** The `typedpython` wheel and the `pyrefly` it pins, installed into `build/typedpython/venv`:
-  never the project's `.venv`. The venv is created through `pypackpack`'s UV backend
-  (`createVirtualEnvironment`, `--no-project --clear`, Python `>=3.13`; only when the venv does not exist).
-  The install calls `uv` directly: `pypackpack`'s backend has no operation that installs named
-  requirements into an existing venv (`installDependenciesToTarget` reads `-r pyproject.toml` into
-  `--target`; `addDependencies` edits `pyproject.toml`): a `pypackpack` change, not made here.
+  never the project's `.venv`. Both venv creation (`createVirtualEnvironment`, `--no-project --clear`,
+  Python `>=3.13`; only when the venv does not exist) and the requirement install into it
+  (`installRequirementsToVenv`, `pypackpack#40`) run through `pypackpack`'s UV backend.
 - **Index rule.** A package whose name is **unclaimed on PyPI** is never installed from an index:
   `typedpython` is unclaimed, so a bare-name install would run whatever someone publishes under that
   name on every consumer's build. A **hash-pinned** install from PyPI is allowed: `pyrefly` comes from
@@ -628,6 +626,47 @@ decision.
   marker; and uploads the bundle to the Sonatype Central Portal (`publishingType=USER_MANAGED`), where a person
   presses Publish. A manual run does all of it except the upload, building packpack from pypackpack's develop
   when Central does not have it yet.
+
+### 1.20 WASM cross-origin isolation
+Source: issue [`toolchain#81`](https://github.com/thisisthepy/toolchain/issues/81) (decision 2026-10-04).
+
+WASM runs free-threaded CPython 3.15t with pthreads. WebAssembly threads require `SharedArrayBuffer`,
+which browsers only expose to cross-origin isolated pages (`self.crossOriginIsolated === true`). Cross-origin
+isolation is on by default for every WASM app `toolchain` builds:
+
+- **Headers.**
+  - `Cross-Origin-Opener-Policy`: `same-origin`
+  - `Cross-Origin-Embedder-Policy`: `require-corp` by default (`-Ppython.wasm.coep=credentialless` selects
+    `credentialless`; any other value fails with a message naming both valid policies)
+  - `Cross-Origin-Resource-Policy`: `same-origin` on our own assets
+- **Dev server.** Before any `wasmJs*Webpack` task runs, the plugin writes
+  `webpack.config.d/python-cross-origin-isolation.js` into the root build's `build/wasm/packages/<module>/`
+  directory (`patchWasmWebpackConfigDirectory`), setting those three headers on `config.devServer.headers`
+  (without overwriting headers the consumer already set).
+- **Distribution assets (`stageWasmCrossOriginIsolation`).** Unpacks three files into
+  `build/pythonWasmIsolation/`, wired into `wasmJsProcessResources` so they ship at the root of the wasm
+  browser distribution:
+  1. `_headers`: Cloudflare Pages and Netlify header rules setting the three headers on `/*`.
+  2. `coi-serviceworker.js`: our own service-worker fallback for hosts that cannot set response headers
+     (such as GitHub Pages). When loaded in a window where `self.crossOriginIsolated` is false, it registers
+     itself as a service worker and reloads once on controller activation; the worker intercepts navigation
+     and same-origin requests and re-serves their responses with the three headers. Its header comment states
+     both costs: one reload on the first visit, and no effect when service workers are unavailable.
+  3. `coi-check.html`: a diagnostic test page that loads `coi-serviceworker.js` and checks
+     `self.crossOriginIsolated` and `typeof SharedArrayBuffer === "function"`, failing loudly in the page and
+     console with instructions if the page is not cross-origin isolated (matching `python-multiplatform`'s
+     startup check).
+- **Documented limits.** `docs/guide/guide-staging.html#wasm-isolation` documents the three browser limits of
+  cross-origin isolation (third-party iframes must opt in via CORP/COEP; popup OAuth and payment flows lose
+  `window.opener` under COOP `same-origin`; external resources without CORP or CORS are blocked under
+  `require-corp` while `credentialless` relaxes this for no-cookie requests) alongside plain-text header
+  snippets for nginx, Apache, Firebase Hosting and Vercel.
+
+**Status: implemented**. `plugin/wasm/WasmCrossOriginIsolation.kt`, wiring in `plugin/PythonPlugin.kt`;
+`ptest/wasm/WasmCrossOriginIsolationTest.kt` (unit + ProjectBuilder: default `require-corp` and
+`credentialless` policies, invalid COEP rejection, `_headers` content, service-worker script content and
+documented costs, `coi-check.html` diagnostic page, webpack `config.d` generation, `stageWasmCrossOriginIsolation`
+task output and `wasmJsProcessResources` wiring).
 
 ## 2. `tcl`: toolchain-lite
 
