@@ -543,8 +543,7 @@ bundled. Every `buildPython<Variant><BuildType>` and the single host `buildPytho
      its processor jar, `org.thisisthepy:python-multiplatform-ksp:3.15.0-alpha03:typedpython-gate@zip`
      (`DEFAULT_TYPEDPYTHON_GATE`, the one place its group and version are written; `-Ptypedpython.gate=
      <group:artifact:version>` overrides it). It is resolved leniently from the project's own
-     repositories (Maven Central has it from python-multiplatform 3.15.0-alpha03, its first Central release;
-     python-multiplatform's `publishToMavenLocal` puts it in `mavenLocal()`), unzipped into
+     repositories (python-multiplatform's `publishToMavenLocal` puts it in `mavenLocal()`), unzipped into
      `build/typedpython/gate`, and its manifest `typedpython-gate.json` (format 1) gives typedpython's
      wheel, version and SHA-256 and the SHA-256 of every pyrefly PyPI wheel. The install is `uv pip
      install --python <venv> --require-hashes -r build/typedpython/gate-requirements.txt`, where

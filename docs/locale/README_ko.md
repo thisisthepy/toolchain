@@ -47,9 +47,14 @@ Python 을 내장한 Kotlin Multiplatform 앱에는 맞물려 돌아가야 하�
 
 ## 🚀 빠른 시작
 
-> `toolchain` 은 `1.0.0-alpha` 부터 Gradle 플러그인 마커와 함께 Maven Central 에 배포됩니다.
-> `settings.gradle.kts` 의 `pluginManagement.repositories` 에 `mavenCentral()` 을 두세요. 플러그인이
-> `uv` 로 의존성을 설치하므로 `PATH` 에 `uv` 가 있어야 합니다.
+> `toolchain` 은 Gradle 플러그인 마커와 함께 Maven Central 에 배포됩니다(`settings.gradle.kts` 의
+> `pluginManagement.repositories` 에 `mavenCentral()` 을 두세요). 정식 출시 전에는 `pypackpack` 의
+> `packpack` 아티팩트와 이 플러그인을 먼저 `mavenLocal()` 에 배포하고, `PATH` 에 `uv` 가 있어야 합니다.
+
+```shell
+# pypackpack 에서:  ./gradlew :packpack:publishToMavenLocal
+./gradlew :toolchain:publishToMavenLocal
+```
 
 ```kotlin
 // settings.gradle.kts
@@ -57,6 +62,7 @@ pluginManagement {
     repositories {
         mavenCentral()
         gradlePluginPortal()
+        mavenLocal() // 출시 전 로컬 빌드를 쓸 때
     }
 }
 ```

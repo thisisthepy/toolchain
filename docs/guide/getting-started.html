@@ -28,15 +28,13 @@
 
 <section>
 <h2><span data-lang="en">1. Prerequisites</span><span data-lang="ko">1. 준비물</span></h2>
-<div class="table-wrap"><table><thead><tr><th><span data-lang="en">Need</span><span data-lang="ko">필요한 것</span></th><th><span data-lang="en">Why</span><span data-lang="ko">이유</span></th></tr></thead><tbody><tr><td><span data-lang="en">JDK 17+ and Gradle 8.9 (wrapper)</span><span data-lang="ko">JDK 17 이상, Gradle 8.9 (래퍼)</span></td><td><span data-lang="en">The build itself.</span><span data-lang="ko">빌드 자체.</span></td></tr><tr><td><span data-lang="en"><code>uv</code> on <code>PATH</code></span><span data-lang="ko"><code>PATH</code> 의 <code>uv</code></span></td><td><span data-lang="en">pypackpack installs dependencies with it.</span><span data-lang="ko">pypackpack 이 의존성 설치에 씁니다.</span></td></tr><tr><td><span data-lang="en"><code>mavenCentral()</code> in <code>pluginManagement.repositories</code></span><span data-lang="ko"><code>pluginManagement.repositories</code> 의 <code>mavenCentral()</code></span></td><td><span data-lang="en">The plugin, its marker and pypackpack (the library it depends on) come from Maven Central.</span><span data-lang="ko">플러그인, 마커, 그리고 플러그인이 의존하는 pypackpack 라이브러리를 Maven Central 에서 받습니다.</span></td></tr><tr><td><span data-lang="en">Android SDK (<code>ANDROID_HOME</code>)</span><span data-lang="ko">Android SDK (<code>ANDROID_HOME</code>)</span></td><td><span data-lang="en">Only if your module has an Android target.</span><span data-lang="ko">모듈에 Android 타깃이 있을 때만.</span></td></tr></tbody></table></div>
-<pre><code class="language-kotlin">// settings.gradle.kts
-pluginManagement {
-    repositories {
-        mavenCentral()
-        gradlePluginPortal()
-    }
-}</code></pre>
-<div class="note"><p data-lang="en">The plugin and its marker are published to Maven Central, starting with <code>1.0.0-alpha</code>. To try an unreleased change from a checkout, see <a href="status.html#contributing">Contributing</a>.</p><p data-lang="ko">플러그인과 마커는 <code>1.0.0-alpha</code> 부터 Maven Central 에 배포됩니다. 체크아웃의 출시 전 변경을 써 보려면 <a href="status.html#contributing">기여하기</a>를 보세요.</p></div>
+<div class="table-wrap"><table><thead><tr><th><span data-lang="en">Need</span><span data-lang="ko">필요한 것</span></th><th><span data-lang="en">Why</span><span data-lang="ko">이유</span></th></tr></thead><tbody><tr><td><span data-lang="en">JDK 17+ and Gradle 8.9 (wrapper)</span><span data-lang="ko">JDK 17 이상, Gradle 8.9 (래퍼)</span></td><td><span data-lang="en">The build itself.</span><span data-lang="ko">빌드 자체.</span></td></tr><tr><td><span data-lang="en"><code>uv</code> on <code>PATH</code></span><span data-lang="ko"><code>PATH</code> 의 <code>uv</code></span></td><td><span data-lang="en">pypackpack installs dependencies with it.</span><span data-lang="ko">pypackpack 이 의존성 설치에 씁니다.</span></td></tr><tr><td><span data-lang="en"><code>packpack:0.1.0</code> in Maven Local</span><span data-lang="ko">Maven Local 의 <code>packpack:0.1.0</code></span></td><td><span data-lang="en">The plugin depends on pypackpack as a library.</span><span data-lang="ko">플러그인이 pypackpack 을 라이브러리로 씁니다.</span></td></tr><tr><td><span data-lang="en">Android SDK (<code>ANDROID_HOME</code>)</span><span data-lang="ko">Android SDK (<code>ANDROID_HOME</code>)</span></td><td><span data-lang="en">Only if your module has an Android target.</span><span data-lang="ko">모듈에 Android 타깃이 있을 때만.</span></td></tr></tbody></table></div>
+<pre><code class="language-shell"># in a pypackpack checkout
+./gradlew :packpack:publishToMavenLocal
+
+# in this repository
+./gradlew :toolchain:publishToMavenLocal</code></pre>
+<div class="note"><p data-lang="en">The plugin and its marker are distributed through Maven Central (with <code>mavenLocal()</code> as the fallback while pre-release). Put <code>mavenCentral()</code> in <code>pluginManagement.repositories</code> in your <code>settings.gradle.kts</code> (plus <code>mavenLocal()</code> for local builds).</p><p data-lang="ko">플러그인과 마커는 Maven Central 로 배포됩니다(출시 전에는 <code>mavenLocal()</code> 로 대체). <code>settings.gradle.kts</code> 의 <code>pluginManagement.repositories</code> 에 <code>mavenCentral()</code> 을 두세요(로컬 빌드를 쓸 때는 <code>mavenLocal()</code> 도 함께).</p></div>
 </section>
 
 <section>

@@ -245,9 +245,9 @@ history removing.
 Prerequisites: `org.thisisthepy.python.multiplatform:packpack:0.1.0` in `~/.m2` (published from the
 `pypackpack` repository), `uv` on `PATH`, and network access: `InstallDependenciesTaskTest` and
 `InstallerTest` run a real `uv add` against PyPI. `usage-example` additionally needs an Android SDK
-(`ANDROID_HOME`) and python-multiplatform `3.15.0-alpha03` (library, KSP processor, bindings plugin), which it
-resolves from Maven Central only; only the toolchain plugin and packpack come from `~/.m2`. That version must
-equal `DEFAULT_TYPEDPYTHON_GATE` (`toolchain/.../typedpython/TypedpythonGate.kt`): bump both together.
+(`ANDROID_HOME`) and python-multiplatform in `~/.m2`: from a python-multiplatform checkout,
+`./gradlew publishAllToMavenLocal` (`org.thisisthepy:python-multiplatform*` and bindings plugin `3.15.0-alpha03`).
+That version must equal `DEFAULT_TYPEDPYTHON_GATE` (`toolchain/.../typedpython/TypedpythonGate.kt`): bump both together.
 
 Run each module separately (rule 8), with output to a file under `.cache/`:
 
