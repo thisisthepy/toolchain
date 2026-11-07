@@ -13,7 +13,7 @@ compose-plugin = "1.11.1-ext.3"
 kotlin = "2.4.20-Beta2"
 kotlinx-coroutines = "1.10.1"
 # python-multiplatform's library, KSP and bindings plugin share one version (its #70, #95, #318, #333).
-python-multiplatform = "3.15.0-alpha01"
+python-multiplatform = "3.15.0-alpha02"
 # The toolchain plugin, from ../toolchain via mavenLocal (`./gradlew :toolchain:publishToMavenLocal`).
 toolchain = "1.0.0-alpha"
 

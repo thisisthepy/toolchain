@@ -43,13 +43,9 @@ const val TYPEDPYTHON_NO_STUBS_NOTICE =
  * Statically checks the project's own Python with the TypedPython gate before it is bundled
  * (issue `toolchain#23`, `docs/SPEC.md` section 1.18).
  *
- * The gate's venv ([venvDir], `build/typedpython/venv`) is created through `pypackpack`'s UV backend
- * (`createVirtualEnvironment`). The install into it calls `uv` directly: the backend has no operation
- * that installs named requirements into an existing venv from a local wheel directory.
- * `installDependenciesToTarget` always reads `-r pyproject.toml` into a `--target` directory, and
- * `addDependencies` edits `pyproject.toml`. What is missing is a `pip install <requirements>
- * --python <venv> [--no-index] [--find-links <dir>]` operation; with it, [ensureTypedpythonGate] is
- * the one place to switch. That is a `pypackpack` change, proposed rather than made here.
+ * The gate's venv ([venvDir], `build/typedpython/venv`) is created and populated through
+ * `pypackpack`'s UV backend (`createVirtualEnvironment` and `installRequirementsToVenv`,
+ * `pypackpack#40`).
  */
 abstract class TypedpythonCheckTask : DefaultTask() {
     /** The `.py`/`.pyi` files of the package directory -- see [typedpythonSourceExcluded]. */
@@ -189,14 +185,22 @@ fun ensureTypedpythonGate(venv: File, version: String, pyreflyVersion: String, w
 
     val work = venv.parentFile.apply { mkdirs() }
     createTypedpythonVenv(venv, work)
-    runUv(typedpythonInstallCommand(venv, version, pyreflyVersion, wheelDir), work).let { (exit, output) ->
-        if (exit != 0) {
-            throw GradleException(
-                "Could not install typedpython==$version and pyrefly==$pyreflyVersion into $venv from $wheelDir " +
-                    "(uv exit $exit, --no-index):\n$output\n" +
-                    typedpythonWheelInstruction(version, pyreflyVersion),
-            )
-        }
+    val installed = runBlocking {
+        BackendInterface.create(BackendType.UV).installRequirementsToVenv(
+            venvPath = venv.path,
+            requirements = listOf("typedpython==$version", "pyrefly==$pyreflyVersion"),
+            noIndex = true,
+            findLinks = wheelDir,
+            workingDir = work,
+        )
+    }
+    installed.onFailure {
+        throw GradleException(
+            "Could not install typedpython==$version and pyrefly==$pyreflyVersion into $venv from $wheelDir " +
+                "(--no-index):\n${it.message}\n" +
+                typedpythonWheelInstruction(version, pyreflyVersion),
+            it,
+        )
     }
     if (!executable.isFile) throw GradleException("typedpython was installed into $venv but $executable does not exist")
     marker.writeText(request)
@@ -244,13 +248,20 @@ fun ensureTypedpythonGateFromArchive(venv: File, archive: File, gateDir: File): 
     val work = venv.parentFile.apply { mkdirs() }
     createTypedpythonVenv(venv, work)
     val requirements = File(work, "gate-requirements.txt").apply { writeText(requirementsText) }
-    runUv(typedpythonHashedInstallCommand(venv, requirements), work).let { (exit, output) ->
-        if (exit != 0) {
-            throw GradleException(
-                "Could not install typedpython ${manifest.typedpythonVersion} (from $archive) and pyrefly " +
-                    "${manifest.pyreflyVersion} (from PyPI) into $venv with --require-hashes (uv exit $exit):\n$output",
-            )
-        }
+    val installed = runBlocking {
+        BackendInterface.create(BackendType.UV).installRequirementsToVenv(
+            venvPath = venv.path,
+            requirements = emptyList(),
+            extraArgs = linkedMapOf("require-hashes" to "", "requirement" to requirements.path),
+            workingDir = work,
+        )
+    }
+    installed.onFailure {
+        throw GradleException(
+            "Could not install typedpython ${manifest.typedpythonVersion} (from $archive) and pyrefly " +
+                "${manifest.pyreflyVersion} (from PyPI) into $venv with --require-hashes:\n${it.message}",
+            it,
+        )
     }
     if (!executable.isFile) throw GradleException("typedpython was installed into $venv but $executable does not exist")
     marker.writeText(requirementsText)
@@ -306,16 +317,6 @@ fun typedpythonInstallCommand(venv: File, version: String, pyreflyVersion: Strin
         "uv", "pip", "install", "--python", venv.path, "--no-index", "--find-links", wheelDir,
         "typedpython==$version", "pyrefly==$pyreflyVersion",
     )
-
-private fun runUv(command: List<String>, workingDir: File): Pair<Int, String> {
-    val process = try {
-        ProcessBuilder(command).directory(workingDir).redirectErrorStream(true).start()
-    } catch (e: IOException) {
-        throw GradleException("typedpythonCheck needs uv on PATH to install the gate: ${e.message}", e)
-    }
-    val output = process.inputStream.bufferedReader().readText()
-    return process.waitFor() to output
-}
 
 private fun typedpythonExecutable(venv: File): File =
     if (System.getProperty("os.name").orEmpty().startsWith("Windows")) {
