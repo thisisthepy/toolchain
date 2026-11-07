@@ -85,7 +85,7 @@ plugins {
 }
 
 python {
-    compileSdk = "3.13"
+    compileSdk = "3.15.0"                       // the CPython python-multiplatform provides
     localLibraryPath = "src/commonMain/python"  // a pypackpack package: pyproject.toml + src/main/<pkg>
     packaging {
         fileName = "usage-example"
@@ -120,7 +120,8 @@ python {
 Python only? Skip Gradle builds entirely:
 
 ```shell
-./gradlew :toolchain:runTcl --args="install pythonx-compose"
+uv tool install toolchain-lite
+tcl install pythonx-compose
 ```
 
 ## 🧭 Architecture at a glance
