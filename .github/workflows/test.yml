@@ -121,9 +121,9 @@ jobs:
           python-version: "3.15"
       - uses: astral-sh/setup-uv@v6
 
-      # usage-example applies three things from mavenLocal: packpack (through the plugin), the
-      # toolchain plugin, and python-multiplatform's library and bindings plugin. Versions pinned in
-      # usage-example/gradle/libs.versions.toml (3.15.0-alpha02).
+      # usage-example takes packpack (through the plugin) and the toolchain plugin from mavenLocal, and
+      # python-multiplatform (3.15.0-alpha03, usage-example/gradle/libs.versions.toml) from Maven Central
+      # only (usage-example/settings.gradle.kts), so its local publish below is not what the build uses.
       - name: Publish packpack, the toolchain plugin and python-multiplatform to mavenLocal
         run: |
           (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)

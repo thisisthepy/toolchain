@@ -61,7 +61,7 @@ Test: `PythonSdkTest` (`a CPython before 3_15 is refused as a GIL build, inside 
 
 **Temporary exception: `3.15.0` without `t` (`PY3_15_0`).** It names python-multiplatform's GIL build,
 which is what python-multiplatform publishes today: its `gradle.properties` has `pythonFreeThreaded=false`,
-its artifact version (`3.15.0-alpha02`) carries no flavour, and Android and iOS have no 3.15t build yet
+its artifact version (`3.15.0-alpha03`) carries no flavour, and Android and iOS have no 3.15t build yet
 (python-multiplatform #163). Selecting `cp315t` wheels for that runtime would install wheels it cannot
 load. The exception is removed, and `3.15.0` then means `3.15.0t`, when python-multiplatform publishes
 free-threaded as its default with the flavour in its version or metadata, and #163 lands; #76 tracks it.
@@ -540,10 +540,11 @@ bundled. Every `buildPython<Variant><BuildType>` and the single host `buildPytho
      --find-links <dir> typedpython==<v> pyrefly==<v>` (`@Input` versions, defaults `0.1.0` and `1.3.2`).
      `<dir>` must hold both wheels for the platform; nothing comes from an index.
   2. The **gate artifact**, by default: the `typedpython-gate` zip python-multiplatform-ksp publishes beside
-     its processor jar, `org.thisisthepy:python-multiplatform-ksp:3.15.0-alpha02:typedpython-gate@zip`
+     its processor jar, `org.thisisthepy:python-multiplatform-ksp:3.15.0-alpha03:typedpython-gate@zip`
      (`DEFAULT_TYPEDPYTHON_GATE`, the one place its group and version are written; `-Ptypedpython.gate=
      <group:artifact:version>` overrides it). It is resolved leniently from the project's own
-     repositories (python-multiplatform's `publishToMavenLocal` puts it in `mavenLocal()`), unzipped into
+     repositories (Maven Central has it from python-multiplatform 3.15.0-alpha03, its first Central release;
+     python-multiplatform's `publishToMavenLocal` puts it in `mavenLocal()`), unzipped into
      `build/typedpython/gate`, and its manifest `typedpython-gate.json` (format 1) gives typedpython's
      wheel, version and SHA-256 and the SHA-256 of every pyrefly PyPI wheel. The install is `uv pip
      install --python <venv> --require-hashes -r build/typedpython/gate-requirements.txt`, where
@@ -671,9 +672,15 @@ task output and `wasmJsProcessResources` wiring).
 ## 2. `tcl`: toolchain-lite
 
 ### 2.1 `tcl install <package>`
-Finds the nearest `pyproject.toml` at or above the working directory. If there is none, runs
-`uv init --bare` there first (through `pypackpack`'s `BackendInterface.initProject`), then
-`addDependencies` for the package. Exit code 0 on success and the `uv` output on stdout; 1 with a
+Finds the project to add to without ever editing an unrelated ancestor (`findProjectRoot`): the working
+directory's own `pyproject.toml` always counts; inside a git repository (a directory holding a `.git`
+directory, or a `.git` file for a worktree) the search walks up to the nearest `pyproject.toml` and stops at
+the repository root; outside any repository no parent is searched. If no project qualifies, runs
+`uv init --bare --no-workspace` in the working directory first (through `pypackpack`'s
+`BackendInterface.initProject`; `--no-workspace` keeps `uv` from adding the new project as a member of an
+ancestor's workspace, which would write into that ancestor's `pyproject.toml`), then `addDependencies` for
+the package. Inside a repository whose root has a `pyproject.toml`, a subdirectory without one still adds
+to the root's project, as `uv add` itself would. Exit code 0 on success and the `uv` output on stdout; 1 with a
 message on stderr for a missing argument, an unknown command or a failed install. No arguments
 prints `Usage: tcl install <package>`.
 

@@ -1,10 +1,19 @@
 // usage-example/ is its own Gradle build (toolchain#22, #62), run with the repository's wrapper:
 // ./gradlew -p usage-example …. It consumes python-multiplatform, which is built with Kotlin 2.4, so it uses
 // that toolchain (gradle/libs.versions.toml here); the plugin in ../toolchain stays on
-// its own Kotlin for its consumers. Plugins and libraries resolve from Maven Central once published,
-// and fall back to mavenLocal while unreleased (publish them locally first; see AGENTS.md §16).
+// its own Kotlin for its consumers. python-multiplatform (library, KSP processor, bindings plugin and
+// the typedpython-gate zip) resolves from Maven Central only: 3.15.0-alpha03 is its first Central
+// release, so this build resolves once that upload is published. Only the toolchain plugin under test
+// and packpack (group org.thisisthepy.python.multiplatform) come from mavenLocal, checked first, so the
+// build exercises this checkout's plugin (`./gradlew :toolchain:publishToMavenLocal`; AGENTS.md §15-16)
+// even after a version of it is on Central.
 pluginManagement {
     repositories {
+        mavenLocal {
+            content {
+                includeGroup("org.thisisthepy.python.multiplatform")
+            }
+        }
         google {
             mavenContent {
                 includeGroupAndSubgroups("androidx")
@@ -22,13 +31,6 @@ pluginManagement {
             }
         }
         gradlePluginPortal()
-        mavenLocal {
-            content {
-                includeGroupAndSubgroups("org.thisisthepy")
-                excludeGroupAndSubgroups("org.thisisthepy.compose")
-                excludeGroupAndSubgroups("org.thisisthepy.kotlin")
-            }
-        }
     }
 }
 
@@ -48,13 +50,6 @@ dependencyResolutionManagement {
             metadataSources {
                 gradleMetadata()
                 mavenPom()
-            }
-        }
-        mavenLocal {
-            content {
-                includeGroupAndSubgroups("org.thisisthepy")
-                excludeGroupAndSubgroups("org.thisisthepy.compose")
-                excludeGroupAndSubgroups("org.thisisthepy.kotlin")
             }
         }
     }

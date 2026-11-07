@@ -48,14 +48,9 @@ owns the Gradle vocabulary in between.
 
 ## 🚀 Quick start
 
-> `toolchain` is published to Maven Central (with its Gradle plugin marker, so add `mavenCentral()` to
-> `pluginManagement.repositories` in `settings.gradle.kts`). While pre-release, publish `pypackpack`'s
-> `packpack` artifact and this plugin to `mavenLocal()` first, and have `uv` on your `PATH`.
-
-```shell
-# in pypackpack:  ./gradlew :packpack:publishToMavenLocal
-./gradlew :toolchain:publishToMavenLocal
-```
+> `toolchain` is published to Maven Central with its Gradle plugin marker, starting with `1.0.0-alpha`:
+> add `mavenCentral()` to `pluginManagement.repositories` in `settings.gradle.kts`. The plugin installs
+> dependencies with `uv`, so have `uv` on your `PATH`.
 
 ```kotlin
 // settings.gradle.kts
@@ -63,7 +58,6 @@ pluginManagement {
     repositories {
         mavenCentral()
         gradlePluginPortal()
-        mavenLocal() // while using an unreleased local build
     }
 }
 ```
@@ -85,7 +79,7 @@ plugins {
 }
 
 python {
-    compileSdk = "3.13"
+    compileSdk = "3.15.0"                       // the CPython python-multiplatform provides
     localLibraryPath = "src/commonMain/python"  // a pypackpack package: pyproject.toml + src/main/<pkg>
     packaging {
         fileName = "usage-example"
@@ -120,7 +114,8 @@ python {
 Python only? Skip Gradle builds entirely:
 
 ```shell
-./gradlew :toolchain:runTcl --args="install pythonx-compose"
+uv tool install toolchain-lite
+tcl install pythonx-compose
 ```
 
 ## 🧭 Architecture at a glance
