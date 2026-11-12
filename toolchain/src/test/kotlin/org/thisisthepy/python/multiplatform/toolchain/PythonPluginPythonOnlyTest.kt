@@ -22,7 +22,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Stands in for python-multiplatform's `EmbeddedPythonVersion` extension, read by name, reflectively. */
-open class FakeEmbeddedPythonVersion(var pythonVersion: String)
+open class FakeEmbeddedPythonVersion(var pythonVersion: String, var freeThreaded: Boolean = false)
 
 /**
  * docs/SPEC.md §1.2, §1.12, issue #42, on an applied plugin: toolchain ships only `python/`. At
@@ -158,10 +158,13 @@ class PythonPluginPythonOnlyTest {
         assertNull(unknown.build("buildPythonAndroidArm64Debug").pythonVersionRejection)
     }
 
-    private fun appBesidePythonMultiplatform(extensionVersion: String): Project {
+    private fun appBesidePythonMultiplatform(
+        extensionVersion: String,
+        freeThreaded: Boolean = false,
+    ): Project {
         val root = ProjectBuilder.builder().withProjectDir(createTempDirectory("python-only-root").toFile()).build()
         val pythonMultiplatform = ProjectBuilder.builder().withName("python-multiplatform").withParent(root).build()
-        pythonMultiplatform.extensions.add(PYTHON_MULTIPLATFORM_EXTENSION, FakeEmbeddedPythonVersion(extensionVersion))
+        pythonMultiplatform.extensions.add(PYTHON_MULTIPLATFORM_EXTENSION, FakeEmbeddedPythonVersion(extensionVersion, freeThreaded))
         return ProjectBuilder.builder().withName("app").withParent(root).build()
     }
 
@@ -173,6 +176,16 @@ class PythonPluginPythonOnlyTest {
         configured(app) { androidArm64() }
         val rejection = assertNotNull(app.build("buildPythonAndroidArm64Debug").pythonVersionRejection)
         assertTrue("3.15.0" in rejection && "3.13.0" in rejection, rejection)
+    }
+
+    @Test
+    fun `the extension's freeThreaded is read and a GIL compileSdk is refused against it`() {
+        val app = appBesidePythonMultiplatform("3.15.0", freeThreaded = true)
+        assertEquals("3.15.0t", readPythonMultiplatformExtensionVersion(app))
+
+        configured(app) { androidArm64() }
+        val rejection = assertNotNull(app.build("buildPythonAndroidArm64Debug").pythonVersionRejection)
+        assertTrue("3.15.0t" in rejection && "free-threaded" in rejection, rejection)
     }
 
     @Test

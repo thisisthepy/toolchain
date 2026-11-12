@@ -18,14 +18,30 @@ const val PYTHON_MULTIPLATFORM_PROJECT_PATH = ":python-multiplatform"
 /**
  * The extension python-multiplatform registers on its own project
  * (`python.multiplatform.gradle.EmbeddedPythonVersion`, thisisthepy/python-multiplatform#61): its
- * `pythonVersion` ("3.14.7") is the version it links and embeds; it also carries `freeThreaded` and
- * `majorMinor`, which toolchain does not read. Read reflectively: python-multiplatform is not on this
- * plugin's classpath.
+ * `pythonVersion` ("3.15.0") is the version it links and embeds, and `freeThreaded` its flavour (#76;
+ * `majorMinor` is not read). Read reflectively: python-multiplatform is not on this plugin's classpath.
  */
 const val PYTHON_MULTIPLATFORM_EXTENSION = "pythonMultiplatform"
 
 /** The getter of that extension's `pythonVersion` property. */
 private const val PYTHON_MULTIPLATFORM_VERSION_GETTER = "getPythonVersion"
+
+/** The getter of that extension's `freeThreaded` property (#76). */
+private const val PYTHON_MULTIPLATFORM_FREE_THREADED_GETTER = "getFreeThreaded"
+
+/**
+ * python-multiplatform's `pythonVersion` spelled with its flavour (#76): `3.15.0t` when
+ * [freeThreaded], else as given. `null` [freeThreaded] counts as the GIL build, as
+ * python-multiplatform's own `EmbeddedPythonVersion.parse` treats an absent `freeThreaded`. A
+ * [pythonVersion] already ending in `t` is kept. Blank or `null` gives `null`.
+ */
+fun embeddedPythonVersion(
+    pythonVersion: String?,
+    freeThreaded: Boolean?,
+): String? {
+    val version = pythonVersion?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return if (freeThreaded == true && !version.endsWith("t")) "${version}t" else version
+}
 
 /**
  * Which python-multiplatform `pythonVersion` toolchain checks `compileSdk` against: the explicit
@@ -55,23 +71,43 @@ fun selectPythonMultiplatformVersion(
  *
  * python-multiplatform links libpython into its binaries and ships the matching stdlib; toolchain
  * ships only `python/`, whose wheels `compileSdk` selected (`--python-version`). The two must name the
- * same `X.Y.Z`. A rejection is returned only when both are known and differ: either side `null` means
- * there is nothing to compare. A [pythonMultiplatformVersion] that is not a version is a rejection too,
- * since it cannot be compared.
+ * same `X.Y.Z` and the same flavour (#76): [pythonMultiplatformVersion] spells free-threaded with a
+ * trailing `t` ([embeddedPythonVersion]), and `cp315t` wheels do not load on a GIL build, nor `cp315`
+ * on a free-threaded one. A rejection is returned only when both are known and differ: either side
+ * `null` means there is nothing to compare. A [pythonMultiplatformVersion] that is not a version is a
+ * rejection too, since it cannot be compared.
  */
 fun checkPythonVersionAgreement(compileSdk: ResolvedPythonSdk?, pythonMultiplatformVersion: String?): String? {
     if (compileSdk == null || pythonMultiplatformVersion == null) return null
-    val expected = compileSdk.version.toReleaseString()
+    val expected = compileSdk.version.toWheelVersion()
     val embedded =
-        runCatching { PythonVersion.parse(pythonMultiplatformVersion).toReleaseString() }.getOrElse {
+        runCatching { PythonVersion.parse(pythonMultiplatformVersion).toWheelVersion() }.getOrElse {
             return "python-multiplatform's pythonVersion '$pythonMultiplatformVersion' is not an X.Y.Z " +
                 "version, so compileSdk $expected cannot be checked against it."
         }
     if (expected == embedded) return null
+    val expectedRelease = compileSdk.version.toReleaseString()
+    val embeddedRelease = PythonVersion.parse(pythonMultiplatformVersion).toReleaseString()
+    if (expectedRelease == embeddedRelease) {
+        return "compileSdk is $expected (${flavourOf(expected)}) but python-multiplatform's pythonVersion " +
+            "is $embedded (${flavourOf(embedded)}, its gradle.properties pythonFreeThreaded), and that is " +
+            "the interpreter embedded in the app. The wheels in python/ are selected for " +
+            "${wheelAbiOf(expected)} and would not load on a ${flavourOf(embedded)} interpreter " +
+            "(${wheelAbiOf(embedded)}). Set compileSdk to \"$embedded\", or use a python-multiplatform " +
+            "built ${flavourOf(expected)}."
+    }
     return "compileSdk is $expected but python-multiplatform's pythonVersion (its gradle.properties) is " +
         "$embedded, and that is the interpreter and stdlib embedded in the app. The wheels in python/ " +
         "are selected for $expected and would not load on $embedded. Set compileSdk to $embedded, or " +
         "use a python-multiplatform built for $expected."
+}
+
+private fun flavourOf(wheelVersion: String): String = if (wheelVersion.endsWith("t")) "free-threaded" else "GIL"
+
+/** `cp315t` for `3.15.0t`, `cp315` for `3.15.0`. */
+private fun wheelAbiOf(wheelVersion: String): String {
+    val parts = wheelVersion.removeSuffix("t").split('.')
+    return "cp${parts[0]}${parts[1]}" + if (wheelVersion.endsWith("t")) "t" else ""
 }
 
 /**
@@ -86,9 +122,9 @@ fun evaluatePythonMultiplatformFirst(project: Project) {
 
 /**
  * Reads `pythonMultiplatform.pythonVersion` from the `:python-multiplatform` project of this build,
- * reflectively (the extension's class is not on this classpath). `null` when there is no such project,
- * extension or property, or it has no value. A `Provider` is unwrapped; anything else is
- * `toString()`-ed.
+ * reflectively (the extension's class is not on this classpath), with `freeThreaded` as a trailing `t`
+ * ([embeddedPythonVersion]). `null` when there is no such project, extension or property, or it has
+ * no value. A `Provider` is unwrapped; anything else is `toString()`-ed.
  *
  * Only a project of the same build is reachable this way. A published consumer's version comes from
  * python-multiplatform's module metadata or jar resource ([readPublishedPythonMultiplatformVersion]);
@@ -101,9 +137,12 @@ fun readPythonMultiplatformExtensionVersion(project: Project): String? {
         extension.javaClass.methods.firstOrNull {
             it.name == PYTHON_MULTIPLATFORM_VERSION_GETTER && it.parameterCount == 0
         } ?: return null
-    return when (val value = getter.invoke(extension)) {
-        null -> null
-        is Provider<*> -> value.orNull?.toString()
-        else -> value.toString()
-    }
+    val version = unwrap(getter.invoke(extension))?.toString()
+    val freeThreaded =
+        extension.javaClass.methods
+            .firstOrNull { it.name == PYTHON_MULTIPLATFORM_FREE_THREADED_GETTER && it.parameterCount == 0 }
+            ?.let { unwrap(it.invoke(extension))?.toString()?.trim()?.toBooleanStrictOrNull() }
+    return embeddedPythonVersion(version, freeThreaded)
 }
+
+private fun unwrap(value: Any?): Any? = if (value is Provider<*>) value.orNull else value
