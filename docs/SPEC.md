@@ -68,10 +68,11 @@ free-threaded as its default with the flavour in its version or metadata, and #1
 
 A trailing `t` names the free-threaded build (`compileSdk = "3.15t"`, `"3.15.0t"`); it resolves
 against the same published list (python-multiplatform ships both builds of a pinned version) and
-there is no free-threaded constant. The `t` never reaches `toReleaseString()`, so the agreement
-check with python-multiplatform's `pythonVersion` (§1.12) compares `X.Y.Z` only. **Not checked:**
-whether python-multiplatform was built free-threaded (its `freeThreaded` flag is a separate
-attribute that toolchain does not read).
+there is no free-threaded constant. The `t` never reaches `toReleaseString()`; the agreement check
+with python-multiplatform's `pythonVersion` (§1.12) compares `X.Y.Z` **and the flavour** (#76): a
+`compileSdk` of `"3.15t"` against a python-multiplatform built with the GIL is refused, and so is
+`"3.15.0"` against a free-threaded one, because `cp315t` and `cp315` wheels do not load on the other
+build.
 
 The resolved version is also forwarded to every bundle as pypackpack's
 `BundleRequest.pythonVersion` (`3.15.0`, or `3.15.0t`; absent without `compileSdk`), which fixes the
@@ -101,23 +102,27 @@ embedLevel 2; `--python-version` still follows `compileSdk`).
 python-multiplatform embeds the interpreter named by its `pythonVersion` (its `gradle.properties`),
 so `compileSdk` must name the same `X.Y.Z`. `checkPythonVersionAgreement(compileSdk,
 pythonMultiplatformVersion)` returns a rejection naming both versions when both are known and their
-`X.Y.Z` differ (a `pythonMultiplatformVersion` that is not a version is rejected too); either side
-unknown means no check. The rejection fails only that variant's `buildPython…` (with a package to
+`X.Y.Z` or their flavour differ (a `pythonMultiplatformVersion` that is not a version is rejected
+too); either side unknown means no check. The flavour travels as the trailing `t` of the version
+string (`3.15.0t` is free-threaded, `toWheelVersion()`); python-multiplatform without a `freeThreaded`
+statement counts as the GIL build, as its own `EmbeddedPythonVersion.parse` does. The rejection fails only that variant's `buildPython…` (with a package to
 bundle), like the `compileSdk` rejection above. Levels 0 and 1 are not checked: python-multiplatform
 embeds nothing there.
 
 Where `pythonMultiplatformVersion` comes from, in order (`selectPythonMultiplatformVersion`):
 
 1. the `python.multiplatform.pythonVersion` project property (`gradle.properties` or `-P`), when set;
+   its spelling states the flavour (`3.15.0t` free-threaded, `3.15.0` the GIL build);
 2. otherwise, when this build has a `:python-multiplatform` project, its `pythonMultiplatform`
-   extension's `pythonVersion` (type `python.multiplatform.gradle.EmbeddedPythonVersion`,
+   extension's `pythonVersion` and `freeThreaded` (type `python.multiplatform.gradle.EmbeddedPythonVersion`,
    python-multiplatform#61), read reflectively by name; that project is made to evaluate first
    (`evaluationDependsOn`);
 3. otherwise, for a consumer of the **published** artifact (`org.thisisthepy:python-multiplatform*`,
    python-multiplatform#61, #95): the first resolvable runtime classpath that declares it is resolved, and
-   the version is the resolved variant's module-metadata attribute `org.thisisthepy.python.version`,
-   else the jar resource `META-INF/python-multiplatform/python.properties` (`pythonVersion`; inside
-   an AAR's `classes.jar`). This resolves a configuration, so it runs only when 1 and 2 give nothing,
+   the version is the resolved variant's module-metadata attributes `org.thisisthepy.python.version`
+   and `org.thisisthepy.python.free-threaded`, else the jar resource
+   `META-INF/python-multiplatform/python.properties` (`pythonVersion` and `freeThreaded`; inside an
+   AAR's `classes.jar`). This resolves a configuration, so it runs only when 1 and 2 give nothing,
    and only for a level-2 bundle (#49);
 4. otherwise unknown: no check, logged once.
 
@@ -127,8 +132,9 @@ Where `pythonMultiplatformVersion` comes from, in order (`selectPythonMultiplatf
 property winning), `ptest/PublishedPythonVersionTest.kt` (a local Maven repository with a fake
 python-multiplatform module: the metadata attribute, the jar-resource fallback, the AAR's
 `classes.jar`, and the published source consulted last). An included build's projects are not
-reachable through `rootProject.findProject`; such a build states the version with the property. The
-`freeThreaded` flag is not read.
+reachable through `rootProject.findProject`; such a build states the version with the property.
+The flavour (#76): `PythonVersionAgreementTest` (`the flavour has to agree too`),
+`PublishedPythonVersionTest` (`freeThreaded` from the resource, the attribute and the extension).
 → *Automatic build of a version python-multiplatform does not provide: **planned**, past 2026-11.*
 
 ### 1.3 `defaultConfig { versionCode, versionName, pip { … } }`
@@ -629,14 +635,19 @@ decision.
 - The coordinates are written once, in `gradle.properties` (#99): `mavenGroup`, `toolchainVersion`, `pluginId`,
   `packpackModule`, `packpackVersion`. A group unification (python-multiplatform #95) changes those lines only;
   the plugin's implementation class is its Kotlin package and does not follow the id.
-- Releasing (#99, #116): a GitHub Release tagged `v<version>` runs `.github/workflows/publish-gradle-plugin.yml` in the
-  `maven-central` environment (to be restricted to `v*` tags). It checks that the tag names
-  `toolchainVersion`, that `packpackVersion` is on Maven Central and that neither `toolchain` nor its
-  `.gradle.plugin` marker is on Maven Central yet; stops naming any missing `SIGNING_KEY`, `SIGNING_KEY_PASSWORD`,
-  `CENTRAL_PORTAL_USERNAME` or `CENTRAL_PORTAL_PASSWORD`; builds `centralBundle` and checks the plugin and its
-  marker; and uploads the bundle to the Sonatype Central Portal (`publishingType=USER_MANAGED`), where a person
-  presses Publish. A manual run does all of it except the upload, building packpack from pypackpack's develop
-  when Central does not have it yet.
+- Releasing (#99, #116, #129), python-multiplatform's mechanism (`maven-central.yml`, `central-upload.sh`) at
+  the leader's request (boost 2026-11-13): pushing the tag `v<version>` runs
+  `.github/workflows/publish-gradle-plugin.yml`. It checks that the tag names `toolchainVersion`, that
+  `packpackVersion` is on Maven Central and that neither `toolchain` nor its `.gradle.plugin` marker is on Maven
+  Central yet; builds `centralBundle` signed with `MAVEN_GPG_PRIVATE_KEY` / `MAVEN_GPG_PASSPHRASE`; checks the
+  plugin and its marker and `gpg --verify`s every file; and then, in the `maven-central` environment, uploads it
+  with `.github/scripts/release/central-upload.sh` (`CENTRAL_TOKEN_USERNAME`, `CENTRAL_TOKEN_PASSWORD`) as
+  `USER_MANAGED`. The script waits for the Portal's validation and fails on `FAILED`; a person then presses
+  Publish. A missing secret stops the job and names it.
+- Dry run: a pull request touching the publishing setup (the workflow, `.github/scripts/maven/`,
+  `central-upload.sh`, `toolchain/build.gradle.kts`, `gradle.properties`) and a manual run do all of it except
+  the upload, signing with a key made in the job and thrown away, and building packpack from pypackpack's
+  develop when Central does not have it yet. A manual run with `dry_run` off publishes the tag it names.
 
 ### 1.20 WASM cross-origin isolation
 Source: issue [`toolchain#81`](https://github.com/thisisthepy/toolchain/issues/81) (decision 2026-10-04).

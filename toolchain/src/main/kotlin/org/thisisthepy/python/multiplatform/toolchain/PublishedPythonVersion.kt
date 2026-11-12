@@ -19,6 +19,9 @@ const val PYTHON_MULTIPLATFORM_MODULE_PREFIX = "python-multiplatform"
 /** The module-metadata variant attribute carrying the embedded `pythonVersion` ("3.14.7"). */
 const val PYTHON_VERSION_ATTRIBUTE = "org.thisisthepy.python.version"
 
+/** The module-metadata variant attribute carrying python-multiplatform's flavour (`"true"` / `"false"`, #76). */
+const val PYTHON_FREE_THREADED_ATTRIBUTE = "org.thisisthepy.python.free-threaded"
+
 /** The resource in python-multiplatform's jar (and an AAR's classes.jar) with `pythonVersion=`. */
 const val PYTHON_PROPERTIES_RESOURCE = "META-INF/python-multiplatform/python.properties"
 
@@ -36,9 +39,17 @@ fun isPythonMultiplatformModule(
     name: String,
 ): Boolean = group == PYTHON_MULTIPLATFORM_GROUP && name.startsWith(PYTHON_MULTIPLATFORM_MODULE_PREFIX) && name !in NON_RUNTIME_MODULES
 
-/** `pythonVersion` from a `python.properties` text, or `null` when absent or blank. */
-fun parsePythonProperties(text: String): String? =
-    Properties().apply { load(StringReader(text)) }.getProperty("pythonVersion")?.trim()?.takeIf { it.isNotEmpty() }
+/**
+ * `pythonVersion` from a `python.properties` text, with `freeThreaded=true` as a trailing `t`
+ * ([embeddedPythonVersion], #76), or `null` when `pythonVersion` is absent or blank.
+ */
+fun parsePythonProperties(text: String): String? {
+    val properties = Properties().apply { load(StringReader(text)) }
+    return embeddedPythonVersion(
+        properties.getProperty("pythonVersion"),
+        properties.getProperty("freeThreaded")?.trim()?.toBooleanStrictOrNull(),
+    )
+}
 
 /**
  * `pythonVersion` from [archive]'s [PYTHON_PROPERTIES_RESOURCE]: directly in a jar, or inside an
@@ -91,9 +102,15 @@ private fun versionFromVariantAttribute(configuration: Configuration): String? =
             id != null && isPythonMultiplatformModule(id.group, id.name)
         }.flatMap { it.variants.asSequence() }
         .mapNotNull { variant ->
-            val key = variant.attributes.keySet().firstOrNull { it.name == PYTHON_VERSION_ATTRIBUTE } ?: return@mapNotNull null
-            @Suppress("UNCHECKED_CAST")
-            variant.attributes.getAttribute(key as Attribute<Any>)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            fun attribute(name: String): String? {
+                val key = variant.attributes.keySet().firstOrNull { it.name == name } ?: return null
+                @Suppress("UNCHECKED_CAST")
+                return variant.attributes.getAttribute(key as Attribute<Any>)?.toString()
+            }
+            embeddedPythonVersion(
+                attribute(PYTHON_VERSION_ATTRIBUTE),
+                attribute(PYTHON_FREE_THREADED_ATTRIBUTE)?.trim()?.toBooleanStrictOrNull(),
+            )
         }.firstOrNull()
 
 private fun versionFromArtifact(configuration: Configuration): String? =
