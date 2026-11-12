@@ -205,10 +205,19 @@ by `-Ppython.buildType=<name>` (default `debug`); an undeclared name fails loudl
 `ptest/PythonPluginBuildTypeTest.kt`. (The debug-only setter rejections have no test: partial.)
 
 ### 1.6 `compileLevel`
-Blank resolves to `instant`. `instant` and `bytecode` pass through to `BundleRequest.buildLevel`.
-`native` and `mixed` are rejected with a message naming the planned compile slot (pypackpack#19);
-any other value is rejected too. Rejection happens **inside the variant's task action**, so
-`--continue` still builds every other variant.
+Blank resolves to `instant`. `instant`, `bytecode` and `mixed` pass through to `BundleRequest.buildLevel`.
+`native` is rejected with a message naming what it still needs (TypedPython's generated C, and the
+CPython headers and extension suffix of each target); any other value is rejected too. Rejection happens
+**inside the variant's task action**, so `--continue` still builds every other variant.
+
+`mixed` (toolchain#128) is `pypackpack`'s `ResourceBundler` with the meaning the user decided
+(2026-10-03, recorded in pypackpack `docs/design/compile-slot.md` §4): the developer's modules ship as
+bytecode and TypedPython's C is not applied; the libraries' prebuilt extensions, which arrive through
+`libDirs` (each target's installed dependencies), ship as they are. For the developer's modules it
+behaves exactly as `bytecode` (`debug` keeps the `.py`, `release` ships only `.pyc`), so it gets the
+same `.venv` checks below, with messages naming `compileLevel 'mixed'`. toolchain fills no native field
+of `BundleRequest`. `BundleResult.warnings` (for example the free-threading findings on a library
+`.so`) are logged as Gradle warnings at every level.
 
 `bytecode` is `pypackpack`'s `ResourceBundler`: `compileall -b` writes `foo.pyc` beside `foo.py`;
 `debug` keeps the `.py`, `release` deletes it and ships only `.pyc`. It compiles with the interpreter
@@ -224,8 +233,10 @@ package directory. Before calling it, the task checks that interpreter
   CPython minor release, so a 3.13 `.pyc` does not load on a 3.14 runtime. The venv's version is read
   from its `pyvenv.cfg` (`version =` from the stdlib `venv`, `version_info =` from `uv`/`virtualenv`).
 
-**Status: implemented**. `resolveBuildLevel` in `plugin/PythonPlugin.kt`, `bytecodeInterpreterRejection`
-in `plugin/bundle/BuildPythonArtifactTask.kt`; `ptest/PythonPluginBuildLevelTest.kt`,
+**Status: implemented** (`instant`, `bytecode`, `mixed`). `resolveBuildLevel` and `compilesBytecode` in `plugin/PythonPlugin.kt`,
+`bytecodeInterpreterRejection` in `plugin/bundle/BuildPythonArtifactTask.kt`; `ptest/PythonPluginBuildLevelTest.kt`,
+`ptest/bundle/MixedLevelTest.kt` (real `compileall`: release has `.pyc` only for developer modules, a
+`libDirs` extension is carried unchanged, debug keeps `.py`; a venv-less `mixed` is refused naming it),
 `ptest/PythonPluginVariantGraphTest.kt`, `ptest/bundle/BytecodeLevelTest.kt` (real `compileall`:
 debug has `.py` + `.pyc`, release has `.pyc` only; needs `python3` on `PATH`),
 `ptest/dependency/lang/python/InstallDependenciesTaskTest.kt` (the `uv add` venv is found and read).
@@ -233,7 +244,7 @@ debug has `.py` + `.pyc`, release has `.pyc` only; needs `python3` on `PATH`),
 Known limits of the version check: it is skipped when `compileSdk` is not declared (nothing to
 compare with), and when the venv has no readable `pyvenv.cfg` (a hand-made `.venv/bin/python3`
 symlink, for example). In both cases the `.venv`'s own interpreter decides the magic number.
-→ *Building at `native` / `mixed`: **planned**, blocked on pypackpack#19.*
+→ *Building at `native`: **planned**. It needs TypedPython's generated C and each target's CPython headers and extension suffix, and no source for them is reachable from this build yet.*
 
 ### 1.7 `useCodeMinifier`, `excludeMetaclass`
 Both are declared on `ReleaseBuildType` (`debug`'s setters throw, §1.5).
