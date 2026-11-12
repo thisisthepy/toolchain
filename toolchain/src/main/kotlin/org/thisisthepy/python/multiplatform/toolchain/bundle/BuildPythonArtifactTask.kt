@@ -12,6 +12,7 @@ import org.thisisthepy.python.multiplatform.packpack.bundle.BundleResult
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleType
 import org.thisisthepy.python.multiplatform.packpack.utils.Platforms
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonVersion
+import org.thisisthepy.python.multiplatform.toolchain.compilesBytecode
 import org.thisisthepy.python.multiplatform.toolchain.resolveBuildLevel
 import java.io.File
 
@@ -186,8 +187,8 @@ open class BuildPythonArtifactTask : DefaultTask() {
         // Throws for anything `ppp`'s ResourceBundler cannot bundle. Deliberately here rather than
         // during configuration -- see `compileLevel`'s kdoc.
         val resolvedBuildLevel = resolveBuildLevel(compileLevel)
-        if (resolvedBuildLevel == "bytecode") {
-            bytecodeInterpreterRejection(source, compileSdkVersion?.let { PythonVersion.parse(it) })
+        if (compilesBytecode(resolvedBuildLevel)) {
+            bytecodeInterpreterRejection(source, compileSdkVersion?.let { PythonVersion.parse(it) }, resolvedBuildLevel)
                 ?.let { throw GradleException(it) }
         }
 
@@ -196,6 +197,7 @@ open class BuildPythonArtifactTask : DefaultTask() {
                 source, target, buildType, bundleDir, resolvedBuildLevel, minSdk, metaDirs, libDirs,
                 versionName, versionCode, compileSdkVersion?.let { wheelVersionOf(it) },
             )
+        result.warnings.forEach { logger.warn("packpack: $it") }
         logger.lifecycle(
             "Bundled ${result.fileCount} file(s) for Python '$pythonVersion' via packpack's " +
                 "'${result.bundleType.id}' bundler into ${result.outputDir} " +
@@ -341,10 +343,11 @@ fun venvPythonVersion(interpreter: File): Pair<Int, Int>? {
 fun bytecodeInterpreterRejection(
     packageDir: File,
     compileSdk: PythonVersion?,
+    buildLevel: String = "bytecode",
 ): String? {
     val interpreter =
         locateVenvInterpreter(packageDir)
-            ?: return "compileLevel 'bytecode' compiles with the Python in a '.venv' at or above " +
+            ?: return "compileLevel '$buildLevel' compiles with the Python in a '.venv' at or above " +
                 "${packageDir.canonicalPath}, and there is none (looked for .venv/" +
                 VENV_INTERPRETERS.joinToString(", .venv/") + "). Declare a Python dependency so " +
                 "installPythonDependencies (uv add) creates <package>/.venv, or run " +
@@ -353,7 +356,7 @@ fun bytecodeInterpreterRejection(
     if (compileSdk == null) return null
     val (major, minor) = venvPythonVersion(interpreter) ?: return null
     if (major == compileSdk.major && minor == compileSdk.minor) return null
-    return "compileLevel 'bytecode' would compile with Python $major.$minor (${interpreter.path}), " +
+    return "compileLevel '$buildLevel' would compile with Python $major.$minor (${interpreter.path}), " +
         "but compileSdk is $compileSdk: a .pyc only loads on the CPython minor version that wrote it. " +
         "Recreate that .venv with Python ${compileSdk.major}.${compileSdk.minor} " +
         "(`uv venv --python ${compileSdk.major}.${compileSdk.minor}`)."
