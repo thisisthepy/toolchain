@@ -1,77 +1,98 @@
 name: Publish the Gradle plugin
 
-# Publishing a GitHub Release tagged `v<version>` (the plugin's tags, #71) signs and stages the plugin
-# (`org.thisisthepy.python.multiplatform:toolchain`) and its marker
-# (`org.thisisthepy.python.multiplatform:org.thisisthepy.python.multiplatform.gradle.plugin`), checks
-# the bundle against Maven Central's requirements (.github/scripts/maven/check_central_bundle.py --plugin-id)
-# and uploads it to the Sonatype Central Portal as USER_MANAGED: the Portal validates it and waits, and
-# a person presses Publish there. A manual run does everything except the upload (#99, #116).
+# Publishes the plugin (org.thisisthepy.python.multiplatform:toolchain) and its marker
+# (org.thisisthepy.python.multiplatform:org.thisisthepy.python.multiplatform.gradle.plugin) to Maven
+# Central through the Sonatype Central Portal, the way python-multiplatform's maven-central.yml does
+# (toolchain#129; before it, #99 and #116):
 #
-# Nothing can upload until the user has created the `maven-central` environment (restricted to
-# `v*` tags) with its four secrets and published such a release; without a secret the job stops
-# and names it. The plugin depends on packpack, which consumers resolve from Maven Central, so the
-# job also stops while gradle.properties' packpackVersion is not on Central. docs/SPEC.md §1.19.
+# - A pushed tag `v<toolchainVersion>` builds, signs with the release key, checks the plugin and its
+#   marker (.github/scripts/maven/check_central_bundle.py --plugin-id, gpg --verify) and uploads the
+#   bundle as USER_MANAGED (.github/scripts/release/central-upload.sh): the Portal validates it and
+#   waits until a person presses Publish or Drop. The plugin's POM depends on packpack, so a release
+#   stops while packpackVersion is not on Maven Central (pypackpack publish-maven.yml goes first).
+# - A pull request that touches the publishing setup, and a manual run, are dry runs: packpack comes
+#   from pypackpack's develop when Central does not have it, the bundle is signed with a key made in
+#   the job and thrown away, checked, and kept as a workflow artifact. Nothing is uploaded. A manual
+#   run with dry_run off publishes the tag named in "tag".
+#
+# `toolchain-lite-v*` tags are tcl's (publish-pypi.yml) and do not match `v*`. Secrets read by a
+# real upload, in the environment `maven-central` (python-multiplatform's names, so the same values
+# serve every repository); nothing else reads them:
+#   MAVEN_GPG_PRIVATE_KEY   signing key, ASCII armoured (gpg --armor --export-secret-keys)
+#   MAVEN_GPG_PASSPHRASE    its passphrase
+#   CENTRAL_TOKEN_USERNAME  Central Portal user token, username half
+#   CENTRAL_TOKEN_PASSWORD  Central Portal user token, password half
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    paths:
+      - '.github/workflows/publish-gradle-plugin.yml'
+      - '.github/scripts/maven/**'
+      - '.github/scripts/release/central-upload.sh'
+      - 'toolchain/build.gradle.kts'
+      - 'gradle.properties'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and sign with a throwaway key, upload nothing'
+        type: boolean
+        default: true
+      tag:
+        description: 'Tag to publish when dry_run is off (v<version>); ignored for a dry run'
+        required: false
+        default: ''
+      publishing_type:
+        description: 'USER_MANAGED waits in the Central Portal for someone to press Publish; AUTOMATIC publishes once validated'
+        type: choice
+        options: [USER_MANAGED, AUTOMATIC]
+        default: USER_MANAGED
 
 permissions:
   contents: read
 
 concurrency:
-  group: publish-gradle-plugin-${{ github.ref }}
+  group: publish-gradle-plugin-${{ github.event.inputs.tag || github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publish:
-    # Releases tagged toolchain-lite-v* are tcl's (publish-pypi.yml).
-    if: github.event_name != 'release' || (startsWith(github.event.release.tag_name, 'v'))
+  bundle:
+    name: Build, sign and check the bundle
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: ${{ github.event_name == 'release' && 'maven-central' || '' }}
     env:
-      IS_RELEASE: ${{ github.event_name == 'release' }}
-      TAG: ${{ github.event.release.tag_name }}
+      DRY_RUN: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A release builds the tag's own gradle.properties, not the branch it was cut from.
+          ref: ${{ (github.event_name == 'push' || inputs.dry_run == false) && (github.event.inputs.tag || github.ref) || github.ref }}
 
       - name: The tag names the version; packpack is on Central; the version is new on Central
         run: |
+          set -euo pipefail
           prop() { sed -n "s/^$1=//p" gradle.properties; }
           group=$(prop mavenGroup); version=$(prop toolchainVersion); plugin=$(prop pluginId)
           packpack=$(prop packpackModule); packpack_version=$(prop packpackVersion)
-          echo "plugin $plugin $version ($group:toolchain)   packpack $packpack:$packpack_version   tag: ${TAG:-none (dry run)}"
+          echo "plugin $plugin $version ($group:toolchain)   packpack $packpack:$packpack_version   dry run: $DRY_RUN   tag: $TAG"
           { echo "GROUP=$group"; echo "VERSION=$version"; echo "PLUGIN_ID=$plugin"; } >> "$GITHUB_ENV"
-          fail() { if [ "$IS_RELEASE" = true ]; then echo "::error::$1"; exit 1; else echo "::warning::$1"; fi; }
-          if [ "$IS_RELEASE" = true ] && [ "$TAG" != "v$version" ]; then
-            echo "::error::release tag '$TAG' is not 'v$version' (gradle.properties toolchainVersion)"; exit 1
+          fail() { if [ "$DRY_RUN" != true ]; then echo "::error::$1"; exit 1; else echo "::warning::$1"; fi; }
+          if [ "$DRY_RUN" != true ] && [ "$TAG" != "v$version" ]; then
+            echo "::error::tag '$TAG' is not 'v$version' (gradle.properties toolchainVersion)"; exit 1
           fi
           pp_group=${packpack%%:*}; pp_artifact=${packpack##*:}
-          curl -fsS -o /dev/null "https://repo1.maven.org/maven2/${pp_group//.//}/$pp_artifact/$packpack_version/$pp_artifact-$packpack_version.pom" \
-            || fail "$packpack:$packpack_version is not on Maven Central; publish packpack first (pypackpack publish-maven.yml)"
+          if curl -fsS -o /dev/null "https://repo1.maven.org/maven2/${pp_group//.//}/$pp_artifact/$packpack_version/$pp_artifact-$packpack_version.pom"; then
+            echo "PACKPACK_ON_CENTRAL=true" >> "$GITHUB_ENV"
+          else
+            echo "PACKPACK_ON_CENTRAL=false" >> "$GITHUB_ENV"
+            fail "$packpack:$packpack_version is not on Maven Central; publish packpack first (pypackpack publish-maven.yml)"
+          fi
           pom="https://repo1.maven.org/maven2/${group//.//}/toolchain/$version/toolchain-$version.pom"
           if curl -fsS -o /dev/null "$pom"; then fail "$group:toolchain:$version is already on Maven Central; bump toolchainVersion"; fi
           marker="https://repo1.maven.org/maven2/${plugin//.//}/$plugin.gradle.plugin/$version/$plugin.gradle.plugin-$version.pom"
           if curl -fsS -o /dev/null "$marker"; then fail "$plugin $version marker is already on Maven Central; bump toolchainVersion"; fi
-
-      - name: The publishing secrets are there
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-          CENTRAL_PORTAL_USERNAME: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
-          CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
-        run: |
-          missing=""
-          for name in SIGNING_KEY SIGNING_KEY_PASSWORD CENTRAL_PORTAL_USERNAME CENTRAL_PORTAL_PASSWORD; do
-            [ -n "${!name}" ] || missing="$missing $name"
-          done
-          if [ -n "$missing" ]; then
-            if [ "$IS_RELEASE" = true ]; then
-              echo "::error::missing secrets in the maven-central environment:$missing (docs/SPEC.md §1.19)"; exit 1
-            fi
-            echo "::notice::dry run without:$missing; the bundle is built unsigned and nothing is uploaded"
-          fi
 
       - uses: actions/setup-java@v4
         with:
@@ -80,51 +101,92 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # The plugin builds against packpack; until packpack is on Maven Central (a dry run before its
-      # first release), build it from pypackpack's develop into mavenLocal, as test.yml does.
+      - name: The signing key (throwaway for a dry run, the release key otherwise)
+        env:
+          RELEASE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          RELEASE_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          # Outside the workspace: gpg-agent's socket path must stay short.
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -p "$GNUPGHOME"; chmod 700 "$GNUPGHOME"
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          if [ "$DRY_RUN" = true ]; then
+            gpg --batch --quiet --passphrase '' --quick-generate-key "toolchain dry run <dry-run@invalid>" rsa3072 sign 1d
+            key="$(gpg --batch --pinentry-mode loopback --passphrase '' --armor --export-secret-keys)"
+            passphrase=""
+          else
+            [ -n "$RELEASE_KEY" ] || { echo "::error::secret MAVEN_GPG_PRIVATE_KEY is missing in the maven-central environment"; exit 1; }
+            gpg --batch --quiet --import <<< "$RELEASE_KEY"
+            key="$RELEASE_KEY"; passphrase="$RELEASE_PASSPHRASE"
+          fi
+          # toolchain/build.gradle.kts signs when the Gradle property signingInMemoryKey is set.
+          {
+            echo "ORG_GRADLE_PROJECT_signingInMemoryKey<<SIGNING_KEY_EOF"; echo "$key"; echo "SIGNING_KEY_EOF"
+            echo "ORG_GRADLE_PROJECT_signingInMemoryKeyPassword=$passphrase"
+          } >> "$GITHUB_ENV"
+
+      # A dry run before packpack's first release builds it from pypackpack's develop into
+      # mavenLocal, as test.yml does. A release never gets here without packpack on Central.
       - name: packpack, from pypackpack, when Central does not have it yet
-        if: github.event_name != 'release'
+        if: env.PACKPACK_ON_CENTRAL != 'true'
         run: |
-          prop() { sed -n "s/^$1=//p" gradle.properties; }
-          packpack=$(prop packpackModule); v=$(prop packpackVersion); g=${packpack%%:*}; a=${packpack##*:}
-          if ! curl -fsS -o /dev/null "https://repo1.maven.org/maven2/${g//.//}/$a/$v/$a-$v.pom"; then
-            git clone --depth 1 --branch develop https://github.com/thisisthepy/pypackpack.git "$RUNNER_TEMP/pypackpack"
-            (cd "$RUNNER_TEMP/pypackpack" && ./gradlew :packpack:publishToMavenLocal --console=plain)
-          fi
+          git clone --depth 1 --branch develop https://github.com/thisisthepy/pypackpack.git "$RUNNER_TEMP/pypackpack"
+          (cd "$RUNNER_TEMP/pypackpack" && ./gradlew :packpack:publishToMavenLocal --console=plain)
 
-      - name: Stage the bundle (signed when a key is there)
-        env:
-          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
-          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
-        run: |
-          if [ -z "$ORG_GRADLE_PROJECT_signingInMemoryKey" ]; then
-            unset ORG_GRADLE_PROJECT_signingInMemoryKey ORG_GRADLE_PROJECT_signingInMemoryKeyPassword
-          fi
-          ./gradlew :toolchain:centralBundle --console=plain
+      - name: Stage and zip the bundle
+        run: ./gradlew :toolchain:centralBundle --console=plain
 
-      - name: The plugin and its marker meet Central's requirements
-        env:
-          SIGNED: ${{ secrets.SIGNING_KEY != '' }}
+      - name: The bundle meets Central's requirements, and every signature verifies
         run: |
-          flag=""
-          [ "$SIGNED" = true ] || flag="--unsigned"
-          python3 .github/scripts/maven/check_central_bundle.py toolchain/build/staging-deploy "$GROUP" toolchain "$VERSION" --plugin-id "$PLUGIN_ID" $flag
+          set -euo pipefail
+          python3 .github/scripts/maven/check_central_bundle.py toolchain/build/staging-deploy "$GROUP" toolchain "$VERSION" --plugin-id "$PLUGIN_ID"
+          fail=0; n=0
+          while IFS= read -r f; do
+            n=$((n + 1))
+            gpg --batch --quiet --verify "$f.asc" "$f" 2>/dev/null || { echo "::error::bad or missing signature on $f"; fail=1; }
+          done < <(find toolchain/build/staging-deploy -type f -not -name '*.asc' -not -name '*.md5' -not -name '*.sha1' \
+                     -not -name '*.sha256' -not -name '*.sha512' -not -name 'maven-metadata*')
+          echo "$n signed files verified"
+          [ "$fail" = 0 ] && [ "$n" -gt 0 ]
 
       - uses: actions/upload-artifact@v4
         with:
-          name: central-bundle-${{ env.VERSION }}
+          name: central-bundle
           path: toolchain/build/central/central-bundle-${{ env.VERSION }}.zip
+          retention-days: 14
 
-      - name: Upload to the Central Portal (USER_MANAGED; press Publish in the Portal)
-        if: github.event_name == 'release'
+  upload:
+    name: Upload to the Central Portal
+    needs: bundle
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Required reviewers can be set on this environment, so even a pushed tag waits for a person
+    # before anything reaches Central. A dry run never gets here.
+    environment: maven-central
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          sparse-checkout: |
+            .github/scripts/release
+            gradle.properties
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: central-bundle
+          path: ${{ runner.temp }}
+
+      - name: Upload (USER_MANAGED unless chosen otherwise; press Publish in the Portal)
         env:
-          CENTRAL_PORTAL_USERNAME: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
-          CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          TYPE: ${{ inputs.publishing_type || 'USER_MANAGED' }}
         run: |
-          token=$(printf '%s:%s' "$CENTRAL_PORTAL_USERNAME" "$CENTRAL_PORTAL_PASSWORD" | base64 -w0)
-          id=$(curl --fail-with-body -sS -X POST \
-            -H "Authorization: Bearer $token" \
-            -F "bundle=@toolchain/build/central/central-bundle-$VERSION.zip" \
-            "https://central.sonatype.com/api/v1/publisher/upload?publishingType=USER_MANAGED&name=toolchain-$VERSION")
-          echo "Central Portal deployment: $id"
-          echo "::notice::uploaded as deployment $id; check it at https://central.sonatype.com/publishing/deployments and press Publish"
+          set -euo pipefail
+          version=$(sed -n 's/^toolchainVersion=//p' gradle.properties)
+          .github/scripts/release/central-upload.sh "$RUNNER_TEMP/central-bundle-$version.zip" "toolchain $version" "$TYPE"
