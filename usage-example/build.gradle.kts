@@ -65,7 +65,10 @@ python {
     // desktop `run` a port and a token (toolchain#105); `-Ppython.buildType=release` would do neither.
     buildTypes {
         getByName("debug") { enableHotReload = true }
-        getByName("release") { }
+        // The example build file's release is `compileLevel = "native"` or "mixed"; native is refused until
+        // TypedPython's C reaches the bundle, so this takes mixed: example_py as .pyc only, the installed
+        // libraries as they are (#128, #132; CI's consumer job builds it with -Ppython.buildType=release).
+        getByName("release") { compileLevel = "mixed" }
     }
     // `compose = true` is left out: it needs `python.compose.pythonxCompose` and
     // `python.compose.kotlinModule`, and neither artifact is published yet (docs/SPEC.md §1.16).
