@@ -624,14 +624,19 @@ decision.
 - The coordinates are written once, in `gradle.properties` (#99): `mavenGroup`, `toolchainVersion`, `pluginId`,
   `packpackModule`, `packpackVersion`. A group unification (python-multiplatform #95) changes those lines only;
   the plugin's implementation class is its Kotlin package and does not follow the id.
-- Releasing (#99, #116): a GitHub Release tagged `v<version>` runs `.github/workflows/publish-gradle-plugin.yml` in the
-  `maven-central` environment (to be restricted to `v*` tags). It checks that the tag names
-  `toolchainVersion`, that `packpackVersion` is on Maven Central and that neither `toolchain` nor its
-  `.gradle.plugin` marker is on Maven Central yet; stops naming any missing `SIGNING_KEY`, `SIGNING_KEY_PASSWORD`,
-  `CENTRAL_PORTAL_USERNAME` or `CENTRAL_PORTAL_PASSWORD`; builds `centralBundle` and checks the plugin and its
-  marker; and uploads the bundle to the Sonatype Central Portal (`publishingType=USER_MANAGED`), where a person
-  presses Publish. A manual run does all of it except the upload, building packpack from pypackpack's develop
-  when Central does not have it yet.
+- Releasing (#99, #116, #129), python-multiplatform's mechanism (`maven-central.yml`, `central-upload.sh`) at
+  the leader's request (boost 2026-11-13): pushing the tag `v<version>` runs
+  `.github/workflows/publish-gradle-plugin.yml`. It checks that the tag names `toolchainVersion`, that
+  `packpackVersion` is on Maven Central and that neither `toolchain` nor its `.gradle.plugin` marker is on Maven
+  Central yet; builds `centralBundle` signed with `MAVEN_GPG_PRIVATE_KEY` / `MAVEN_GPG_PASSPHRASE`; checks the
+  plugin and its marker and `gpg --verify`s every file; and then, in the `maven-central` environment, uploads it
+  with `.github/scripts/release/central-upload.sh` (`CENTRAL_TOKEN_USERNAME`, `CENTRAL_TOKEN_PASSWORD`) as
+  `USER_MANAGED`. The script waits for the Portal's validation and fails on `FAILED`; a person then presses
+  Publish. A missing secret stops the job and names it.
+- Dry run: a pull request touching the publishing setup (the workflow, `.github/scripts/maven/`,
+  `central-upload.sh`, `toolchain/build.gradle.kts`, `gradle.properties`) and a manual run do all of it except
+  the upload, signing with a key made in the job and thrown away, and building packpack from pypackpack's
+  develop when Central does not have it yet. A manual run with `dry_run` off publishes the tag it names.
 
 ### 1.20 WASM cross-origin isolation
 Source: issue [`toolchain#81`](https://github.com/thisisthepy/toolchain/issues/81) (decision 2026-10-04).
