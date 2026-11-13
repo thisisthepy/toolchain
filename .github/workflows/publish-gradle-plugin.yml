@@ -15,13 +15,16 @@ name: Publish the Gradle plugin
 #   the job and thrown away, checked, and kept as a workflow artifact. Nothing is uploaded. A manual
 #   run with dry_run off publishes the tag named in "tag".
 #
-# `toolchain-lite-v*` tags are tcl's (publish-pypi.yml) and do not match `v*`. Secrets read by a
-# real upload, in the environment `maven-central` (python-multiplatform's names, so the same values
-# serve every repository); nothing else reads them:
+# `toolchain-lite-v*` tags are tcl's (publish-pypi.yml) and do not match `v*`. Repository secrets
+# (Settings > Secrets and variables > Actions) read by a real upload, with python-multiplatform's
+# names so the same values serve every repository; nothing else reads them:
 #   MAVEN_GPG_PRIVATE_KEY   signing key, ASCII armoured (gpg --armor --export-secret-keys)
 #   MAVEN_GPG_PASSPHRASE    its passphrase
 #   CENTRAL_TOKEN_USERNAME  Central Portal user token, username half
 #   CENTRAL_TOKEN_PASSWORD  Central Portal user token, password half
+# The signing job has no environment, so the two MAVEN_GPG_* secrets must be repository secrets, not
+# environment secrets. The upload runs in the environment "maven-central", where required reviewers
+# can be set.
 on:
   push:
     tags:
@@ -116,7 +119,7 @@ jobs:
             key="$(gpg --batch --pinentry-mode loopback --passphrase '' --armor --export-secret-keys)"
             passphrase=""
           else
-            [ -n "$RELEASE_KEY" ] || { echo "::error::secret MAVEN_GPG_PRIVATE_KEY is missing in the maven-central environment"; exit 1; }
+            [ -n "$RELEASE_KEY" ] || { echo "::error::repository secret MAVEN_GPG_PRIVATE_KEY is missing (Settings > Secrets and variables > Actions)"; exit 1; }
             gpg --batch --quiet --import <<< "$RELEASE_KEY"
             key="$RELEASE_KEY"; passphrase="$RELEASE_PASSPHRASE"
           fi

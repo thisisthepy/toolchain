@@ -643,7 +643,9 @@ decision.
   plugin and its marker and `gpg --verify`s every file; and then, in the `maven-central` environment, uploads it
   with `.github/scripts/release/central-upload.sh` (`CENTRAL_TOKEN_USERNAME`, `CENTRAL_TOKEN_PASSWORD`) as
   `USER_MANAGED`. The script waits for the Portal's validation and fails on `FAILED`; a person then presses
-  Publish. A missing secret stops the job and names it.
+  Publish. A missing secret stops the job and names it. The four secrets are repository secrets with
+  python-multiplatform's names (#138): the signing job has no environment, so an environment-only key would
+  not reach it.
 - Dry run: a pull request touching the publishing setup (the workflow, `.github/scripts/maven/`,
   `central-upload.sh`, `toolchain/build.gradle.kts`, `gradle.properties`) and a manual run do all of it except
   the upload, signing with a key made in the job and thrown away, and building packpack from pypackpack's
