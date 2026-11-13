@@ -311,7 +311,10 @@ share one install.
   written. `uv` runs in the task's temporary directory (`build/tmp/<task>/`), outside the install
   directory.
 - Options: the `pip { }` repositories (§1.3), `python-version` = `compileSdk`'s `major.minor` (wheel
-  tags carry the CPython ABI), and `only-binary = :all:` (no sdist is built with the host compiler).
+  tags carry the CPython ABI), for a free-threaded `compileSdk` also `python` = `X.Yt` (#134: uv
+  rejects `--python-version 3.15t`, and `3.15` alone selects `cp315` GIL wheels; a free-threaded
+  interpreter makes it select `cp315t`), and `only-binary = :all:` (no sdist is built with the host
+  compiler).
   A requirement with no wheel for the triple fails that set's task with uv's message, which names it.
 - Every bundle task of the set (§1.11) lists `build/pythonDeps/<set>/` **first** in `libDirs` and
   depends on the task, so a declared `libDirs(…)` tree overrides an installed file.
