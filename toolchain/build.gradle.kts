@@ -191,7 +191,7 @@ signing {
 // `tclVersion` is tcl's own version, which `tcl --version` prints and the toolchain-lite wheel
 // carries; publish-pypi.yml refuses to publish unless it equals pyproject.toml's. The plugin keeps
 // rootProject.version.
-val tclVersion = "0.1.0"
+val tclVersion = "0.1.1"
 val tclMainClass = "org.thisisthepy.python.multiplatform.tcl.CliKt"
 
 val cliMain: SourceSet by sourceSets.creating
