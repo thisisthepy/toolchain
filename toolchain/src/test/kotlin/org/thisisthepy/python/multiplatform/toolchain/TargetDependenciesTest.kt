@@ -164,6 +164,17 @@ class TargetDependenciesTest {
     }
 
     @Test
+    fun `a free-threaded compileSdk also names the free-threaded interpreter, so uv picks cp315t wheels`() {
+        // uv rejects `--python-version 3.15t`; with only `--python-version 3.15` it selects
+        // cp315-cp315 (GIL) wheels. `--python 3.15t` makes it tag the install cp315t (#134).
+        val args = targetInstallArguments(PythonVersion.parse("3.15t"), emptyMap())
+
+        assertEquals("3.15", args["python-version"])
+        assertEquals("3.15t", args["python"])
+        assertFalse("python" in targetInstallArguments(PythonVersion.parse("3.15.0"), emptyMap()))
+    }
+
+    @Test
     fun `without compileSdk there is no python-version, and only-binary is still set`() {
         val args = targetInstallArguments(null, emptyMap())
 
