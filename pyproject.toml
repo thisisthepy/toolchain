@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "toolchain-lite"
-version = "0.1.0"
+version = "0.1.1"
 description = "tcl: install Python packages for a Kotlin Multiplatform app's Python half, no Gradle project needed"
 readme = "docs/pypi/README.md"
 license = "Apache-2.0"

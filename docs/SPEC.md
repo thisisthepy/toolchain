@@ -745,6 +745,9 @@ tcl --help
 the four wheels above, each smoke-tested before upload. `uvx --from toolchain-lite==0.1.0 tcl --version`
 prints `tcl 0.1.0` (checked 2026-10-17, macOS arm64). Pull requests that touch these files still build
 and smoke-test the wheels without uploading.
+develop carries 0.1.1 (#136, owner approval 2026-11-13 through the leader): it ships the fix that
+stops tcl at the start directory instead of an ancestor `pyproject.toml`. 0.1.1 is not on PyPI until
+the `toolchain-lite-v0.1.1` release.
 
 ---
 
