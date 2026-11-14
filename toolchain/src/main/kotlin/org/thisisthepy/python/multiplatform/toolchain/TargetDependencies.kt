@@ -99,12 +99,16 @@ fun unreachableSourceSetRejection(
  * - `python-version` = [compileSdk]'s `major.minor`: wheel tags carry the CPython ABI (`cp314`), and
  *   uv must pick the runtime's, not whatever Python the build machine has. Omitted when `compileSdk`
  *   is undeclared; uv then uses the interpreter it finds, which SPEC §1.10 records as a limit.
+ * - `python` = `X.Yt` when [compileSdk] is free-threaded (#134): uv rejects `--python-version 3.15t`,
+ *   and `--python-version 3.15` alone selects `cp315-cp315` (GIL) wheels, which do not load on a
+ *   free-threaded interpreter. Naming a free-threaded interpreter makes uv tag the install `cp315t`
+ *   (uv 0.12.3: `cp315-cp315t-manylinux_2_17_x86_64` for markupsafe); uv finds or fetches it.
  * - `only-binary` = `:all:`: without it uv builds an sdist with the *host* compiler and only then
  *   rejects the result for a cross target (`pypackpack`'s `UVBackendRealInstallTest` records this).
  *   The host chain uses it as well, so every bundle is made of published wheels only and a package
  *   with no wheel fails the same way on every target.
  *
- * The two fixed keys are put last so they win over a same-named pip argument.
+ * The fixed keys are put last so they win over a same-named pip argument.
  */
 fun targetInstallArguments(
     compileSdk: PythonVersion?,
@@ -113,6 +117,7 @@ fun targetInstallArguments(
     buildMap {
         putAll(pipArguments)
         compileSdk?.let { put("python-version", "${it.major}.${it.minor}") }
+        compileSdk?.takeIf { it.freeThreaded }?.let { put("python", "${it.major}.${it.minor}t") }
         put("only-binary", ":all:")
     }
 

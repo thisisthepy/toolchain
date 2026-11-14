@@ -27,6 +27,28 @@ class PublishedPythonVersionTest {
     }
 
     @Test
+    fun `freeThreaded from the resource becomes the trailing t`() {
+        assertEquals("3.15.0t", parsePythonProperties("pythonVersion=3.15.0\nfreeThreaded=true\n"))
+        assertEquals("3.15.0", parsePythonProperties("pythonVersion=3.15.0\n"))
+    }
+
+    @Test
+    fun `freeThreaded from the module metadata attribute becomes the trailing t`() {
+        val repo = createTempDirectory("pm-repo").toFile()
+        publishFakeModule(repo, "python-multiplatform-desktop", attributeVersion = "3.15.0", resourceVersion = null, freeThreaded = true)
+
+        assertEquals("3.15.0t", readPublishedPythonMultiplatformVersion(consumer(repo, "python-multiplatform-desktop")))
+    }
+
+    @Test
+    fun `freeThreaded from the jar resource becomes the trailing t`() {
+        val repo = createTempDirectory("pm-repo").toFile()
+        publishFakeModule(repo, "python-multiplatform-desktop", attributeVersion = null, resourceVersion = "3.15.0", freeThreaded = true)
+
+        assertEquals("3.15.0t", readPublishedPythonMultiplatformVersion(consumer(repo, "python-multiplatform-desktop")))
+    }
+
+    @Test
     fun `the resource is read from a jar and from an AAR's classes jar`() {
         val dir = createTempDirectory("pm-archives").toFile()
         val jar = File(dir, "pm.jar").apply { writeBytes(zipOf(PYTHON_PROPERTIES_RESOURCE to "pythonVersion=3.14.7\n")) }
@@ -106,12 +128,13 @@ class PublishedPythonVersionTest {
         module: String,
         attributeVersion: String?,
         resourceVersion: String?,
+        freeThreaded: Boolean = false,
     ) {
         val dir = File(repo, "${PYTHON_MULTIPLATFORM_GROUP.replace('.', '/')}/$module/$VERSION").apply { mkdirs() }
         val jarName = "$module-$VERSION.jar"
         val jarBytes =
             if (resourceVersion != null) {
-                zipOf(PYTHON_PROPERTIES_RESOURCE to "pythonVersion=$resourceVersion\nfreeThreaded=false\n")
+                zipOf(PYTHON_PROPERTIES_RESOURCE to "pythonVersion=$resourceVersion\nfreeThreaded=$freeThreaded\n")
             } else {
                 zipOf("placeholder.txt" to "x")
             }
@@ -143,7 +166,8 @@ class PublishedPythonVersionTest {
                     "org.gradle.dependency.bundling": "external",
                     "org.gradle.libraryelements": "jar",
                     "org.gradle.usage": "java-runtime",
-                    "$PYTHON_VERSION_ATTRIBUTE": "$attributeVersion"
+                    "$PYTHON_VERSION_ATTRIBUTE": "$attributeVersion",
+                    "$PYTHON_FREE_THREADED_ATTRIBUTE": "$freeThreaded"
                   },
                   "files": [
                     {

@@ -50,6 +50,31 @@ class PythonVersionAgreementTest {
     }
 
     @Test
+    fun `the flavour has to agree too`() {
+        // python-multiplatform states free-threaded as a trailing t (#76): 3.15.0t, else the GIL build.
+        assertNull(checkPythonVersionAgreement(sdk("3.15t"), "3.15.0t"))
+        assertNull(checkPythonVersionAgreement(sdk("3.15.0t"), "3.15.0t"))
+
+        val ftOnGil = assertNotNull(checkPythonVersionAgreement(sdk("3.15t"), "3.15.0"))
+        assertTrue("3.15.0t" in ftOnGil && "GIL" in ftOnGil && "cp315t" in ftOnGil, ftOnGil)
+
+        val gilOnFt = assertNotNull(checkPythonVersionAgreement(sdk("3.15.0"), "3.15.0t"))
+        assertTrue("3.15.0t" in gilOnFt && "free-threaded" in gilOnFt, gilOnFt)
+    }
+
+    @Test
+    fun `the embedded spelling carries the flavour`() {
+        assertEquals("3.15.0t", embeddedPythonVersion("3.15.0", freeThreaded = true))
+        assertEquals("3.15.0", embeddedPythonVersion("3.15.0", freeThreaded = false))
+        // Unknown counts as the GIL build, as python-multiplatform's own EmbeddedPythonVersion.parse does.
+        assertEquals("3.15.0", embeddedPythonVersion(" 3.15.0 ", freeThreaded = null))
+        // Already spelled with t (the property): kept, never doubled.
+        assertEquals("3.15.0t", embeddedPythonVersion("3.15.0t", freeThreaded = true))
+        assertNull(embeddedPythonVersion(" ", freeThreaded = true))
+        assertNull(embeddedPythonVersion(null, freeThreaded = true))
+    }
+
+    @Test
     fun `the property wins over the extension, blank counts as unset, nothing means no check`() {
         assertEquals("3.13.0", selectPythonMultiplatformVersion("3.13.0", "3.15.0"))
         assertEquals("3.15.0", selectPythonMultiplatformVersion(null, "3.15.0"))

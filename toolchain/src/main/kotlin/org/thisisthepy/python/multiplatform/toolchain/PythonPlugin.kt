@@ -143,6 +143,7 @@ class PythonPlugin : Plugin<Project> {
         org.thisisthepy.python.multiplatform.toolchain.bundle.registerStagePythonBundleIosForXcode(
             project, stageTasks.getValue(PythonStagingPlatform.IOS),
         )
+        org.thisisthepy.python.multiplatform.toolchain.wasm.configureWasmCrossOriginIsolation(project)
 
         // python-multiplatform's `pythonVersion` is read from its extension in `afterEvaluate` below
         // (SPEC §1.12, #42), so a `:python-multiplatform` project of this build is evaluated first.
@@ -1110,12 +1111,14 @@ fun collectIntegrationDependencies(sourceSets: List<SourceSetConfig>): List<Stri
  * to be refused. See that task's `compileLevel` kdoc.
  *
  * `pypackpack`'s `ResourceBundler` (`bundle/resource/ResourceBundler.kt`, its `SUPPORTED_BUILD_LEVELS`)
- * implements `instant` and `bytecode`, so both pass through (Issue #15). `bytecode` runs `compileall -b`
- * with the interpreter at `<project>/.venv`; the task checks that interpreter first
- * ([org.thisisthepy.python.multiplatform.toolchain.bundle.bytecodeInterpreterRejection]). `native`
- * and `mixed` need the compile stage's output, whose interface is planned as pypackpack#19, so they
- * are refused here -- per variant, because this runs in the task action (AGENTS.md §14). Anything
- * else is refused as well rather than handed to `ResourceBundler` to refuse in its own words.
+ * implements `instant`, `bytecode` and `mixed`, so all three pass through (Issues #15, #128). `bytecode`
+ * and `mixed` run `compileall -b` with the interpreter at `<project>/.venv`; the task checks that
+ * interpreter first ([org.thisisthepy.python.multiplatform.toolchain.bundle.bytecodeInterpreterRejection],
+ * selected by [compilesBytecode]). `mixed` ships the developer's modules as bytecode and the libraries'
+ * prebuilt extensions (`libDirs`) as they are. `native` needs TypedPython's generated C and each
+ * target's CPython headers and extension suffix, which this build has no source for, so it is refused
+ * here -- per variant, because this runs in the task action (AGENTS.md §14). Anything else is
+ * refused as well rather than handed to `ResourceBundler` to refuse in its own words.
  *
  * `BuildType.compileLevel` defaults to `""` for both `DebugBuildType` and `ReleaseBuildType`, which
  * is why blank resolves to `"instant"` -- that keeps `usage-example` (which never sets
@@ -1124,17 +1127,22 @@ fun collectIntegrationDependencies(sourceSets: List<SourceSetConfig>): List<Stri
 fun resolveBuildLevel(compileLevel: String): String {
     val normalized = compileLevel.ifBlank { "instant" }
     return when (normalized) {
-        "instant", "bytecode" -> normalized
-        "native", "mixed" -> throw IllegalArgumentException(
-            "Python compileLevel '$normalized' needs pypackpack's native/mixed compile slot, which is " +
-                "planned (pypackpack#19) and not implemented yet; use 'instant' or 'bytecode'.",
+        "instant", "bytecode", "mixed" -> normalized
+        "native" -> throw IllegalArgumentException(
+            "Python compileLevel 'native' is not available yet: it needs TypedPython's generated C and, " +
+                "for each target, the CPython headers (Python.h) and the extension suffix, and this build " +
+                "has no source for them. Use 'mixed' (your code as bytecode, libraries' extensions as " +
+                "they are), 'bytecode' or 'instant'.",
         )
         else -> throw IllegalArgumentException(
-            "Python compileLevel '$normalized' is not a build level; use 'instant' or 'bytecode' " +
-                "('native' and 'mixed' are planned, pypackpack#19).",
+            "Python compileLevel '$normalized' is not a build level; use 'instant', 'bytecode' or " +
+                "'mixed' ('native' is planned).",
         )
     }
 }
+
+/** Whether [buildLevel] (a [resolveBuildLevel] result) runs `compileall`, so needs a matching `.venv` interpreter. */
+fun compilesBytecode(buildLevel: String): Boolean = buildLevel == "bytecode" || buildLevel == "mixed"
 
 /**
  * Validates every variant declared under `python { }` platform maps to a real `pypackpack`

@@ -123,7 +123,7 @@ jobs:
 
       # usage-example applies three things from mavenLocal: packpack (through the plugin), the
       # toolchain plugin, and python-multiplatform's library and bindings plugin. Versions pinned in
-      # usage-example/gradle/libs.versions.toml (3.15.0-alpha01).
+      # usage-example/gradle/libs.versions.toml (3.15.0-alpha03).
       - name: Publish packpack, the toolchain plugin and python-multiplatform to mavenLocal
         run: |
           (cd .ci/pypackpack && ./gradlew :packpack:publishToMavenLocal --console=plain)
@@ -148,6 +148,21 @@ jobs:
           test -f build/pythonDeps/host/iniconfig/__init__.py || { echo "iniconfig was not installed for the host triple"; exit 1; }
           test -f build/pythonBundle/python/iniconfig/__init__.py || { echo "iniconfig is not in the bundle"; exit 1; }
           unzip -l build/distributions/*.zip | grep -q "python/iniconfig/__init__.py" || { echo "iniconfig is not in the zip"; exit 1; }
+
+      - name: Release at compileLevel mixed (#132)
+        working-directory: usage-example
+        run: |
+          # release { compileLevel = "mixed" }: the developer's modules ship as .pyc only, data files and
+          # the installed libraries as they are (pypackpack ResourceBundler, user decision 2026-10-03).
+          ../gradlew buildPython -Ppython.buildType=release \
+            --console=plain > consumer-release.log 2>&1 || { cat consumer-release.log; exit 1; }
+          cat consumer-release.log
+          b=build/pythonBundle/python
+          find "$b" -maxdepth 3 | sort
+          test -f "$b/example_py/__init__.pyc" || { echo "mixed did not compile example_py"; exit 1; }
+          test ! -e "$b/example_py/__init__.py" || { echo "mixed release kept example_py's .py"; exit 1; }
+          test -f "$b/example_py/data/table.json" || { echo "mixed dropped example_py's data file"; exit 1; }
+          test -e "$b/iniconfig" || { echo "mixed dropped the installed library"; exit 1; }
 
   # toolchain#22, desktop: the packaged app (createDistributable) runs Python with no PYTHONHOME --
   # python-multiplatform's stdlib from python-multiplatform-home/ (its SPEC L-9, #60) plus this

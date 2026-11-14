@@ -84,7 +84,7 @@ plugins {
 }
 
 python {
-    compileSdk = "3.13"
+    compileSdk = "3.15.0"                       // python-multiplatform 이 제공하는 CPython
     localLibraryPath = "src/commonMain/python"  // pypackpack 패키지: pyproject.toml + src/main/<pkg>
     packaging {
         fileName = "usage-example"
@@ -119,7 +119,8 @@ python {
 Python 만 쓰나요? Gradle 빌드 없이:
 
 ```shell
-./gradlew :toolchain:runTcl --args="install pythonx-compose"
+uv tool install toolchain-lite
+tcl install pythonx-compose
 ```
 
 ## 🧭 한눈에 보는 구조

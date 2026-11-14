@@ -93,7 +93,8 @@ gradlePlugin {
 // rejected as out of scope -- `compose-multiplatform 1.7.0` (`gradle/libs.versions.toml`) is not
 // verified against it, and that is exactly the kind of build-wide change a single delegation should
 // not carry.
-// `TypedpythonCheckTaskTest` installs the real `typedpython` gate, which is not on PyPI yet:
+// `TypedpythonCheckTaskTest` installs the real `typedpython` gate, which is not published to PyPI
+// (it ships with the GitHub Release and the distribution):
 // `-Ptypedpython.wheelDir=<dir>` names the directory holding its wheel. Forwarded as-is; the test
 // fails with that instruction when it is missing rather than skipping.
 tasks.test {
@@ -190,7 +191,7 @@ signing {
 // `tclVersion` is tcl's own version, which `tcl --version` prints and the toolchain-lite wheel
 // carries; publish-pypi.yml refuses to publish unless it equals pyproject.toml's. The plugin keeps
 // rootProject.version.
-val tclVersion = "0.1.0"
+val tclVersion = "0.1.1"
 val tclMainClass = "org.thisisthepy.python.multiplatform.tcl.CliKt"
 
 val cliMain: SourceSet by sourceSets.creating

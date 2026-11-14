@@ -20,11 +20,14 @@ import kotlin.test.assertTrue
  * comes from PyPI). Without the zip these tests are skipped with that reason, as on CI.
  */
 class TypedpythonGateArtifactTest {
-    private val mavenLocalZip = File(
-        System.getProperty("user.home"),
-        ".m2/repository/org/thisisthepy/python-multiplatform-ksp/3.15.0-alpha01/" +
-            "python-multiplatform-ksp-3.15.0-alpha01-typedpython-gate.zip",
-    )
+    // Derived from DEFAULT_TYPEDPYTHON_GATE so a version bump cannot leave this test probing an old path.
+    private val mavenLocalZip = DEFAULT_TYPEDPYTHON_GATE.split(':').let { (group, artifact, version) ->
+        File(
+            System.getProperty("user.home"),
+            ".m2/repository/${group.replace('.', '/')}/$artifact/$version/" +
+                "$artifact-$version-$TYPEDPYTHON_GATE_CLASSIFIER.zip",
+        )
+    }
 
     @BeforeTest
     fun requireGate() {

@@ -183,4 +183,23 @@ class BuildPythonArtifactTaskTest {
         assertEquals("3.14.7", wheelVersionOf("3.14.7"))
         assertEquals(null, bundleRequestFor(fixturePackageDir(), "aarch64-apple-darwin", "debug", java.io.File(".")).pythonVersion)
     }
+
+    @Test
+    fun `bundleRequestFor forwards mixed and leaves native fields empty`() {
+        val request = bundleRequestFor(
+            packageDir = fixturePackageDir(),
+            target = "aarch64-apple-darwin",
+            buildType = "release",
+            outputDir = kotlin.io.path.createTempDirectory("packpack-bundle-out-mixed").toFile(),
+            buildLevel = "mixed",
+        )
+        assertEquals("mixed", request.buildLevel)
+        assertEquals(null, request.pythonAbi)
+        assertTrue(request.nativeModules.isEmpty())
+        assertTrue(request.notNativeModules.isEmpty())
+        assertEquals(null, request.cpythonIncludeDir)
+        assertEquals(null, request.extensionSuffix)
+        assertEquals(null, request.cpythonLibDir)
+        assertEquals(null, request.cpythonLibraryName)
+    }
 }
