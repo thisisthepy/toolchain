@@ -201,4 +201,49 @@ class PythonPluginPythonOnlyTest {
         val project = ProjectBuilder.builder().withProjectDir(createTempDirectory("python-only-alone").toFile()).build()
         assertNull(readPythonMultiplatformExtensionVersion(project))
     }
+
+    @Test
+    fun `published dependencies check each variant against its own platform runtime classpath`() {
+        val repo = createTempDirectory("pm-repo").toFile()
+        PublishedPythonVersionTest.publishFakeModule(
+            repo,
+            "python-multiplatform-android",
+            attributeVersion = "3.15.0",
+            resourceVersion = null,
+            freeThreaded = false,
+        )
+        PublishedPythonVersionTest.publishFakeModule(
+            repo,
+            "python-multiplatform-desktop",
+            attributeVersion = "3.15.0",
+            resourceVersion = null,
+            freeThreaded = true,
+        )
+
+        val project = ProjectBuilder.builder().withProjectDir(createTempDirectory("python-only-variants").toFile()).build()
+        project.repositories.maven { setUrl(repo.toURI()) }
+        project.configurations.create("androidDebugRuntimeClasspath") { isCanBeResolved = true }
+        project.dependencies.add(
+            "androidDebugRuntimeClasspath",
+            "$PYTHON_MULTIPLATFORM_GROUP:python-multiplatform-android:${PublishedPythonVersionTest.VERSION}",
+        )
+        project.configurations.create("desktopRuntimeClasspath") { isCanBeResolved = true }
+        project.dependencies.add(
+            "desktopRuntimeClasspath",
+            "$PYTHON_MULTIPLATFORM_GROUP:python-multiplatform-desktop:${PublishedPythonVersionTest.VERSION}",
+        )
+
+        configured(project, sdk = "3.15t") {
+            packaging { embedLevel = 2 }
+            androidArm64()
+            macosArm64()
+        }
+
+        val macos = project.build("buildPythonMacosArm64Debug")
+        assertNull(macos.pythonVersionRejection)
+
+        val android = project.build("buildPythonAndroidArm64Debug")
+        val rejection = assertNotNull(android.pythonVersionRejection)
+        assertTrue("3.15.0t" in rejection && "3.15.0" in rejection, rejection)
+    }
 }

@@ -173,15 +173,21 @@ class PythonPlugin : Plugin<Project> {
                 interpreterVersion = expectedInterpreterVersion(hostEmbedLevel, pythonSdk)
             }
             // python-multiplatform embeds the interpreter at level 2; compileSdk must name the same
-            // X.Y.Z (SPEC §1.12, #42). The property wins over the `:python-multiplatform` extension
+            // X.Y.Z (SPEC §1.12, #42, #76, #140). The property wins over the `:python-multiplatform` extension
             // (python-multiplatform#61), then the published dependency's metadata or jar resource (#49);
-            // read once, when the first level-2 bundling task is configured.
-            val pythonMultiplatformVersion by lazy {
-                selectPythonMultiplatformVersion(
-                    project.findProperty(PYTHON_MULTIPLATFORM_VERSION_PROPERTY)?.toString(),
-                    readPythonMultiplatformExtensionVersion(project),
-                ) { readPublishedPythonMultiplatformVersion(project) }.also { version ->
-                    if (version == null) {
+            // cached per platform destination when the first level-2 bundling task is configured.
+            val propertyOverride = project.findProperty(PYTHON_MULTIPLATFORM_VERSION_PROPERTY)?.toString()
+            val extensionVersion by lazy { readPythonMultiplatformExtensionVersion(project) }
+            var loggedUnknownVersion = false
+            val publishedVersionByPlatform = mutableMapOf<PythonStagingPlatform, String?>()
+            fun pythonMultiplatformVersionFor(platform: PythonStagingPlatform): String? =
+                selectPythonMultiplatformVersion(propertyOverride, extensionVersion) {
+                    publishedVersionByPlatform.getOrPut(platform) {
+                        readPublishedPythonMultiplatformVersion(project, platform)
+                    }
+                }.also { version ->
+                    if (version == null && !loggedUnknownVersion) {
+                        loggedUnknownVersion = true
                         project.logger.lifecycle(
                             "python-multiplatform's pythonVersion is unknown (no $PYTHON_MULTIPLATFORM_VERSION_PROPERTY " +
                                 "property, no $PYTHON_MULTIPLATFORM_PROJECT_PATH project with a " +
@@ -190,9 +196,12 @@ class PythonPlugin : Plugin<Project> {
                         )
                     }
                 }
-            }
-            fun pythonVersionRejectionFor(embedLevel: Int): String? =
-                if (embedLevel == 2) checkPythonVersionAgreement(pythonSdk, pythonMultiplatformVersion) else null
+            fun pythonVersionRejectionFor(embedLevel: Int, target: String): String? =
+                if (embedLevel == 2) {
+                    checkPythonVersionAgreement(pythonSdk, pythonMultiplatformVersionFor(PythonStagingPlatform.forTarget(target)))
+                } else {
+                    null
+                }
             if (pythonSdk != null) {
                 project.logger.lifecycle(
                     "Configured Python compileSdk: ${extension.compileSdk} " +
@@ -457,7 +466,7 @@ class PythonPlugin : Plugin<Project> {
                 // consumer declares with `libDirs(...)` (a vendored tree) overrides them.
                 val hostInstall = registerTargetInstall("Host", HOST_DEPENDENCY_SET, Platforms.detectHostTarget(), null)
                 buildTask.configure {
-                    pythonVersionRejection = pythonVersionRejectionFor(hostEmbedLevel)
+                    pythonVersionRejection = pythonVersionRejectionFor(hostEmbedLevel, Platforms.detectHostTarget())
                     libDirs = listOf(targetDependenciesDir(projectBuildDir, HOST_DEPENDENCY_SET)) + resolvedLibDirs
                     dependsOn(hostInstall)
                     buildType = activeBuildTypeName
@@ -536,7 +545,7 @@ class PythonPlugin : Plugin<Project> {
                             compileLevel = variant.compileLevel
                             minSdk = variant.minSdk
                             bundleDir = variantBundleDir
-                            pythonVersionRejection = pythonVersionRejectionFor(variantEmbedLevel)
+                            pythonVersionRejection = pythonVersionRejectionFor(variantEmbedLevel, variant.target)
                             dependsOn(installTask, targetInstall, typedpythonCheckTask)
                         }
 
