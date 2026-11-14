@@ -5,18 +5,12 @@ name: iOS e2e
 # macOS minutes cost ~10x, so this runs only for iOS wiring changes, on develop and by hand, and is
 # informational (not a required check). Lead decision, 2026-10-03.
 on:
-  # Checked on develop after merging, not on every pull request (user decision,
-  # 2026-10-17). A red develop is fixed forward by its own pull request.
-  push:
-    branches: [develop]
-  workflow_dispatch:
+  # Runs only as a job of test.yml, which is started by hand (owner, 2026-11-14: "한 ci에서
+  # 최대한 여러개를 확인하기", "개발 테스트 ci는 명시적으로 실행하기").
+  workflow_call:
 
 permissions:
   contents: read
-
-concurrency:
-  group: ios-e2e-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   ios-e2e:
