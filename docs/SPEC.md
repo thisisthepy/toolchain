@@ -118,8 +118,10 @@ Where `pythonMultiplatformVersion` comes from, in order (`selectPythonMultiplatf
    python-multiplatform#61), read reflectively by name; that project is made to evaluate first
    (`evaluationDependsOn`);
 3. otherwise, for a consumer of the **published** artifact (`org.thisisthepy:python-multiplatform*`,
-   python-multiplatform#61, #95): the first resolvable runtime classpath that declares it is resolved, and
-   the version is the resolved variant's module-metadata attributes `org.thisisthepy.python.version`
+   python-multiplatform#61, #95): the resolvable runtime classpath matching the variant's staging platform
+   (`android`, `ios`, `desktop`, falling back to any runtime classpath declaring it) is resolved, so each
+   variant is checked against its own platform's `python-multiplatform` artifact (#76, #140). The version is the
+   resolved variant's module-metadata attributes `org.thisisthepy.python.version`
    and `org.thisisthepy.python.free-threaded`, else the jar resource
    `META-INF/python-multiplatform/python.properties` (`pythonVersion` and `freeThreaded`; inside an
    AAR's `classes.jar`). This resolves a configuration, so it runs only when 1 and 2 give nothing,
@@ -129,11 +131,11 @@ Where `pythonMultiplatformVersion` comes from, in order (`selectPythonMultiplatf
 **Status: implemented**. `plugin/PythonVersionAgreement.kt`, `plugin/PublishedPythonVersion.kt`;
 `ptest/PythonVersionAgreementTest.kt` (the check and the precedence),
 `ptest/PythonPluginPythonOnlyTest.kt` (the property and the extension reaching the bundling task, the
-property winning), `ptest/PublishedPythonVersionTest.kt` (a local Maven repository with a fake
-python-multiplatform module: the metadata attribute, the jar-resource fallback, the AAR's
-`classes.jar`, and the published source consulted last). An included build's projects are not
-reachable through `rootProject.findProject`; such a build states the version with the property.
-The flavour (#76): `PythonVersionAgreementTest` (`the flavour has to agree too`),
+property winning, per-variant classpath agreement #140), `ptest/PublishedPythonVersionTest.kt` (a local
+Maven repository with a fake python-multiplatform module: the metadata attribute, the jar-resource fallback,
+the AAR's `classes.jar`, per-platform classpath selection, and the published source consulted last). An
+included build's projects are not reachable through `rootProject.findProject`; such a build states the version
+with the property. The flavour (#76): `PythonVersionAgreementTest` (`the flavour has to agree too`),
 `PublishedPythonVersionTest` (`freeThreaded` from the resource, the attribute and the extension).
 → *Automatic build of a version python-multiplatform does not provide: **planned**, past 2026-11.*
 

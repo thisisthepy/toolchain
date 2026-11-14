@@ -4,6 +4,7 @@ import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.attributes.Attribute
+import org.thisisthepy.python.multiplatform.toolchain.bundle.PythonStagingPlatform
 import java.io.File
 import java.io.StringReader
 import java.util.Properties
@@ -71,28 +72,62 @@ fun readPythonPropertiesFromArchive(archive: File): String? =
     }.getOrNull()
 
 /**
- * python-multiplatform's embedded `pythonVersion` as a **published** dependency states it, for a consumer
- * that has no `:python-multiplatform` project in its build (docs/SPEC.md §1.12, #49).
+ * Whether [configurationName] belongs to [platform]'s runtime classpath.
  *
- * Looks at the project's resolvable runtime classpaths that declare a python-multiplatform module,
- * in name order. For each it reads the [PYTHON_VERSION_ATTRIBUTE] of the resolved variant (module
- * metadata), then falls back to [PYTHON_PROPERTIES_RESOURCE] in the resolved artifact. `null` when no
- * classpath declares python-multiplatform or neither source says. Resolution failures are not
- * errors here: the check is skipped, as when nothing is known.
+ * Android configurations contain `android`; iOS configurations contain `ios`; desktop configurations
+ * start with `desktop`, `jvm`, `macos`, `linux`, or `mingw`.
+ */
+fun configurationMatchesPlatform(
+    configurationName: String,
+    platform: PythonStagingPlatform,
+): Boolean {
+    val lower = configurationName.lowercase()
+    return when (platform) {
+        PythonStagingPlatform.ANDROID -> lower.startsWith("android") || lower.contains("android")
+        PythonStagingPlatform.IOS -> lower.startsWith("ios") || lower.contains("ios")
+        PythonStagingPlatform.DESKTOP ->
+            lower.startsWith("desktop") || lower.startsWith("jvm") || lower.startsWith("macos") ||
+                lower.startsWith("linux") || lower.startsWith("mingw")
+    }
+}
+
+/**
+ * python-multiplatform's embedded `pythonVersion` as a **published** dependency states it, for a consumer
+ * that has no `:python-multiplatform` project in its build (docs/SPEC.md §1.12, #49, #76, #140).
+ *
+ * Looks at the project's resolvable runtime classpaths that declare a python-multiplatform module.
+ * When [platform] is given, configurations matching that platform are consulted first, followed by
+ * the remaining configurations as a fallback for single-target projects (such as `java`'s
+ * `runtimeClasspath`). For each candidate in order, it reads the [PYTHON_VERSION_ATTRIBUTE] of the
+ * resolved variant (module metadata), then falls back to [PYTHON_PROPERTIES_RESOURCE] in the
+ * resolved artifact. `null` when no classpath declares python-multiplatform or neither source says.
+ * Resolution failures are not errors here: the check is skipped, as when nothing is known.
  *
  * This resolves a configuration, so callers invoke it lazily: only when a version check is needed
  * and the property and the same-build extension gave none.
  */
-fun readPublishedPythonMultiplatformVersion(project: Project): String? =
-    project.configurations
-        .filter { configuration ->
-            configuration.isCanBeResolved &&
-                (configuration.name == "runtimeClasspath" || configuration.name.endsWith("RuntimeClasspath")) &&
-                configuration.allDependencies.any { isPythonMultiplatformModule(it.group, it.name) }
-        }.sortedBy { it.name }
-        .firstNotNullOfOrNull { configuration ->
-            runCatching { versionFromVariantAttribute(configuration) ?: versionFromArtifact(configuration) }.getOrNull()
+fun readPublishedPythonMultiplatformVersion(
+    project: Project,
+    platform: PythonStagingPlatform? = null,
+): String? {
+    val candidates =
+        project.configurations
+            .filter { configuration ->
+                configuration.isCanBeResolved &&
+                    (configuration.name == "runtimeClasspath" || configuration.name.endsWith("RuntimeClasspath")) &&
+                    configuration.allDependencies.any { isPythonMultiplatformModule(it.group, it.name) }
+            }.sortedBy { it.name }
+    val ordered =
+        if (platform != null) {
+            val (matching, fallback) = candidates.partition { configurationMatchesPlatform(it.name, platform) }
+            matching + fallback
+        } else {
+            candidates
         }
+    return ordered.firstNotNullOfOrNull { configuration ->
+        runCatching { versionFromVariantAttribute(configuration) ?: versionFromArtifact(configuration) }.getOrNull()
+    }
+}
 
 private fun versionFromVariantAttribute(configuration: Configuration): String? =
     configuration.incoming.resolutionResult.allComponents
