@@ -1,6 +1,7 @@
 package org.thisisthepy.python.multiplatform.toolchain
 
 import org.gradle.testfixtures.ProjectBuilder
+import org.thisisthepy.python.multiplatform.toolchain.bundle.PythonStagingPlatform
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
@@ -109,6 +110,53 @@ class PublishedPythonVersionTest {
         assertNull(readPublishedPythonMultiplatformVersion(project))
     }
 
+    @Test
+    fun `configurationMatchesPlatform classifies configurations by destination platform`() {
+        // Android
+        assertTrue(configurationMatchesPlatform("androidDebugRuntimeClasspath", PythonStagingPlatform.ANDROID))
+        assertFalse(configurationMatchesPlatform("desktopRuntimeClasspath", PythonStagingPlatform.ANDROID))
+        assertFalse(configurationMatchesPlatform("debugRuntimeClasspath", PythonStagingPlatform.ANDROID))
+
+        // iOS
+        assertTrue(configurationMatchesPlatform("iosArm64RuntimeClasspath", PythonStagingPlatform.IOS))
+        assertFalse(configurationMatchesPlatform("androidDebugRuntimeClasspath", PythonStagingPlatform.IOS))
+        assertFalse(configurationMatchesPlatform("desktopRuntimeClasspath", PythonStagingPlatform.IOS))
+
+        // Desktop
+        assertTrue(configurationMatchesPlatform("desktopRuntimeClasspath", PythonStagingPlatform.DESKTOP))
+        assertTrue(configurationMatchesPlatform("jvmRuntimeClasspath", PythonStagingPlatform.DESKTOP))
+        assertTrue(configurationMatchesPlatform("macosArm64RuntimeClasspath", PythonStagingPlatform.DESKTOP))
+        assertTrue(configurationMatchesPlatform("linuxX64RuntimeClasspath", PythonStagingPlatform.DESKTOP))
+        assertTrue(configurationMatchesPlatform("mingwX64RuntimeClasspath", PythonStagingPlatform.DESKTOP))
+        assertFalse(configurationMatchesPlatform("androidDebugRuntimeClasspath", PythonStagingPlatform.DESKTOP))
+        assertFalse(configurationMatchesPlatform("iosArm64RuntimeClasspath", PythonStagingPlatform.DESKTOP))
+    }
+
+    @Test
+    fun `per-platform classpath is preferred when multiple platforms declare python-multiplatform`() {
+        val repo = createTempDirectory("pm-repo").toFile()
+        publishFakeModule(repo, "python-multiplatform-android", attributeVersion = "3.15.0", resourceVersion = null, freeThreaded = false)
+        publishFakeModule(repo, "python-multiplatform-desktop", attributeVersion = "3.15.0", resourceVersion = null, freeThreaded = true)
+
+        val project = ProjectBuilder.builder().build()
+        project.repositories.maven { setUrl(repo.toURI()) }
+
+        project.configurations.create("androidDebugRuntimeClasspath") { isCanBeResolved = true }
+        project.dependencies.add("androidDebugRuntimeClasspath", "$PYTHON_MULTIPLATFORM_GROUP:python-multiplatform-android:$VERSION")
+
+        project.configurations.create("desktopRuntimeClasspath") { isCanBeResolved = true }
+        project.dependencies.add("desktopRuntimeClasspath", "$PYTHON_MULTIPLATFORM_GROUP:python-multiplatform-desktop:$VERSION")
+
+        assertEquals("3.15.0t", readPublishedPythonMultiplatformVersion(project, PythonStagingPlatform.DESKTOP))
+        assertEquals("3.15.0", readPublishedPythonMultiplatformVersion(project, PythonStagingPlatform.ANDROID))
+
+        // Single-target project with only runtimeClasspath falls back to it for any platform
+        val singleTarget = consumer(repo, "python-multiplatform-desktop")
+        assertEquals("3.15.0t", readPublishedPythonMultiplatformVersion(singleTarget, PythonStagingPlatform.ANDROID))
+        assertEquals("3.15.0t", readPublishedPythonMultiplatformVersion(singleTarget, PythonStagingPlatform.DESKTOP))
+        assertEquals("3.15.0t", readPublishedPythonMultiplatformVersion(singleTarget, PythonStagingPlatform.IOS))
+    }
+
     private fun consumer(
         repo: File,
         module: String,
@@ -118,90 +166,90 @@ class PublishedPythonVersionTest {
         project.dependencies.add("implementation", "$PYTHON_MULTIPLATFORM_GROUP:$module:$VERSION")
     }
 
-    /**
-     * A minimal Maven layout for [module]: a jar (with [resourceVersion] in python.properties when
-     * given), a pom, and -- when [attributeVersion] is given -- Gradle module metadata whose runtime
-     * variant carries `org.thisisthepy.python.version`. Without metadata, Gradle uses the pom.
-     */
-    private fun publishFakeModule(
-        repo: File,
-        module: String,
-        attributeVersion: String?,
-        resourceVersion: String?,
-        freeThreaded: Boolean = false,
-    ) {
-        val dir = File(repo, "${PYTHON_MULTIPLATFORM_GROUP.replace('.', '/')}/$module/$VERSION").apply { mkdirs() }
-        val jarName = "$module-$VERSION.jar"
-        val jarBytes =
-            if (resourceVersion != null) {
-                zipOf(PYTHON_PROPERTIES_RESOURCE to "pythonVersion=$resourceVersion\nfreeThreaded=$freeThreaded\n")
-            } else {
-                zipOf("placeholder.txt" to "x")
-            }
-        File(dir, jarName).writeBytes(jarBytes)
-        val metadataMarker = if (attributeVersion != null) "  <!-- do_not_remove: published-with-gradle-metadata -->\n" else ""
-        File(dir, "$module-$VERSION.pom").writeText(
-            """
-            |<?xml version="1.0" encoding="UTF-8"?>
-            |<project xmlns="http://maven.apache.org/POM/4.0.0">
-            |$metadataMarker  <modelVersion>4.0.0</modelVersion>
-            |  <groupId>$PYTHON_MULTIPLATFORM_GROUP</groupId>
-            |  <artifactId>$module</artifactId>
-            |  <version>$VERSION</version>
-            |</project>
-            """.trimMargin(),
-        )
-        if (attributeVersion == null) return
-        File(dir, "$module-$VERSION.module").writeText(
-            """
-            {
-              "formatVersion": "1.1",
-              "component": { "group": "$PYTHON_MULTIPLATFORM_GROUP", "module": "$module", "version": "$VERSION" },
-              "createdBy": { "gradle": { "version": "8.9" } },
-              "variants": [
+    companion object {
+        const val VERSION = "3.14.7-alpha01"
+
+        /**
+         * A minimal Maven layout for [module]: a jar (with [resourceVersion] in python.properties when
+         * given), a pom, and -- when [attributeVersion] is given -- Gradle module metadata whose runtime
+         * variant carries `org.thisisthepy.python.version`. Without metadata, Gradle uses the pom.
+         */
+        internal fun publishFakeModule(
+            repo: File,
+            module: String,
+            attributeVersion: String?,
+            resourceVersion: String?,
+            freeThreaded: Boolean = false,
+        ) {
+            val dir = File(repo, "${PYTHON_MULTIPLATFORM_GROUP.replace('.', '/')}/$module/$VERSION").apply { mkdirs() }
+            val jarName = "$module-$VERSION.jar"
+            val jarBytes =
+                if (resourceVersion != null) {
+                    zipOf(PYTHON_PROPERTIES_RESOURCE to "pythonVersion=$resourceVersion\nfreeThreaded=$freeThreaded\n")
+                } else {
+                    zipOf("placeholder.txt" to "x")
+                }
+            File(dir, jarName).writeBytes(jarBytes)
+            val metadataMarker = if (attributeVersion != null) "  <!-- do_not_remove: published-with-gradle-metadata -->\n" else ""
+            File(dir, "$module-$VERSION.pom").writeText(
+                """
+                |<?xml version="1.0" encoding="UTF-8"?>
+                |<project xmlns="http://maven.apache.org/POM/4.0.0">
+                |$metadataMarker  <modelVersion>4.0.0</modelVersion>
+                |  <groupId>$PYTHON_MULTIPLATFORM_GROUP</groupId>
+                |  <artifactId>$module</artifactId>
+                |  <version>$VERSION</version>
+                |</project>
+                """.trimMargin(),
+            )
+            if (attributeVersion == null) return
+            File(dir, "$module-$VERSION.module").writeText(
+                """
                 {
-                  "name": "runtimeElements",
-                  "attributes": {
-                    "org.gradle.category": "library",
-                    "org.gradle.dependency.bundling": "external",
-                    "org.gradle.libraryelements": "jar",
-                    "org.gradle.usage": "java-runtime",
-                    "$PYTHON_VERSION_ATTRIBUTE": "$attributeVersion",
-                    "$PYTHON_FREE_THREADED_ATTRIBUTE": "$freeThreaded"
-                  },
-                  "files": [
+                  "formatVersion": "1.1",
+                  "component": { "group": "$PYTHON_MULTIPLATFORM_GROUP", "module": "$module", "version": "$VERSION" },
+                  "createdBy": { "gradle": { "version": "8.9" } },
+                  "variants": [
                     {
-                      "name": "$jarName",
-                      "url": "$jarName",
-                      "size": ${jarBytes.size},
-                      "sha1": "${digest("SHA-1", jarBytes)}",
-                      "md5": "${digest("MD5", jarBytes)}"
+                      "name": "runtimeElements",
+                      "attributes": {
+                        "org.gradle.category": "library",
+                        "org.gradle.dependency.bundling": "external",
+                        "org.gradle.libraryelements": "jar",
+                        "org.gradle.usage": "java-runtime",
+                        "$PYTHON_VERSION_ATTRIBUTE": "$attributeVersion",
+                        "$PYTHON_FREE_THREADED_ATTRIBUTE": "$freeThreaded"
+                      },
+                      "files": [
+                        {
+                          "name": "$jarName",
+                          "url": "$jarName",
+                          "size": ${jarBytes.size},
+                          "sha1": "${digest("SHA-1", jarBytes)}",
+                          "md5": "${digest("MD5", jarBytes)}"
+                        }
+                      ]
                     }
                   ]
                 }
-              ]
-            }
-            """.trimIndent(),
-        )
-    }
+                """.trimIndent(),
+            )
+        }
 
-    private fun zipOf(vararg entries: Pair<String, Any>): ByteArray =
-        ByteArrayOutputStream().also { bytes ->
-            ZipOutputStream(bytes).use { zip ->
-                entries.forEach { (name, content) ->
-                    zip.putNextEntry(ZipEntry(name))
-                    zip.write(if (content is ByteArray) content else content.toString().toByteArray())
-                    zip.closeEntry()
+        internal fun zipOf(vararg entries: Pair<String, Any>): ByteArray =
+            ByteArrayOutputStream().also { bytes ->
+                ZipOutputStream(bytes).use { zip ->
+                    entries.forEach { (name, content) ->
+                        zip.putNextEntry(ZipEntry(name))
+                        zip.write(if (content is ByteArray) content else content.toString().toByteArray())
+                        zip.closeEntry()
+                    }
                 }
-            }
-        }.toByteArray()
+            }.toByteArray()
 
-    private fun digest(
-        algorithm: String,
-        bytes: ByteArray,
-    ): String = MessageDigest.getInstance(algorithm).digest(bytes).joinToString("") { "%02x".format(it) }
-
-    private companion object {
-        const val VERSION = "3.14.7-alpha01"
+        internal fun digest(
+            algorithm: String,
+            bytes: ByteArray,
+        ): String = MessageDigest.getInstance(algorithm).digest(bytes).joinToString("") { "%02x".format(it) }
     }
 }
