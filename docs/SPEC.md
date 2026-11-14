@@ -49,34 +49,31 @@ form `pypackpack` accepts. A blank value is a silent skip; a malformed one fails
 `compileSdk` takes either form the example build file writes, both with `=` (Gradle's Kotlin
 assignment overloading on `PythonSdk`): a string, `compileSdk = "3.15.0"`, or a named constant,
 `compileSdk = PY3_15_0`. Constants exist only for versions python-multiplatform provides a runtime
-for (its pinned `pythonVersion`, 3.15.0), so the example's `PY3_11_9_ALPHA` does not compile (INTENT §4.1). A string resolves to a provided version (`X.Y`
+for (its pinned `pythonVersion`, 3.15.0t), so the example's `PY3_11_9_ALPHA` does not compile (INTENT §4.1). A string resolves to a provided version (`X.Y`
 takes the newest `X.Y.*`). A string naming a version that is not provided would be built
 automatically (INTENT §4.1), which is not available yet: the reason fails `buildPython…` (only
 when there is a package to bundle), not the configuration.
 
-**CPython 3.15t only (#76).** The runtime is CPython 3.15t, free-threaded only (python-multiplatform #158).
-`PY3_14_7` and `PY3_13_0` are gone, and a string naming a CPython before 3.15 (`"3.14.7"`, `"3.13"`) is
-refused as a GIL-only build, inside `buildPython…` as above, with a message that points to `"3.15t"`.
-Test: `PythonSdkTest` (`a CPython before 3_15 is refused as a GIL build, inside the task`).
+**CPython 3.15t only (#76, #77).** The runtime is CPython 3.15t, free-threaded only across desktop,
+Android and iOS (python-multiplatform #158, #163, #328). `PY3_14_7` and `PY3_13_0` are gone, and a
+string naming a CPython before 3.15 (`"3.14.7"`, `"3.13"`) is refused as a GIL-only build, inside
+`buildPython…` as above, with a message that points to `"3.15t"`. Test: `PythonSdkTest` (`a CPython
+before 3_15 is refused as a GIL build, inside the task`).
 
-**Temporary exception: `3.15.0` without `t` (`PY3_15_0`).** It names python-multiplatform's GIL build,
-which is what python-multiplatform publishes today: its `gradle.properties` has `pythonFreeThreaded=false`,
-its artifact version (`3.15.0-alpha03`) carries no flavour, and Android and iOS have no 3.15t build yet
-(python-multiplatform #163). Selecting `cp315t` wheels for that runtime would install wheels it cannot
-load. The exception is removed, and `3.15.0` then means `3.15.0t`, when python-multiplatform publishes
-free-threaded as its default with the flavour in its version or metadata, and #163 lands; #76 tracks it.
-
-A trailing `t` names the free-threaded build (`compileSdk = "3.15t"`, `"3.15.0t"`); it resolves
-against the same published list (python-multiplatform ships both builds of a pinned version) and
-there is no free-threaded constant. The `t` never reaches `toReleaseString()`; the agreement check
-with python-multiplatform's `pythonVersion` (§1.12) compares `X.Y.Z` **and the flavour** (#76): a
-`compileSdk` of `"3.15t"` against a python-multiplatform built with the GIL is refused, and so is
-`"3.15.0"` against a free-threaded one, because `cp315t` and `cp315` wheels do not load on the other
-build.
+`PythonReleaseServer.PUBLISHED` is `listOf("3.15.0t")`, and `PythonSdkVersion.PY3_15_0` has
+`version = "3.15.0t"`. Every provided 3.15 spelling (`compileSdk = PY3_15_0`, `"3.15.0"`, `"3.15"`,
+`"3.15t"`, `"3.15.0t"`) resolves to the free-threaded `3.15.0t` (`freeThreaded = true`,
+`toReleaseString() == "3.15.0"`, `toWheelVersion() == "3.15.0t"`), because python-multiplatform
+provides only the free-threaded CPython 3.15t runtime (#158, #163, #328). The trailing `t` never
+reaches `toReleaseString()`; the agreement check with python-multiplatform's `pythonVersion` (§1.12)
+still compares `X.Y.Z` **and the flavour** (`toWheelVersion()`, #76): `compileSdk` (`3.15.0t`) agrees
+with a free-threaded python-multiplatform (`3.15.0t`) and is refused against a GIL python-multiplatform
+(`3.15.0`), and a GIL `ResolvedPythonSdk` (`freeThreaded = false`) is refused against a free-threaded
+python-multiplatform (`3.15.0t`), because `cp315t` and `cp315` wheels do not load on the other build.
 
 The resolved version is also forwarded to every bundle as pypackpack's
-`BundleRequest.pythonVersion` (`3.15.0`, or `3.15.0t`; absent without `compileSdk`), which fixes the
-wheel tags (`cp315-cp315`, `cp315-cp315t`). **Status: implemented**.
+`BundleRequest.pythonVersion` (`3.15.0t`; absent without `compileSdk`), which fixes the wheel tags
+(`cp315-cp315t`). **Status: implemented**.
 `ptest/bundle/BuildPythonArtifactTaskTest.kt`, `ptest/dsl/PythonSdkTest.kt`,
 `ptest/dsl/PythonVersionTest.kt`. Needs a `packpack` in `~/.m2` built from pypackpack#77 or later
 (the same `0.1.0` coordinates; CI publishes it from pypackpack `develop`).

@@ -84,7 +84,7 @@ plugins {
 }
 
 python {
-    compileSdk = "3.15.0"                       // python-multiplatform 이 제공하는 CPython
+    compileSdk = PY3_15_0                       // python-multiplatform 이 제공하는 CPython (3.15.0t)
     localLibraryPath = "src/commonMain/python"  // pypackpack 패키지: pyproject.toml + src/main/<pkg>
     packaging {
         fileName = "usage-example"
