@@ -85,7 +85,7 @@ plugins {
 }
 
 python {
-    compileSdk = "3.15.0"                       // the CPython python-multiplatform provides
+    compileSdk = PY3_15_0                       // the CPython python-multiplatform provides (3.15.0t)
     localLibraryPath = "src/commonMain/python"  // a pypackpack package: pyproject.toml + src/main/<pkg>
     packaging {
         fileName = "usage-example"

@@ -285,8 +285,9 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
+          # On a failed check the step prints unfiltered logcat: a native crash logs under DEBUG/libc, not PythonSmoke.
           script: |
-            set -eu; apk=$(find usage-example/build/outputs/apk/debug -name '*.apk' | head -n 1); [ -n "$apk" ]; adb install -r "$apk"; adb logcat -c; adb shell am start -W -n org.thisisthepy.python.multiplatform.toolchain.example/.MainActivity --ez python-smoke true; sleep 20; adb logcat -d -s PythonSmoke:V > smoke.log; cat smoke.log; grep -q 'PYTHON_SMOKE_OK ' smoke.log; grep 'PYTHON_SMOKE_OK ' smoke.log | grep -q '/data/'
+            set -eu; apk=$(find usage-example/build/outputs/apk/debug -name '*.apk' | head -n 1); [ -n "$apk" ]; adb install -r "$apk"; adb logcat -c; adb shell am start -W -n org.thisisthepy.python.multiplatform.toolchain.example/.MainActivity --ez python-smoke true; sleep 20; adb logcat -d -s PythonSmoke:V > smoke.log; cat smoke.log; if ! grep 'PYTHON_SMOKE_OK ' smoke.log | grep -q '/data/'; then echo '--- smoke check failed: last 200 logcat lines, all tags ---'; adb logcat -d -t 200 || true; echo '--- crash buffer ---'; adb logcat -d -b crash || true; exit 1; fi
 
   guide:
     runs-on: ubuntu-latest
