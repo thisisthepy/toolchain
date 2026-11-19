@@ -29,13 +29,6 @@ on:
   push:
     tags:
       - 'v*'
-  pull_request:
-    paths:
-      - '.github/workflows/publish-gradle-plugin.yml'
-      - '.github/scripts/maven/**'
-      - '.github/scripts/release/central-upload.sh'
-      - 'toolchain/build.gradle.kts'
-      - 'gradle.properties'
   workflow_dispatch:
     inputs:
       dry_run:

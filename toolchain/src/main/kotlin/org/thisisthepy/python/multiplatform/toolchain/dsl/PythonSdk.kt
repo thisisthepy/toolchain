@@ -4,22 +4,19 @@ import org.gradle.api.SupportsKotlinAssignmentOverloading
 
 /**
  * The CPython versions python-multiplatform actually provides a runtime for: its `gradle.properties`
- * `pythonVersion`, 3.15.0 (python-multiplatform#197). The runtime is CPython 3.15t, free-threaded only
- * (python-multiplatform#158, toolchain#76), so the GIL-only 3.14.7 and 3.13.0 are gone.
+ * `pythonVersion`, 3.15.0t. The runtime is CPython 3.15.0t, free-threaded only across desktop, Android
+ * and iOS (python-multiplatform#158, #163, #328, toolchain#76, #77), so the temporary GIL exception
+ * is gone and 3.15.0t is the published runtime.
  *
- * `3.15.0` without `t` still names python-multiplatform's GIL build: a temporary exception while its
- * published runtime is the GIL build (`pythonFreeThreaded=false`) and Android and iOS have no 3.15t build
- * (python-multiplatform#163). It goes when python-multiplatform publishes free-threaded as its default
- * with the flavour in its version or metadata (`docs/SPEC.md` §1.2).
  * Add a version here and a constant to [PythonSdkVersion] when python-multiplatform pins one.
  */
 object PythonReleaseServer {
-    val PUBLISHED: List<String> = listOf("3.15.0")
+    val PUBLISHED: List<String> = listOf("3.15.0t")
 }
 
 /** `compileSdk = PY3_15_0`: a version python-multiplatform provides. Only those exist as constants. */
 enum class PythonSdkVersion(val version: String) {
-    PY3_15_0("3.15.0"),
+    PY3_15_0("3.15.0t"),
 }
 
 /**
@@ -89,7 +86,7 @@ fun resolvePythonSdk(sdk: PythonSdk): ResolvedPythonSdk? {
     }
 
     return if (published != null) {
-        ResolvedPythonSdk(version = published.copy(freeThreaded = parsed.freeThreaded), fromConstant = sdk.constant != null, rejection = null)
+        ResolvedPythonSdk(version = published, fromConstant = sdk.constant != null, rejection = null)
     } else {
         ResolvedPythonSdk(
             version = parsed,

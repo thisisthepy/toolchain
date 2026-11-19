@@ -1,6 +1,8 @@
 package org.thisisthepy.python.multiplatform.toolchain
 
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonSdk
+import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonVersion
+import org.thisisthepy.python.multiplatform.toolchain.dsl.ResolvedPythonSdk
 import org.thisisthepy.python.multiplatform.toolchain.dsl.resolvePythonSdk
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -19,26 +21,27 @@ class PythonVersionAgreementTest {
 
     @Test
     fun `the same X Y Z agrees`() {
-        assertNull(checkPythonVersionAgreement(sdk("3.15.0"), "3.15.0"))
+        assertNull(checkPythonVersionAgreement(sdk("3.15.0"), "3.15.0t"))
         // `X.Y` resolves to the newest published micro, which is what is compared.
-        assertNull(checkPythonVersionAgreement(sdk("3.15"), "3.15.0"))
-        assertNull(checkPythonVersionAgreement(sdk("3.15.0"), " 3.15.0 "))
+        assertNull(checkPythonVersionAgreement(sdk("3.15"), "3.15.0t"))
+        assertNull(checkPythonVersionAgreement(sdk("3.15t"), "3.15.0t"))
+        assertNull(checkPythonVersionAgreement(sdk("3.15.0"), " 3.15.0t "))
     }
 
     @Test
     fun `a different X Y Z is rejected, naming both and where the embedded one comes from`() {
         val rejection = assertNotNull(checkPythonVersionAgreement(sdk("3.15.0"), "3.13.0"))
-        assertTrue("3.13.0" in rejection && "3.15.0" in rejection, rejection)
+        assertTrue("3.13.0" in rejection && "3.15.0t" in rejection, rejection)
         assertTrue("python-multiplatform's pythonVersion" in rejection && "gradle.properties" in rejection, rejection)
         assertTrue("embedded" in rejection, rejection)
 
         // Same minor, different micro: still a different interpreter (cf. iOS 3.14.6 against 3.14.7).
-        assertNotNull(checkPythonVersionAgreement(sdk("3.15.0"), "3.15.1"))
+        assertNotNull(checkPythonVersionAgreement(sdk("3.15.0"), "3.15.1t"))
     }
 
     @Test
     fun `either side unknown means no check`() {
-        assertNull(checkPythonVersionAgreement(null, "3.15.0"))
+        assertNull(checkPythonVersionAgreement(null, "3.15.0t"))
         assertNull(checkPythonVersionAgreement(sdk("3.15.0"), null))
         assertNull(checkPythonVersionAgreement(null, null))
     }
@@ -46,7 +49,7 @@ class PythonVersionAgreementTest {
     @Test
     fun `a python-multiplatform version that is not a version is rejected, naming it`() {
         val rejection = assertNotNull(checkPythonVersionAgreement(sdk("3.15.0"), "latest"))
-        assertTrue("'latest'" in rejection && "3.15.0" in rejection, rejection)
+        assertTrue("'latest'" in rejection && "3.15.0t" in rejection, rejection)
     }
 
     @Test
@@ -54,11 +57,16 @@ class PythonVersionAgreementTest {
         // python-multiplatform states free-threaded as a trailing t (#76): 3.15.0t, else the GIL build.
         assertNull(checkPythonVersionAgreement(sdk("3.15t"), "3.15.0t"))
         assertNull(checkPythonVersionAgreement(sdk("3.15.0t"), "3.15.0t"))
+        assertNull(checkPythonVersionAgreement(sdk("3.15.0"), "3.15.0t"))
+        assertNull(checkPythonVersionAgreement(sdk("3.15"), "3.15.0t"))
 
         val ftOnGil = assertNotNull(checkPythonVersionAgreement(sdk("3.15t"), "3.15.0"))
         assertTrue("3.15.0t" in ftOnGil && "GIL" in ftOnGil && "cp315t" in ftOnGil, ftOnGil)
+        val ftOnGilFrom3150 = assertNotNull(checkPythonVersionAgreement(sdk("3.15.0"), "3.15.0"))
+        assertTrue("3.15.0t" in ftOnGilFrom3150 && "GIL" in ftOnGilFrom3150 && "cp315t" in ftOnGilFrom3150, ftOnGilFrom3150)
 
-        val gilOnFt = assertNotNull(checkPythonVersionAgreement(sdk("3.15.0"), "3.15.0t"))
+        val gilSdk = ResolvedPythonSdk(PythonVersion.parse("3.15.0"), fromConstant = false, rejection = null)
+        val gilOnFt = assertNotNull(checkPythonVersionAgreement(gilSdk, "3.15.0t"))
         assertTrue("3.15.0t" in gilOnFt && "free-threaded" in gilOnFt, gilOnFt)
     }
 

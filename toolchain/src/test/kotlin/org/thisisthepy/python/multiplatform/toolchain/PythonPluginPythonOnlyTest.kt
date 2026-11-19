@@ -127,6 +127,7 @@ class PythonPluginPythonOnlyTest {
 
         val install = assertIs<InstallTargetDependenciesTask>(project.tasks.getByName("installPythonDependenciesAndroidArm64"))
         assertEquals("3.15", install.installArguments["python-version"])
+        assertEquals("3.15t", install.installArguments["python"])
     }
 
     @Test
@@ -139,7 +140,7 @@ class PythonPluginPythonOnlyTest {
 
         val android = project.build("buildPythonAndroidArm64Debug")
         val rejection = assertNotNull(android.pythonVersionRejection)
-        assertTrue("3.15.0" in rejection && "3.13.0" in rejection, rejection)
+        assertTrue("3.15.0t" in rejection && "3.13.0" in rejection, rejection)
         // macOS honours level 0: python-multiplatform embeds nothing there, so nothing to compare.
         assertNull(project.build("buildPythonMacosArm64Debug").pythonVersionRejection)
 
@@ -151,7 +152,7 @@ class PythonPluginPythonOnlyTest {
 
     @Test
     fun `an agreeing version, or none, leaves the bundling task alone`() {
-        val agreeing = evaluated(pythonMultiplatformVersion = "3.15.0") { androidArm64() }
+        val agreeing = evaluated(pythonMultiplatformVersion = "3.15.0t") { androidArm64() }
         assertNull(agreeing.build("buildPythonAndroidArm64Debug").pythonVersionRejection)
 
         val unknown = evaluated { androidArm64() }
@@ -175,24 +176,28 @@ class PythonPluginPythonOnlyTest {
 
         configured(app) { androidArm64() }
         val rejection = assertNotNull(app.build("buildPythonAndroidArm64Debug").pythonVersionRejection)
-        assertTrue("3.15.0" in rejection && "3.13.0" in rejection, rejection)
+        assertTrue("3.15.0t" in rejection && "3.13.0" in rejection, rejection)
     }
 
     @Test
-    fun `the extension's freeThreaded is read and a GIL compileSdk is refused against it`() {
-        val app = appBesidePythonMultiplatform("3.15.0", freeThreaded = true)
-        assertEquals("3.15.0t", readPythonMultiplatformExtensionVersion(app))
+    fun `the extension's freeThreaded is read and a GIL runtime is refused against free-threaded compileSdk`() {
+        val appFt = appBesidePythonMultiplatform("3.15.0", freeThreaded = true)
+        assertEquals("3.15.0t", readPythonMultiplatformExtensionVersion(appFt))
+        configured(appFt) { androidArm64() }
+        assertNull(appFt.build("buildPythonAndroidArm64Debug").pythonVersionRejection)
 
-        configured(app) { androidArm64() }
-        val rejection = assertNotNull(app.build("buildPythonAndroidArm64Debug").pythonVersionRejection)
-        assertTrue("3.15.0t" in rejection && "free-threaded" in rejection, rejection)
+        val appGil = appBesidePythonMultiplatform("3.15.0", freeThreaded = false)
+        assertEquals("3.15.0", readPythonMultiplatformExtensionVersion(appGil))
+        configured(appGil) { androidArm64() }
+        val rejection = assertNotNull(appGil.build("buildPythonAndroidArm64Debug").pythonVersionRejection)
+        assertTrue("3.15.0t" in rejection && "GIL" in rejection, rejection)
     }
 
     @Test
     fun `the property overrides the python-multiplatform project's extension`() {
         val app = appBesidePythonMultiplatform("3.13.0")
 
-        configured(app, pythonMultiplatformVersion = "3.15.0") { androidArm64() }
+        configured(app, pythonMultiplatformVersion = "3.15.0t") { androidArm64() }
         assertNull(app.build("buildPythonAndroidArm64Debug").pythonVersionRejection)
     }
 
@@ -200,5 +205,50 @@ class PythonPluginPythonOnlyTest {
     fun `no python-multiplatform project reads as unknown`() {
         val project = ProjectBuilder.builder().withProjectDir(createTempDirectory("python-only-alone").toFile()).build()
         assertNull(readPythonMultiplatformExtensionVersion(project))
+    }
+
+    @Test
+    fun `published dependencies check each variant against its own platform runtime classpath`() {
+        val repo = createTempDirectory("pm-repo").toFile()
+        PublishedPythonVersionTest.publishFakeModule(
+            repo,
+            "python-multiplatform-android",
+            attributeVersion = "3.15.0",
+            resourceVersion = null,
+            freeThreaded = false,
+        )
+        PublishedPythonVersionTest.publishFakeModule(
+            repo,
+            "python-multiplatform-desktop",
+            attributeVersion = "3.15.0",
+            resourceVersion = null,
+            freeThreaded = true,
+        )
+
+        val project = ProjectBuilder.builder().withProjectDir(createTempDirectory("python-only-variants").toFile()).build()
+        project.repositories.maven { setUrl(repo.toURI()) }
+        project.configurations.create("androidDebugRuntimeClasspath") { isCanBeResolved = true }
+        project.dependencies.add(
+            "androidDebugRuntimeClasspath",
+            "$PYTHON_MULTIPLATFORM_GROUP:python-multiplatform-android:${PublishedPythonVersionTest.VERSION}",
+        )
+        project.configurations.create("desktopRuntimeClasspath") { isCanBeResolved = true }
+        project.dependencies.add(
+            "desktopRuntimeClasspath",
+            "$PYTHON_MULTIPLATFORM_GROUP:python-multiplatform-desktop:${PublishedPythonVersionTest.VERSION}",
+        )
+
+        configured(project, sdk = "3.15t") {
+            packaging { embedLevel = 2 }
+            androidArm64()
+            macosArm64()
+        }
+
+        val macos = project.build("buildPythonMacosArm64Debug")
+        assertNull(macos.pythonVersionRejection)
+
+        val android = project.build("buildPythonAndroidArm64Debug")
+        val rejection = assertNotNull(android.pythonVersionRejection)
+        assertTrue("3.15.0t" in rejection && "3.15.0" in rejection, rejection)
     }
 }

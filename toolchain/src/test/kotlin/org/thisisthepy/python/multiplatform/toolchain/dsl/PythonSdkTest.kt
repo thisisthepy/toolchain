@@ -14,8 +14,8 @@ import kotlin.test.assertTrue
  *   the bundling task.
  * - a named constant, `compileSdk = PY3_15_0`: only versions the server publishes exist as constants.
  *
- * The runtime is CPython 3.15t, free-threaded only (python-multiplatform #158, toolchain #76): 3.14.7 and
- * 3.13.0 are gone, and 3.15.0 is the one version published.
+ * The runtime is CPython 3.15t, free-threaded only (python-multiplatform #158, toolchain #76, #77): 3.14.7 and
+ * 3.13.0 are gone, and 3.15.0t is the one version published.
  *
  * In a build script both are plain `=` (Gradle's Kotlin assignment overloading); plain Kotlin calls
  * `assign` directly.
@@ -32,7 +32,10 @@ class PythonSdkTest {
 
         val resolved = resolvePythonSdk(sdk)!!
 
-        assertEquals("3.15.0", resolved.version.toString())
+        assertEquals("3.15.0t", resolved.version.toString())
+        assertEquals("3.15.0", resolved.version.toReleaseString())
+        assertEquals("3.15.0t", resolved.version.toWheelVersion())
+        assertEquals(true, resolved.version.freeThreaded)
         assertTrue(resolved.fromConstant)
         assertNull(resolved.rejection)
     }
@@ -46,19 +49,24 @@ class PythonSdkTest {
 
     @Test
     fun `3_15_0 is the one published version and the one constant`() {
-        assertEquals(listOf("3.15.0"), PythonReleaseServer.PUBLISHED)
+        assertEquals(listOf("3.15.0t"), PythonReleaseServer.PUBLISHED)
         assertEquals(listOf(PythonSdkVersion.PY3_15_0), PythonSdkVersion.values().toList())
     }
 
     @Test
     fun `3_15_0 is a published constant and X dot Y resolves to it`() {
         val byConstant = resolvePythonSdk(PythonSdk().apply { assign(PythonSdkVersion.PY3_15_0) })!!
-        assertEquals("3.15.0", byConstant.version.toString())
+        assertEquals("3.15.0t", byConstant.version.toString())
+        assertEquals("3.15.0", byConstant.version.toReleaseString())
+        assertEquals("3.15.0t", byConstant.version.toWheelVersion())
+        assertEquals(true, byConstant.version.freeThreaded)
         assertNull(byConstant.rejection)
         assertEquals(true, byConstant.fromConstant)
 
         val byMinor = resolvePythonSdk(PythonSdk().apply { assign("3.15") })!!
         assertEquals("3.15.0", byMinor.version.toReleaseString())
+        assertEquals("3.15.0t", byMinor.version.toWheelVersion())
+        assertEquals(true, byMinor.version.freeThreaded)
         assertNull(byMinor.rejection)
     }
 
@@ -82,15 +90,17 @@ class PythonSdkTest {
             assertEquals("3.15.0", resolved.version.toReleaseString(), raw)
             assertEquals("3.15.0t", resolved.version.toWheelVersion(), raw)
         }
-        assertEquals("3.15.0", resolvePythonSdk(PythonSdk().apply { assign("3.15") })!!.version.toWheelVersion())
+        assertEquals("3.15.0t", resolvePythonSdk(PythonSdk().apply { assign("3.15") })!!.version.toWheelVersion())
     }
 
     @Test
     fun `a string naming a published version is accepted, X dot Y included`() {
-        listOf("3.15.0", "3.15").forEach { raw ->
+        listOf("3.15.0", "3.15", "3.15t", "3.15.0t").forEach { raw ->
             val resolved = resolvePythonSdk(PythonSdk().apply { assign(raw) })!!
 
             assertEquals("3.15.0", resolved.version.toReleaseString(), raw)
+            assertEquals("3.15.0t", resolved.version.toWheelVersion(), raw)
+            assertEquals(true, resolved.version.freeThreaded, raw)
             assertNull(resolved.rejection, raw)
         }
     }
@@ -101,7 +111,7 @@ class PythonSdkTest {
 
         val rejection = resolved.rejection.orEmpty()
         assertTrue(rejection.contains("3.15.9-alpha"), rejection)
-        assertTrue(rejection.contains("3.15.0"), "should list what is published: $rejection")
+        assertTrue(rejection.contains("3.15.0t"), "should list what is published: $rejection")
         assertTrue(rejection.contains("build", ignoreCase = true), rejection)
     }
 

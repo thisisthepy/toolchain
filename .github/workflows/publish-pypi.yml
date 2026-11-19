@@ -17,14 +17,6 @@ name: Publish to PyPI
 on:
   release:
     types: [published]
-  pull_request:
-    paths:
-      - .github/workflows/publish-pypi.yml
-      - .github/scripts/pypi/**
-      - pyproject.toml
-      - docs/pypi/**
-      - toolchain/src/cliMain/**
-      - toolchain/build.gradle.kts
   workflow_dispatch:
 
 permissions:
