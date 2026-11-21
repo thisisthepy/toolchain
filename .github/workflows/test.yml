@@ -165,6 +165,19 @@ jobs:
           test -f "$b/example_py/data/table.json" || { echo "mixed dropped example_py's data file"; exit 1; }
           test -e "$b/iniconfig" || { echo "mixed dropped the installed library"; exit 1; }
 
+      # python-multiplatform#25 end to end (team lead 2026-11-21, Decision 5 (a)): a fixture with one
+      # @compiled function, bundled at compileLevel native, imports its extension with the 3.15t runtime
+      # and prints the interpreted result; the same fixture at bytecode is the negative control. Uses the
+      # TypedPython gate published to mavenLocal in the step above (python-multiplatform-ksp).
+      - name: compileLevel native imports the compiled module (python-multiplatform#25)
+        env:
+          TOOLCHAIN_NATIVE_E2E: "1"
+        run: |
+          rm -rf toolchain/build/test-results/test
+          ./gradlew :toolchain:test --tests '*.NativeLevelE2ETest' --rerun --console=plain
+          grep -q 'tests="1" skipped="0" failures="0" errors="0"' toolchain/build/test-results/test/TEST-*NativeLevelE2ETest.xml \
+            || { echo "NativeLevelE2ETest did not run and pass"; exit 1; }
+
   # toolchain#22, desktop: the packaged app (createDistributable) runs Python with no PYTHONHOME --
   # python-multiplatform's stdlib from python-multiplatform-home/ (its SPEC L-9, #60) plus this
   # plugin's python/ payload (example_py and the bundled iniconfig). `--python-smoke` exits before

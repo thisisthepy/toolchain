@@ -65,9 +65,10 @@ python {
     // desktop `run` a port and a token (toolchain#105); `-Ppython.buildType=release` would do neither.
     buildTypes {
         getByName("debug") { enableHotReload = true }
-        // The example build file's release is `compileLevel = "native"` or "mixed"; native is refused until
-        // TypedPython's C reaches the bundle, so this takes mixed: example_py as .pyc only, the installed
-        // libraries as they are (#128, #132; CI's consumer job builds it with -Ppython.buildType=release).
+        // The example build file's release is `compileLevel = "native"` or "mixed". example_py has no
+        // @compiled function, so native would give it nothing to compile; this takes mixed: example_py as
+        // .pyc only, the installed libraries as they are (#128, #132; CI's consumer job builds it with
+        // -Ppython.buildType=release). native is covered by NativeLevelE2ETest (python-multiplatform#25).
         getByName("release") { compileLevel = "mixed" }
     }
     // `compose = true` is left out: it needs `python.compose.pythonxCompose` and

@@ -267,8 +267,13 @@ variant's task action:
 
 **Status: partial.** `NativeLevel.kt`, `BuildPythonArtifactTask.nativeLevelInputs`; `ptest/bundle/NativeLevelTest.kt`
 (manifest mapping and refusals, the `emit-c` command, both runtime layouts and their refusals, the request
-forwarding), `PythonPluginBuildLevelTest`. Not yet exercised end to end: python-multiplatform's sample app
-importing a compiled module from the bundle on desktop is the #25 criterion (typedpython teammate's half).
+forwarding), `PythonPluginBuildLevelTest`. End to end: `ptest/bundle/NativeLevelE2ETest.kt` (opt-in,
+`TOOLCHAIN_NATIVE_E2E=1`; CI's `consumer` job runs it) bundles the fixture `src/test/resources/native-e2e/`
+(one `@compiled` function, the typedpython teammate's) at `native` for the host through a real Gradle build,
+imports `demo.kernel` with the installed 3.15t interpreter, requires it to load from an extension and to print
+`expected.txt`; the same fixture at `bytecode` must fail that extension check. This is #25's criterion (team
+lead 2026-11-21 21:15, Decision 5 (a): in toolchain rather than python-multiplatform's sample, which does not
+apply this plugin). Becomes `implemented` when that CI step has passed; not yet run.
 
 ### 1.7 `useCodeMinifier`, `excludeMetaclass`
 Both are declared on `ReleaseBuildType` (`debug`'s setters throw, §1.5).
