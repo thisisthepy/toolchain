@@ -204,10 +204,9 @@ by `-Ppython.buildType=<name>` (default `debug`); an undeclared name fails loudl
 `ptest/PythonPluginBuildTypeTest.kt`. (The debug-only setter rejections have no test: partial.)
 
 ### 1.6 `compileLevel`
-Blank resolves to `instant`. `instant`, `bytecode` and `mixed` pass through to `BundleRequest.buildLevel`.
-`native` is rejected with a message naming what it still needs (TypedPython's generated C, and the
-CPython headers and extension suffix of each target); any other value is rejected too. Rejection happens
-**inside the variant's task action**, so `--continue` still builds every other variant.
+Blank resolves to `instant`. `instant`, `bytecode`, `mixed` and `native` pass through to
+`BundleRequest.buildLevel`; any other value is rejected. Rejection happens **inside the variant's task
+action**, so `--continue` still builds every other variant.
 
 `mixed` (toolchain#128) is `pypackpack`'s `ResourceBundler` with the meaning the user decided
 (2026-10-03, recorded in pypackpack `docs/design/compile-slot.md` §4): the developer's modules ship as
@@ -243,7 +242,31 @@ debug has `.py` + `.pyc`, release has `.pyc` only; needs `python3` on `PATH`),
 Known limits of the version check: it is skipped when `compileSdk` is not declared (nothing to
 compare with), and when the venv has no readable `pyvenv.cfg` (a hand-made `.venv/bin/python3`
 symlink, for example). In both cases the `.venv`'s own interpreter decides the magic number.
-→ *Building at `native`: **planned**. It needs TypedPython's generated C and each target's CPython headers and extension suffix, and no source for them is reachable from this build yet.*
+#### `native` (python-multiplatform#25; leader assignment 2026-11-21, in 1.0)
+
+`native` ships the developer modules TypedPython compiles as CPython extensions, built by `pypackpack`'s
+native slot (`ResourceBundler` at `buildLevel = "native"`). toolchain only gathers the inputs, in the
+variant's task action:
+
+- **The C.** `typedpython emit-c` (python-multiplatform `docs/design/typedpython.md` §4.3.2a) runs with the
+  gate `typedpythonCheck` installed in `build/typedpython/venv`, over the package's `.py` files under its
+  import root (`src/main`, else the package directory), with its cache and manifest under
+  `build/typedpython/emit-c/<variant>/`. The v1 manifest maps onto `BundleRequest.nativeModules` and
+  `notNativeModules` (`readTypedpythonEmitCManifest`); `pypackpack` warns for each module left interpreted.
+- **The target's CPython.** `pypackpack`'s `installPython(<compileSdk X.Y.Zt>, <target>, installDir)` puts it
+  in `build/pythonRuntime/<triple>/<version>/` (skipped when its headers are already there). From it:
+  `cpythonIncludeDir` = `include/python<X.Y>t` (or `prefix/include/...` on Android), `extensionSuffix` =
+  `EXT_SUFFIX` of its `_sysconfigdata_*.py`, and on Android `cpythonLibDir`/`cpythonLibraryName` =
+  `lib/libpython<X.Y>t.so`. `pythonAbi` = `compileSdk`'s `X.Y`.
+- **Refused, that variant only, naming the fix:** no `compileSdk`; no gate (`typedpythonCheck` skipped or
+  failed); an `emit-c` failure (its output); a compiled module that is not a `.py` under the import root;
+  a CPython tree without `Python.h`, `EXT_SUFFIX` or Android's `libpython`. Targets the native slot does not
+  build (iOS, Windows, wasm today) are refused by `pypackpack`'s `checkSupport` in its own words.
+
+**Status: partial.** `NativeLevel.kt`, `BuildPythonArtifactTask.nativeLevelInputs`; `ptest/bundle/NativeLevelTest.kt`
+(manifest mapping and refusals, the `emit-c` command, both runtime layouts and their refusals, the request
+forwarding), `PythonPluginBuildLevelTest`. Not yet exercised end to end: python-multiplatform's sample app
+importing a compiled module from the bundle on desktop is the #25 criterion (typedpython teammate's half).
 
 ### 1.7 `useCodeMinifier`, `excludeMetaclass`
 Both are declared on `ReleaseBuildType` (`debug`'s setters throw, §1.5).

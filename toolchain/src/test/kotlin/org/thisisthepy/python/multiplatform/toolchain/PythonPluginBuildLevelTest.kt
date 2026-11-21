@@ -9,9 +9,9 @@ import kotlin.test.assertTrue
  * `BuildType.compileLevel` -> `pypackpack`'s `BundleRequest.buildLevel` ([resolveBuildLevel]).
  *
  * `pypackpack`'s `ResourceBundler` (`bundle/resource/ResourceBundler.kt`, its `SUPPORTED_BUILD_LEVELS`)
- * implements `instant`, `bytecode` and `mixed` (Issues #15, #128), so all pass through. `native` needs
- * TypedPython's C and the CPython headers, so it is still refused -- per variant, inside that
- * variant's task action (AGENTS.md §14), with a message naming what it needs.
+ * implements `instant`, `bytecode`, `mixed` and `native` (Issues #15, #128, python-multiplatform#25), so
+ * all pass through. What `native` needs (TypedPython's C, the CPython headers) is gathered and refused
+ * per variant in `NativeLevel.kt` (`NativeLevelTest`).
  *
  * Blank resolves to `"instant"`: both `DebugBuildType` and `ReleaseBuildType` default `compileLevel`
  * to `""`, and `usage-example` never sets it.
@@ -38,14 +38,8 @@ class PythonPluginBuildLevelTest {
     }
 
     @Test
-    fun `native is rejected with a message naming the missing CPython headers and extension suffix`() {
-        val error = assertFailsWith<IllegalArgumentException> { resolveBuildLevel("native") }
-        val message = error.message.orEmpty()
-        assertTrue(message.contains("'native'"), message)
-        assertTrue(message.contains("TypedPython"), message)
-        assertTrue(message.contains("headers") && message.contains("extension suffix"), message)
-        assertTrue(message.contains("'mixed'"), message)
-        assertTrue(!message.contains("pypackpack#19"), message)
+    fun `native passes through, because pypackpack's ResourceBundler implements it (python-multiplatform#25)`() {
+        assertEquals("native", resolveBuildLevel("native"))
     }
 
     @Test

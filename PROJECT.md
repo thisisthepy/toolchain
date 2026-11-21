@@ -27,7 +27,8 @@ Kotlin Multiplatform 앱의 Python 부분을 Gradle `python { }` 블록으로 �
   스테이징은 `-Ppython.flavor`(기본: 첫 플레이버). 플랫폼 변형 없이 선언하면 `buildPython` 이 이유와 함께 실패
 - `compileLevel`: `instant`, `bytecode`(debug 는 `.py`+`.pyc`, release 는 `.pyc` 만) 지원. `bytecode` 는
   패키지 위쪽의 `.venv` 가 없거나 그 마이너 버전이 `compileSdk` 와 다르면 해당 변형에서 실패.
-  `native`/`mixed` 는 해당 변형의 태스크에서만 실패 (pypackpack#19)
+  `mixed` 지원. `native` 는 TypedPython `emit-c` 와 pypackpack 이 설치한 타깃 CPython 으로 pypackpack 네이티브
+  슬롯에 넘김 (python-multiplatform#25, partial: 끝까지 실행한 검증은 아직 없음). 알 수 없는 레벨은 해당 변형에서만 실패
 - `commonMain` 의 `srcDirs` / `metaDirs` / `libDirs` 전달
 - `implementation` / `integration` 의존성 → `uv add` (`pypackpack` 백엔드, 패키지의 `.venv` 와 `pyproject.toml`)
 - 타깃별 의존성 설치 (#16): 의존성 집합(플랫폼 변형 × 플레이버)마다 `installPythonDependencies<Set>` 이
