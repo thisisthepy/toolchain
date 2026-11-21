@@ -451,11 +451,13 @@ Hand-off to the platform's packaging step:
   a `<target>ProcessResources` that is not a `Copy` task (dependency plus warning), and the built jar
   itself.
 - Android: the staged root is added to `android.sourceSets.main.assets` (reflectively), so the
-  payload is in the APK's `assets/`. **partial**: `ptest/PythonPluginAttachmentTest.kt` applies the
+  payload is in the APK's `assets/`. **implemented**: `ptest/PythonPluginAttachmentTest.kt` applies the
   real `com.android.application` (AGP 8.5.2, test classpath only) and checks the staged root is a
-  `main` asset source directory. Not tested: the `preBuild` / `merge*Assets` → `stagePythonBundleAndroid`
-  dependency (AGP creates those tasks only when the project is evaluated against an Android SDK,
-  which `:toolchain:test` does not require), and the built APK.
+  `main` asset source directory. AGP creates `merge*Assets` only against an Android SDK, which
+  `:toolchain:test` does not require, so the CI job `android-e2e` (which has one) checks the rest: in
+  `usage-example`'s task graph `mergeDebugAssets` runs after `stagePythonBundleAndroid`, and the built debug APK
+  holds `assets/python/example_py/__init__.py` and `assets/python/iniconfig/__init__.py` (toolchain 1.0 scope,
+  owner 2026-11-21: no scope cuts).
 - iOS: toolchain stages and exposes the path; python-multiplatform (#59) owns the Xcode build phase
   that attaches it. `stagePythonBundleIosForXcode` (group `python`) depends on `stagePythonBundleIos`
   and prints exactly one line `PYTHON_PAYLOAD_DIR=<absolute path>` (stdout, visible under `--quiet`).

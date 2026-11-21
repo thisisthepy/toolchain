@@ -285,6 +285,21 @@ jobs:
         working-directory: usage-example
         run: ../gradlew assembleDebug --console=plain
 
+      # SPEC §1.17 Android staging: AGP's asset merge runs after stagePythonBundleAndroid (only checkable with
+      # an Android SDK, which this runner has), and the built APK carries the payload under assets/python/.
+      - name: The asset merge depends on the staging, and the APK carries the payload
+        working-directory: usage-example
+        run: |
+          ../gradlew mergeDebugAssets --dry-run --console=plain > graph.log
+          cat graph.log
+          stage=$(grep -n ':stagePythonBundleAndroid ' graph.log | head -n 1 | cut -d: -f1)
+          merge=$(grep -n ':mergeDebugAssets ' graph.log | head -n 1 | cut -d: -f1)
+          [ -n "$stage" ] && [ -n "$merge" ] && [ "$stage" -lt "$merge" ] || { echo "mergeDebugAssets does not run after stagePythonBundleAndroid"; exit 1; }
+          apk=$(find build/outputs/apk/debug -name '*.apk' | head -n 1)
+          unzip -l "$apk" > apk.txt
+          grep -q 'assets/python/example_py/__init__.py' apk.txt || { echo "example_py is not in the APK's assets"; exit 1; }
+          grep -q 'assets/python/iniconfig/__init__.py' apk.txt || { echo "iniconfig is not in the APK's assets"; exit 1; }
+
       - name: Enable KVM for the emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
