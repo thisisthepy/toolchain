@@ -256,10 +256,13 @@ variant's task action:
   `tp_runtime.h`) goes to `nativeOptions.includeDirs` for every module; `pypackpack` warns for each module left
   interpreted.
 - **The target's CPython.** `pypackpack`'s `installPython(<compileSdk X.Y.Zt>, <target>, installDir)` puts it
-  in `build/pythonRuntime/<triple>/<version>/` (skipped when its headers are already there). From it:
-  `cpythonIncludeDir` = `include/python<X.Y>t` (or `prefix/include/...` on Android), `extensionSuffix` =
-  `EXT_SUFFIX` of its `_sysconfigdata_*.py`, and on Android `cpythonLibDir`/`cpythonLibraryName` =
-  `lib/libpython<X.Y>t.so`. `pythonAbi` = `compileSdk`'s `X.Y`.
+  in `build/pythonRuntime/<triple>/<version>/` (skipped when a readable tree is already there). It is read
+  through `pypackpack`'s `targetPythonIn` (pypackpack#155), which knows every layout `installPython` writes:
+  `cpythonIncludeDir` = the directory with `Python.h` (`include/python<X.Y>t`, Android's `prefix/include/...`,
+  iOS's `Python.framework/Headers`, Windows' `include/`), `extensionSuffix` = `EXT_SUFFIX` (Windows:
+  `.cp<XY>t-win_<arch>.pyd`), and `cpythonLibDir`/`cpythonLibraryName` = what the extension links: Android's
+  `lib/libpython<X.Y>t.so`, Windows' `libs/python<XY>t.lib`, iOS's XCframework slice holding `Python.framework`
+  (no library name). `pythonAbi` = `compileSdk`'s `X.Y`.
 - **Refused, that variant only, naming the fix:** no `compileSdk`; no gate (`typedpythonCheck` skipped or
   failed); an `emit-c` failure (its output); a compiled module that is not a `.py` under the import root;
   a CPython tree without `Python.h`, `EXT_SUFFIX` or Android's `libpython`. Targets the native slot does not
