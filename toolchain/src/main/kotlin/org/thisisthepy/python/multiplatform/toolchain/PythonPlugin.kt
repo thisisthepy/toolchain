@@ -1124,10 +1124,11 @@ fun collectIntegrationDependencies(sourceSets: List<SourceSetConfig>): List<Stri
  * and `mixed` run `compileall -b` with the interpreter at `<project>/.venv`; the task checks that
  * interpreter first ([org.thisisthepy.python.multiplatform.toolchain.bundle.bytecodeInterpreterRejection],
  * selected by [compilesBytecode]). `mixed` ships the developer's modules as bytecode and the libraries'
- * prebuilt extensions (`libDirs`) as they are. `native` needs TypedPython's generated C and each
- * target's CPython headers and extension suffix, which this build has no source for, so it is refused
- * here -- per variant, because this runs in the task action (AGENTS.md §14). Anything else is
- * refused as well rather than handed to `ResourceBundler` to refuse in its own words.
+ * prebuilt extensions (`libDirs`) as they are. `native` (python-multiplatform#25) also passes: the
+ * task then gathers TypedPython's generated C and the target's CPython headers, extension suffix and
+ * `libpython` ([org.thisisthepy.python.multiplatform.toolchain.bundle.NativeLevelInputs]) and fails that
+ * variant alone when one is missing (AGENTS.md §14). Anything else is refused rather than handed to
+ * `ResourceBundler` to refuse in its own words.
  *
  * `BuildType.compileLevel` defaults to `""` for both `DebugBuildType` and `ReleaseBuildType`, which
  * is why blank resolves to `"instant"` -- that keeps `usage-example` (which never sets
@@ -1136,16 +1137,10 @@ fun collectIntegrationDependencies(sourceSets: List<SourceSetConfig>): List<Stri
 fun resolveBuildLevel(compileLevel: String): String {
     val normalized = compileLevel.ifBlank { "instant" }
     return when (normalized) {
-        "instant", "bytecode", "mixed" -> normalized
-        "native" -> throw IllegalArgumentException(
-            "Python compileLevel 'native' is not available yet: it needs TypedPython's generated C and, " +
-                "for each target, the CPython headers (Python.h) and the extension suffix, and this build " +
-                "has no source for them. Use 'mixed' (your code as bytecode, libraries' extensions as " +
-                "they are), 'bytecode' or 'instant'.",
-        )
+        "instant", "bytecode", "mixed", "native" -> normalized
         else -> throw IllegalArgumentException(
-            "Python compileLevel '$normalized' is not a build level; use 'instant', 'bytecode' or " +
-                "'mixed' ('native' is planned).",
+            "Python compileLevel '$normalized' is not a build level; use 'instant', 'bytecode', " +
+                "'mixed' or 'native'.",
         )
     }
 }

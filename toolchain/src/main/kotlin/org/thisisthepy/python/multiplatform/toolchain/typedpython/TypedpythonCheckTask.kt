@@ -318,7 +318,8 @@ fun typedpythonInstallCommand(venv: File, version: String, pyreflyVersion: Strin
         "typedpython==$version", "pyrefly==$pyreflyVersion",
     )
 
-private fun typedpythonExecutable(venv: File): File =
+/** The gate's `typedpython` console script in [venv]; also what `compileLevel = "native"` runs `emit-c` with. */
+fun typedpythonExecutable(venv: File): File =
     if (System.getProperty("os.name").orEmpty().startsWith("Windows")) {
         File(venv, "Scripts/typedpython.exe")
     } else {
