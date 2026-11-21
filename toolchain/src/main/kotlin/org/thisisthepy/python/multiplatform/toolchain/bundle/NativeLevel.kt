@@ -3,6 +3,7 @@ package org.thisisthepy.python.multiplatform.toolchain.bundle
 import groovy.json.JsonSlurper
 import kotlinx.coroutines.runBlocking
 import org.gradle.api.GradleException
+import org.thisisthepy.python.multiplatform.packpack.compile.extension.ExtensionCompileOptions
 import org.thisisthepy.python.multiplatform.packpack.compile.extension.ExtensionModuleSource
 import org.thisisthepy.python.multiplatform.packpack.compile.extension.NotNativeModule
 import org.thisisthepy.python.multiplatform.packpack.compile.extension.PythonAbi
@@ -28,6 +29,8 @@ data class NativeLevelInputs(
     val extensionSuffix: String,
     val cpythonLibDir: File? = null,
     val cpythonLibraryName: String? = null,
+    /** Request-wide flags: the TypedPython runtime headers (`runtimeInclude`, `tp_runtime.h`) for every module. */
+    val nativeOptions: ExtensionCompileOptions = ExtensionCompileOptions(),
 )
 
 /** `typedpython-emit-c` manifest identity (python-multiplatform `docs/design/typedpython.md` §4.3.2a). */
@@ -37,6 +40,8 @@ const val TYPEDPYTHON_EMIT_C_VERSION = 1
 /** The modules TypedPython produced C for, and those it did not, from an `emit-c` manifest. */
 data class TypedpythonEmitCManifest(
     val projectRoot: File,
+    /** The gate wheel's `typedpython/runtime` directory; the generated C includes `tp_runtime.h` from it. */
+    val runtimeInclude: File,
     val nativeModules: List<ExtensionModuleSource>,
     val notNativeModules: List<NotNativeModule>,
 )
@@ -95,7 +100,12 @@ fun readTypedpythonEmitCManifest(json: String): TypedpythonEmitCManifest {
             items = items((m["items"] as? List<*>).orEmpty(), "$owner.items"),
         )
     }
-    return TypedpythonEmitCManifest(File(string(root, "projectRoot", "root")), native, notNative)
+    return TypedpythonEmitCManifest(
+        File(string(root, "projectRoot", "root")),
+        File(string(root, "runtimeInclude", "root")),
+        native,
+        notNative,
+    )
 }
 
 /**

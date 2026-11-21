@@ -252,7 +252,9 @@ variant's task action:
   gate `typedpythonCheck` installed in `build/typedpython/venv`, over the package's `.py` files under its
   import root (`src/main`, else the package directory), with its cache and manifest under
   `build/typedpython/emit-c/<variant>/`. The v1 manifest maps onto `BundleRequest.nativeModules` and
-  `notNativeModules` (`readTypedpythonEmitCManifest`); `pypackpack` warns for each module left interpreted.
+  `notNativeModules` (`readTypedpythonEmitCManifest`), and its `runtimeInclude` (the TypedPython runtime headers,
+  `tp_runtime.h`) goes to `nativeOptions.includeDirs` for every module; `pypackpack` warns for each module left
+  interpreted.
 - **The target's CPython.** `pypackpack`'s `installPython(<compileSdk X.Y.Zt>, <target>, installDir)` puts it
   in `build/pythonRuntime/<triple>/<version>/` (skipped when its headers are already there). From it:
   `cpythonIncludeDir` = `include/python<X.Y>t` (or `prefix/include/...` on Android), `extensionSuffix` =

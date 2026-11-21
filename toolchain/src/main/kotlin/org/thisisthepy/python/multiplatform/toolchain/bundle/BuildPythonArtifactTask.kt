@@ -10,6 +10,7 @@ import org.thisisthepy.python.multiplatform.packpack.bundle.BundlerInterface
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleRequest
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleResult
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleType
+import org.thisisthepy.python.multiplatform.packpack.compile.extension.ExtensionCompileOptions
 import org.thisisthepy.python.multiplatform.packpack.utils.Platforms
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonVersion
 import org.thisisthepy.python.multiplatform.toolchain.compilesBytecode
@@ -250,6 +251,7 @@ private fun BuildPythonArtifactTask.nativeLevelInputs(source: File): NativeLevel
         extensionSuffix = suffix,
         cpythonLibDir = lib?.first,
         cpythonLibraryName = lib?.second,
+        nativeOptions = ExtensionCompileOptions(includeDirs = listOf(manifest.runtimeInclude)),
     )
 }
 
@@ -299,6 +301,7 @@ fun bundleRequestFor(
         extensionSuffix = native?.extensionSuffix,
         cpythonLibDir = native?.cpythonLibDir,
         cpythonLibraryName = native?.cpythonLibraryName,
+        nativeOptions = native?.nativeOptions ?: ExtensionCompileOptions(),
     )
 
 /**
