@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "toolchain-lite"
-version = "0.1.1"
+version = "1.0.0"
 description = "tcl: install Python packages for a Kotlin Multiplatform app's Python half, no Gradle project needed"
 readme = "docs/pypi/README.md"
 license = "Apache-2.0"
@@ -21,7 +21,7 @@ authors = [
 ]
 keywords = ["kotlin-multiplatform", "python", "uv", "packaging"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Operating System :: MacOS",

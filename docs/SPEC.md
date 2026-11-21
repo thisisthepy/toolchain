@@ -29,7 +29,7 @@ Plugin id `org.thisisthepy.python.multiplatform`, implementation class `PythonPl
 Consumers resolve the plugin and its marker (`org.thisisthepy.python.multiplatform:org.thisisthepy.python.multiplatform.gradle.plugin`)
 from Maven Central (`mavenCentral()` in `pluginManagement.repositories`), falling back to `mavenLocal()`
 after `./gradlew :toolchain:publishToMavenLocal` until a version is published (§1.19). The plugin depends on
-`org.thisisthepy.python.multiplatform:packpack:0.1.0`, which this build looks for on Maven Central first
+`org.thisisthepy.python.multiplatform:packpack:1.0.0`, which this build looks for on Maven Central first
 and then in `mavenLocal()`, limited to the `org.thisisthepy` groups.
 
 **Status: implemented**. `plugin/PythonPlugin.kt`; `ptest/PythonPluginApplyTest.kt` applies the
@@ -767,9 +767,10 @@ tcl --help
 the four wheels above, each smoke-tested before upload. `uvx --from toolchain-lite==0.1.0 tcl --version`
 prints `tcl 0.1.0` (checked 2026-10-17, macOS arm64). Pull requests that touch these files still build
 and smoke-test the wheels without uploading.
-develop carries 0.1.1 (#136, owner approval 2026-11-13 through the leader): it ships the fix that
-stops tcl at the start directory instead of an ancestor `pyproject.toml`. 0.1.1 is not on PyPI until
-the `toolchain-lite-v0.1.1` release.
+0.1.1 (#136, owner approval 2026-11-13 through the leader) is on PyPI (`toolchain-lite-v0.1.1`, 2026-11-14):
+it stops tcl at the start directory instead of an ancestor `pyproject.toml`. develop carries 1.0.0 (the team
+lead's 1.0 cut, 2026-11-21: every `tcl` item in this section is implemented; no behaviour change from 0.1.1;
+`packpack` 1.0.0). 1.0.0 is not on PyPI until the `toolchain-lite-v1.0.0` release.
 
 ---
 
