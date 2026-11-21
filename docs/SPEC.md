@@ -29,7 +29,7 @@ Plugin id `org.thisisthepy.python.multiplatform`, implementation class `PythonPl
 Consumers resolve the plugin and its marker (`org.thisisthepy.python.multiplatform:org.thisisthepy.python.multiplatform.gradle.plugin`)
 from Maven Central (`mavenCentral()` in `pluginManagement.repositories`), falling back to `mavenLocal()`
 after `./gradlew :toolchain:publishToMavenLocal` until a version is published (§1.19). The plugin depends on
-`org.thisisthepy.python.multiplatform:packpack:0.1.0`, which this build looks for on Maven Central first
+`org.thisisthepy.python.multiplatform:packpack:1.0.0`, which this build looks for on Maven Central first
 and then in `mavenLocal()`, limited to the `org.thisisthepy` groups.
 
 **Status: implemented**. `plugin/PythonPlugin.kt`; `ptest/PythonPluginApplyTest.kt` applies the
@@ -252,7 +252,9 @@ variant's task action:
   gate `typedpythonCheck` installed in `build/typedpython/venv`, over the package's `.py` files under its
   import root (`src/main`, else the package directory), with its cache and manifest under
   `build/typedpython/emit-c/<variant>/`. The v1 manifest maps onto `BundleRequest.nativeModules` and
-  `notNativeModules` (`readTypedpythonEmitCManifest`); `pypackpack` warns for each module left interpreted.
+  `notNativeModules` (`readTypedpythonEmitCManifest`), and its `runtimeInclude` (the TypedPython runtime headers,
+  `tp_runtime.h`) goes to `nativeOptions.includeDirs` for every module; `pypackpack` warns for each module left
+  interpreted.
 - **The target's CPython.** `pypackpack`'s `installPython(<compileSdk X.Y.Zt>, <target>, installDir)` puts it
   in `build/pythonRuntime/<triple>/<version>/` (skipped when its headers are already there). From it:
   `cpythonIncludeDir` = `include/python<X.Y>t` (or `prefix/include/...` on Android), `extensionSuffix` =
@@ -265,8 +267,13 @@ variant's task action:
 
 **Status: partial.** `NativeLevel.kt`, `BuildPythonArtifactTask.nativeLevelInputs`; `ptest/bundle/NativeLevelTest.kt`
 (manifest mapping and refusals, the `emit-c` command, both runtime layouts and their refusals, the request
-forwarding), `PythonPluginBuildLevelTest`. Not yet exercised end to end: python-multiplatform's sample app
-importing a compiled module from the bundle on desktop is the #25 criterion (typedpython teammate's half).
+forwarding), `PythonPluginBuildLevelTest`. End to end: `ptest/bundle/NativeLevelE2ETest.kt` (opt-in,
+`TOOLCHAIN_NATIVE_E2E=1`; CI's `consumer` job runs it) bundles the fixture `src/test/resources/native-e2e/`
+(one `@compiled` function, the typedpython teammate's) at `native` for the host through a real Gradle build,
+imports `demo.kernel` with the installed 3.15t interpreter, requires it to load from an extension and to print
+`expected.txt`; the same fixture at `bytecode` must fail that extension check. This is #25's criterion (team
+lead 2026-11-21 21:15, Decision 5 (a): in toolchain rather than python-multiplatform's sample, which does not
+apply this plugin). Becomes `implemented` when that CI step has passed; not yet run.
 
 ### 1.7 `useCodeMinifier`, `excludeMetaclass`
 Both are declared on `ReleaseBuildType` (`debug`'s setters throw, §1.5).
@@ -767,9 +774,10 @@ tcl --help
 the four wheels above, each smoke-tested before upload. `uvx --from toolchain-lite==0.1.0 tcl --version`
 prints `tcl 0.1.0` (checked 2026-10-17, macOS arm64). Pull requests that touch these files still build
 and smoke-test the wheels without uploading.
-develop carries 0.1.1 (#136, owner approval 2026-11-13 through the leader): it ships the fix that
-stops tcl at the start directory instead of an ancestor `pyproject.toml`. 0.1.1 is not on PyPI until
-the `toolchain-lite-v0.1.1` release.
+0.1.1 (#136, owner approval 2026-11-13 through the leader) is on PyPI (`toolchain-lite-v0.1.1`, 2026-11-14):
+it stops tcl at the start directory instead of an ancestor `pyproject.toml`. develop carries 1.0.0 (the team
+lead's 1.0 cut, 2026-11-21: every `tcl` item in this section is implemented; no behaviour change from 0.1.1;
+`packpack` 1.0.0). 1.0.0 is not on PyPI until the `toolchain-lite-v1.0.0` release.
 
 ---
 

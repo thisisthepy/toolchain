@@ -107,7 +107,7 @@ docs/            INTENT.md, SPEC.md, locale/, guide/ (GitHub Pages)
 
 ## 빌드와 테스트
 
-전제: `~/.m2` 에 `packpack:0.1.0` (pypackpack 에서 `publishToMavenLocal`), `PATH` 에 `uv`, 네트워크.
+전제: `~/.m2` 에 `packpack:1.0.0` (pypackpack 에서 `publishToMavenLocal`), `PATH` 에 `uv`, 네트워크.
 
 ```bash
 ./gradlew :toolchain:test --rerun --console=plain > .tmp/toolchain-test.log 2>&1; echo "EXIT=$?"
