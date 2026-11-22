@@ -179,4 +179,25 @@ What follows:
   - (a) Embed the darkpyonix kernel in the app beside the L-12 agent, with an on-device client inside the same app.
   - (b) An L-12 to DKP bridge. A DKP `run` maps to L-12 `execute` cell by cell, and the outputs map back.
   - (c) DKP/1 grows a token-authenticated TCP transport, so it can be reached from another uid.
-  Not decided. Questions sent to the darkpyonix lead.
+
+The darkpyonix lead's answers (2026-11-22, team message, checked against darkpyonix-core develop 001cde4):
+- (c) is ruled out: darkpyonix's D5 has no TCP port and the same account only, and "loopback TCP control
+  channel" is in its rejected table. Its remote path is client, then a manager that checks the kernel's tokens
+  (PROTOCOL §6), then a hand-off to the kernel (§3.7); on mobile that manager would live inside the app. Changing
+  D5 is darkpyonix's owner's decision.
+- Correction: the peer-account check is between processes of one uid, not one process. D20 runs kernels in
+  predeclared processes of the same app (`:kernel0` to `:kernel9`, the PyREPL model), and puts the mobile path in
+  Ember, status planned.
+- In-process as a thread is not supported today. User code runs on the kernel's main thread, `run()` installs
+  signal handlers, interrupts are SIGINT, and a hard restart is `os.execv`. A notebook file on disk is required
+  (the kernel takes its id and lock from the path). Changing that is a darkpyonix SPEC item.
+- There is no completion method, and none is planned. `run` with `source` replaces the file's text (an unsaved
+  buffer parsed as a notebook), not a snippet eval. Either would be a new darkpyonix SPEC or PROTOCOL item.
+
+So, for apps built with toolchain (agent proposal, not confirmed), what fits darkpyonix's rules today is:
+- (a) The darkpyonix kernel in its own same-uid process of the app (an Android `:kernelN` process), beside the
+  L-12 agent in the app process, with a notebook file in the app's storage.
+- (b) A manager-style bridge inside the app.
+
+Either is a design for the on-device mode, not part of M1 to M3. It is the owner's to choose, with the darkpyonix
+team for anything that touches their D20 or SPEC.
