@@ -144,5 +144,8 @@ Then:
 - **M5, code push** (SPEC §1.15) reuses the file half of the channel against a server instead of a laptop;
   separate from FastTrack's deploy (pypackpack), which waits for the server-ownership decision.
 
-Open for the maintainer: whether the 2024 "JupyterLab on the device" mode (a notebook with no laptop) is a
-goal at all; if it is, A (or an in-app JupyterLab) comes back for that mode only.
+On-device notebook mode (a notebook with no laptop): the owner answered (2026-11-22 05:45, relayed by the team
+lead in the toolchain report, "Owner answers"): "목표 맞는데 주피터는 아니고 다크피닉스 커널로 바뀌었어". It is a goal,
+reached through the darkpyonix kernel instead of JupyterLab, so A is not brought back for it. Its design waits
+for the darkpyonix kernel's interface and location (asked of the darkpyonix team lead); M1 to M3 go on as
+planned.

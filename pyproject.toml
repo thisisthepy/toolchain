@@ -33,6 +33,11 @@ classifiers = [
 requires-python = ">=3.9"
 dependencies = []
 
+[project.optional-dependencies]
+# The proxy kernel for the live connection (SPEC §2.4; docs/design/live-connection.md B, approved by the team lead
+# 2026-11-22): `uv tool install 'toolchain-lite[kernel]'`. `tcl connect` needs nothing extra.
+kernel = ["ipykernel>=6.29", "jupyter_client>=8"]
+
 [project.urls]
 Homepage = "https://github.com/thisisthepy/toolchain"
 Documentation = "https://thisisthepy.github.io/toolchain/guide-tcl.html"

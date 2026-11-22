@@ -64,6 +64,12 @@ jobs:
       - name: Test ${{ matrix.name }}
         run: ./gradlew :toolchain:${{ matrix.task }} --rerun --console=plain
 
+      # tcl's Python half (SPEC §2.4): the dev agent client, `tcl connect`'s REPL and the proxy kernel under
+      # a real Jupyter client, against a fake agent. ipykernel and jupyter_client come from PyPI for this step.
+      - name: The live-connection client and proxy kernel (Python)
+        if: matrix.task == 'cliTest'
+        run: uv run --no-project --python 3.13 --with ipykernel --with jupyter_client python -m unittest discover -v -s toolchain/src/cliTest/python
+
       - name: The plugin's publication carries no tcl
         if: matrix.task == 'test'
         run: |
@@ -243,6 +249,26 @@ jobs:
             "$appdir"/*) echo "stdlib from the packaged app: $stdlib" ;;
             *) echo "stdlib not from the packaged app ($appdir): '$stdlib'"; exit 1 ;;
           esac
+
+      # Live connection M1 (docs/design/live-connection.md §5, SPEC §2.4): the packaged debug app keeps running
+      # under Xvfb with its dev agent on; toolchain-lite's proxy kernel connects and a Jupyter client runs the
+      # scenarios in it. Without the agent the kernel cannot start and the step fails.
+      - uses: astral-sh/setup-uv@v6
+      - name: A notebook drives the running packaged app (live connection M1)
+        working-directory: usage-example
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y xvfb > /dev/null
+          app=$(find build/compose/binaries/main/app -maxdepth 3 -type f -path '*/bin/*' | head -n 1)
+          read port token < <(python3 -c 'import secrets, socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1], secrets.token_urlsafe(32))')
+          printf '{"host": "127.0.0.1", "port": %s, "token": "%s"}\n' "$port" "$token" > agent.json
+          PYTHON_MULTIPLATFORM_DEV_AGENT="port=$port;token=$token" xvfb-run -a "$app" > app.log 2>&1 &
+          app_pid=$!
+          for i in $(seq 1 90); do grep -q 'dev agent: listening' app.log && break; sleep 1; done
+          grep -q 'dev agent: listening' app.log || { echo "the app's dev agent never started"; cat app.log; exit 1; }
+          uv run --no-project --python 3.13 --with ipykernel --with jupyter_client python ../.github/scripts/live/m1_scenarios.py agent.json \
+            || { cat app.log; kill "$app_pid" || true; exit 1; }
+          kill "$app_pid" || true
 
   # toolchain#22, Android: the debug APK on an x86_64 emulator runs Python with the stdlib
   # python-multiplatform ships and unpacks (PythonBootstrap) plus this plugin's assets/python/
