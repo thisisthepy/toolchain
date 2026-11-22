@@ -160,3 +160,23 @@ The darkpyonix team lead's answer (2026-11-22, team message to toolchain):
 - Agent and kernel: the in-app agent (L-12) could be replaced by the darkpyonix kernel speaking PROTOCOL.md,
   or front it. Not decided by either team. Next step (agent proposal, not confirmed): read PROTOCOL.md and
   compare it with L-12's ops; darkpyonix offered a compatibility check by one of its core teammates.
+
+DKP/1 (darkpyonix `docs/PROTOCOL.md`, read 2026-11-22) against L-12 (agent proposal, not confirmed):
+
+| | L-12 dev agent | DKP/1 darkpyonix kernel |
+|---|---|---|
+| Discovery | the connection file the build or launcher writes (`build/pythonDevAgent/<task>.json`) | UDP multicast on 127.0.0.1 (`239.255.68.80:46880`, TTL 0), announce every 5 s |
+| Transport | TCP on 127.0.0.1, one port | a Unix domain socket (POSIX) or a named pipe (Windows); no TCP port |
+| Authentication | a 43-character token in `hello` | the OS peer account must be the kernel's own (`SO_PEERCRED` / `LOCAL_PEERCRED` / pipe SID); no secret |
+| Framing | one JSON object per line | 4-byte big-endian length plus a JSON object |
+| Unit of execution | `execute {code}`: any code into `__main__` | `run {mode: all/cells, cells or cell_ids, source?}` against the kernel's notebook file; outputs as nbformat events |
+| Completion, hot reload | `complete`, `push` (overlay files, re-import) | none (namespace listing, runs history, collaborative document instead) |
+
+What follows:
+- DKP/1 cannot be the laptop-to-app channel (M1 to M3) as it stands. Its account check rejects any client that is not the app's own OS user. Through `adb forward` the peer is `adbd`, and on Android a second app (Ember) has its own uid. It also has no TCP transport, no completion and no file push.
+- For the on-device mode, it fits when the darkpyonix kernel and its client share one process, or one app's uid. That is darkpyonix's own D20: notebook execution in a fixed in-app process owned by the Ember mobile app.
+- So for apps built with toolchain, the choices are:
+  - (a) Embed the darkpyonix kernel in the app beside the L-12 agent, with an on-device client inside the same app.
+  - (b) An L-12 to DKP bridge. A DKP `run` maps to L-12 `execute` cell by cell, and the outputs map back.
+  - (c) DKP/1 grows a token-authenticated TCP transport, so it can be reached from another uid.
+  Not decided. Questions sent to the darkpyonix lead.
