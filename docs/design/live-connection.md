@@ -146,6 +146,17 @@ Then:
 
 On-device notebook mode (a notebook with no laptop): the owner answered (2026-11-22 05:45, relayed by the team
 lead in the toolchain report, "Owner answers"): "목표 맞는데 주피터는 아니고 다크피닉스 커널로 바뀌었어". It is a goal,
-reached through the darkpyonix kernel instead of JupyterLab, so A is not brought back for it. Its design waits
-for the darkpyonix kernel's interface and location (asked of the darkpyonix team lead); M1 to M3 go on as
-planned.
+reached through the darkpyonix kernel instead of JupyterLab, so A is not brought back for it. M1 to M3 go on as planned.
+
+The darkpyonix team lead's answer (2026-11-22, team message to toolchain):
+- Location: repository DarkPyonix/darkpyonix, folder `darkpyonix/kernel/`, the Python package `darkpyonix`,
+  started with `python -m darkpyonix <notebook file>` (one kernel per source file per machine). A Rust
+  manager (`darkpyonix/manager/`) is an optional HTTP front.
+- Protocol: its own, not Jupyter messaging: `docs/PROTOCOL.md` (discovery datagrams plus JSON control frames
+  over a local socket), notebook format `docs/FORMAT.md`.
+- Standard library only, no native dependencies, CPython 3.8+ from source, so in-process use in the app is
+  plausible, but untested on free-threaded 3.15t and on Android and iOS. darkpyonix's INTENT D20 puts mobile
+  notebook execution in a fixed in-app process owned by the Ember mobile app.
+- Agent and kernel: the in-app agent (L-12) could be replaced by the darkpyonix kernel speaking PROTOCOL.md,
+  or front it. Not decided by either team. Next step (agent proposal, not confirmed): read PROTOCOL.md and
+  compare it with L-12's ops; darkpyonix offered a compatibility check by one of its core teammates.
