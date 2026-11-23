@@ -177,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     p_install.add_argument("--display-name")
     p_install.add_argument("--prefix", help="install under this prefix instead of the user's Jupyter directory")
     p_run = sub.add_parser("run", help="run the proxy kernel (Jupyter starts this from the kernelspec)")
-    p_run.add_argument("--agent", required=True, type=Path)
+    p_run.add_argument("--agent", dest="agent_file", required=True, type=Path)
     p_run.add_argument("-f", dest="connection_file", required=True)
     p_console = sub.add_parser("console", help="a plain REPL into the app")
     p_console.add_argument("agent_file", type=Path)
