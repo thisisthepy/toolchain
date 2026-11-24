@@ -263,7 +263,11 @@ variant's task action:
   `.cp<XY>t-win_<arch>.pyd`), and `cpythonLibDir`/`cpythonLibraryName` = what the extension links: Android's
   `lib/libpython<X.Y>t.so`, Windows' `libs/python<XY>t.lib`, iOS's XCframework slice holding `Python.framework`
   (no library name). `pythonAbi` = `compileSdk`'s `X.Y`.
-- **Refused, that variant only, naming the fix:** no `compileSdk`; no gate (`typedpythonCheck` skipped or
+- **The bytecode of the rest.** `ResourceBundler` byte-compiles every module that did not become an
+  extension (an empty `__init__.py` too) at `native` as at `bytecode`, so `native` gets the same `.venv`
+  checks (`compilesBytecode`, `bytecodeInterpreterRejection`), with messages naming `compileLevel 'native'`.
+- **Refused, that variant only, naming the fix:** no `.venv` interpreter, or one of another minor version
+  (above); no `compileSdk`; no gate (`typedpythonCheck` skipped or
   failed); an `emit-c` failure (its output); a compiled module that is not a `.py` under the import root;
   a CPython tree without `Python.h`, `EXT_SUFFIX` or Android's `libpython`. Targets the native slot does not
   build (iOS, Windows, wasm today) are refused by `pypackpack`'s `checkSupport` in its own words.
@@ -274,7 +278,8 @@ forwarding), `PythonPluginBuildLevelTest`. End to end: `ptest/bundle/NativeLevel
 `TOOLCHAIN_NATIVE_E2E=1`; CI's `consumer` job runs it) bundles the fixture `src/test/resources/native-e2e/`
 (one `@compiled` function, the typedpython teammate's) at `native` for the host through a real Gradle build,
 imports `demo.kernel` with the installed 3.15t interpreter, requires it to load from an extension and to print
-`expected.txt`; the same fixture at `bytecode` must fail that extension check. This is #25's criterion (team
+`expected.txt`; the same fixture at `bytecode` must fail that extension check. The fixture declares no
+dependency, so the test makes the `.venv` both levels compile with (`uv venv --python 3.15t`). This is #25's criterion (team
 lead 2026-11-21 21:15, Decision 5 (a): in toolchain rather than python-multiplatform's sample, which does not
 apply this plugin). Becomes `implemented` when that CI step has passed; not yet run.
 

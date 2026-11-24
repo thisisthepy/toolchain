@@ -46,8 +46,30 @@ class NativeLevelE2ETest {
     private val testKitHome = File("build/testkit-home").absoluteFile
     private val fixture = File("src/test/resources/native-e2e").absoluteFile
 
+    private val projectsRoot = File("build/native-e2e-testkit").absoluteFile
+
+    /**
+     * The `.venv` both projects compile their remaining `.py` with. `native` byte-compiles every module
+     * TypedPython made no extension for (the fixture's empty `demo/__init__.py`), as `bytecode` does,
+     * and `pypackpack` finds that interpreter in a `.venv` at or above the package (`docs/SPEC.md` §1.6).
+     * The fixture declares no dependency, so `installPythonDependencies` makes none; the user's other
+     * way, `uv venv --python <X.Y>`, makes it here, once, above both level directories.
+     */
+    private fun ensureVenv() {
+        if (File(projectsRoot, ".venv/pyvenv.cfg").isFile) return
+        projectsRoot.mkdirs()
+        val process = ProcessBuilder("uv", "venv", "--python", "3.15t", File(projectsRoot, ".venv").path)
+            .directory(projectsRoot)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText()
+        assertTrue(process.waitFor(5, TimeUnit.MINUTES), "uv venv did not finish")
+        assertEquals(0, process.exitValue(), "uv venv --python 3.15t failed:\n$output")
+    }
+
     private fun project(level: String): File {
-        val dir = File("build/native-e2e-testkit/$level").absoluteFile
+        ensureVenv()
+        val dir = File(projectsRoot, level)
         dir.deleteRecursively()
         fixture.copyRecursively(File(dir, "pkg"))
         File(dir, "pkg/expected.txt").delete()
