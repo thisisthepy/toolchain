@@ -54,8 +54,17 @@ def main() -> int:
         run(client, "counter = 41")
         status, _, result = run(client, "counter += 1\ncounter")
         check("state persists across cells", (status, result) == ("ok", "42"), (status, result))
-        status, _, result = run(client, "import example_py, os\nos.path.dirname(example_py.__file__).replace(os.sep, '/').split('/')[-2]")
-        check("the app's payload imports inside the app", status == "ok" and result == "'python'", (status, result))
+        # The payload root python-multiplatform put on sys.path (its PythonPayload): the staged `python/`
+        # directory itself, or, for a payload inside the app's jar, the copy it extracts to
+        # `<tmp>/python-multiplatform-payload/<sha256>`.
+        status, _, result = run(
+            client,
+            "import example_py, os, sys\n"
+            "root = os.path.dirname(os.path.dirname(os.path.abspath(example_py.__file__)))\n"
+            "(root in [os.path.abspath(p) for p in sys.path], os.path.basename(root) == 'python'"
+            " or os.path.basename(os.path.dirname(root)) == 'python-multiplatform-payload')",
+        )
+        check("the app's payload imports inside the app", status == "ok" and result == "(True, True)", (status, result))
         status, _, _ = run(client, "raise ValueError('boom')")
         check("an error is reported as one", status == "error", status)
         client.complete("count", 5)

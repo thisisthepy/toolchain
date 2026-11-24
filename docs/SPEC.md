@@ -809,9 +809,12 @@ by a debug build (§1.14, *The dev agent's launch*), which writes the connection
 `toolchain/src/cliTest/python/test_kernel.py` (the client, the REPL, the kernelspec, and a real
 `jupyter_client` driving the proxy kernel against a fake agent with the L-12 message shapes; CI `test`, the
 cliTest matrix entry). M1's end-to-end check is the `desktop-e2e` step *A notebook drives the running packaged
-app*: the packaged debug app runs under Xvfb with its agent, and `.github/scripts/live/m1_scenarios.py` runs, through
+app*: the packaged debug app (whose `main` initialises Python at start, so its agent starts with the app) runs
+under Xvfb with its agent, and `.github/scripts/live/m1_scenarios.py` runs, through
 the proxy kernel and Jupyter's client API: output and result, the cell running in the app's process, state across
-cells, the app's own payload importing, an error, and completion. Without the agent the kernel cannot start and
+cells, the app's own payload importing (from a root on the app's `sys.path`: the staged `python/` directory,
+or python-multiplatform's extracted `python-multiplatform-payload/<sha256>` copy of a jar payload), an error,
+and completion. Run locally on macOS against the packaged app (2026-11-25): 6/6. Without the agent the kernel cannot start and
 the step fails. Not yet: the design's window scenarios (state `getValue`/`setValue`, re-declaring the root, reading
 back what was typed). They need pythonx-compose in `usage-example`, which leaves `compose = true` out until
 pythonx-compose is published (§1.16). M2 (Android) and M3 (iOS simulator) follow.
