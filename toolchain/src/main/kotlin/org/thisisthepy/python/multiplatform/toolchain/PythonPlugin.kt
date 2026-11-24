@@ -317,7 +317,7 @@ class PythonPlugin : Plugin<Project> {
                 project.findProperty(COMPOSE_PYTHON_PROPERTY)?.toString(),
                 project.projectDir,
             )
-            val pip = resolvePipSettings(extension.defaultConfig.pip)
+            val pip = resolvePipSettings(extension.defaultConfig.pip, project.projectDir)
             val pipArgumentsWithCompose = mergeComposeFindLinks(pip.arguments.orEmpty(), composePython.findLinks)
             installTask.configure {
                 dependenciesList = collectInstallDependencies(extension.sourceSets.allSourceSets()) +
@@ -358,6 +358,8 @@ class PythonPlugin : Plugin<Project> {
                     rejection = composePython.rejection ?: sourceSetRejection
                     pipRejection = pip.rejection
                     installDir = targetDependenciesDir(projectBuildDir, dependencySet)
+                    jitRecipeDirs = pip.jitRecipeDirs
+                    crossDir = File(projectBuildDir, CROSS_BUILD_DIRECTORY)
                     // No package means no bundle reads this directory (`BuildPythonArtifactTask` skips
                     // too), so nothing is downloaded for it.
                     onlyIf { hasPackage }

@@ -14,14 +14,27 @@ import java.net.URI
 data class PipSettings(
     val arguments: Map<String, String>?,
     val rejection: String?,
+    /**
+     * `jit { localRecipes { … } }`'s directories, each resolved against the project directory, or `null` when no
+     * `jit` repository is declared. Non-null (possibly empty) means a target dependency without a wheel is built in
+     * pypackpack's cross build environment, with its recipe from these directories when one exists (#152).
+     */
+    val jitRecipeDirs: List<File>? = null,
 )
 
-fun resolvePipSettings(pip: PipExtension): PipSettings =
-    try {
-        PipSettings(arguments = resolvePipArguments(pip), rejection = null)
-    } catch (error: IllegalArgumentException) {
-        PipSettings(arguments = null, rejection = error.message)
+fun resolvePipSettings(
+    pip: PipExtension,
+    projectDir: File,
+): PipSettings {
+    val recipeDirs = pip.repositories.jit?.localRecipes?.paths?.map { path ->
+        File(path).let { if (it.isAbsolute) it else File(projectDir, path) }
     }
+    return try {
+        PipSettings(arguments = resolvePipArguments(pip), rejection = null, jitRecipeDirs = recipeDirs)
+    } catch (error: IllegalArgumentException) {
+        PipSettings(arguments = null, rejection = error.message, jitRecipeDirs = recipeDirs)
+    }
+}
 
 /**
  * Maps the pip DSL onto `uv add` options, keyed the way pypackpack's uv backend expects (`--<key>
@@ -32,16 +45,17 @@ fun resolvePipSettings(pip: PipExtension): PipSettings =
  * - `local { url = … }`: `--find-links`, a directory of wheels. A `file:` URI (the example writes
  *   `Paths.get(…).toUri().toString()`) becomes a plain path.
  * - `autoUpdate = true`: `--upgrade`.
- * - `jit { … }`: throws. It names a repository that builds packages from recipes on demand, and
- *   pypackpack has no recipe build to hand that to.
+ * - `jit { localRecipes { … } }`: no uv option. It makes each target install build the dependencies that have no
+ *   wheel for the target, in pypackpack's cross build environment, with the recipes in those directories
+ *   ([PipSettings.jitRecipeDirs], #152).
+ * - `jit { url = … }`: throws. It names a recipe server, and none exists (Decision 16, 2026-11-25).
  */
 fun resolvePipArguments(pip: PipExtension): Map<String, String> {
     val repositories = pip.repositories
-    repositories.jit?.let { jit ->
+    repositories.jit?.url?.let { url ->
         throw IllegalArgumentException(
-            "pip { repositories { jit { … } } } is not supported yet: building packages from recipes " +
-                "(url ${jit.url ?: "<none>"}, localRecipes ${jit.localRecipes.paths}) needs a recipe " +
-                "build in pypackpack, which does not exist. Use central or local instead.",
+            "pip { repositories { jit { url = \"$url\" } } } names a recipe server, and there is none to build " +
+                "from. Remove url and keep the recipes on disk with jit { localRecipes { add(\"<directory>\") } }.",
         )
     }
 
