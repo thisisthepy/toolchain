@@ -2,9 +2,11 @@
 """Live connection M1 (toolchain docs/design/live-connection.md §5; SPEC §2.4): a Jupyter client drives the
 packaged desktop app through toolchain-lite's proxy kernel.
 
-    uv run --no-project --with ipykernel --with jupyter_client python .github/scripts/live/m1_scenarios.py <agent.json>
+    uv run --no-project --with ipykernel --with jupyter_client python .github/scripts/live/m1_scenarios.py <agent.json> [--android]
 
-<agent.json> is the connection file (host, port, token) of an app started with PYTHON_MULTIPLATFORM_DEV_AGENT.
+<agent.json> is the connection file (host, port, token) of an app started with PYTHON_MULTIPLATFORM_DEV_AGENT,
+or, with --android (M2), the debug APK's `build/pythonDevAgent/android.json` after `connectPythonAndroid`; the
+cell then must also report `sys.platform == 'android'`.
 Fails (exit 1) unless, through the kernel: a cell's output and result come back; a name set in one cell is
 there in the next; the app's own payload (example_py) imports from inside the app; an error is reported as
 one; completion sees the app's namespace; and the pid is not this process's (the code ran in the app).
@@ -43,14 +45,18 @@ def check(label, ok, detail):
 
 def main() -> int:
     agent_file = Path(sys.argv[1]).resolve()
+    android = "--android" in sys.argv[2:]
     prefix = Path(tempfile.mkdtemp(prefix="tcl-jupyter-"))
-    kernel.install(agent_file, "tcl-m1", "usage-example (desktop debug)", prefix=str(prefix))
+    kernel.install(agent_file, "tcl-m1", "usage-example (Android debug)" if android else "usage-example (desktop debug)", prefix=str(prefix))
     os.environ["JUPYTER_PATH"] = str(prefix / "share" / "jupyter")
     manager, client = start_new_kernel(kernel_name="tcl-m1", startup_timeout=60)
     try:
         status, text, result = run(client, "import os\nprint('hello from the app')\nos.getpid()")
         check("a cell's stream and result come back", status == "ok" and text == "hello from the app\n" and result, (status, text, result))
         check("the cell ran in the app, not here", int(result) != os.getpid(), result)
+        if android:
+            status, _, result = run(client, "import sys\nsys.platform")
+            check("the cell ran on the Android device", (status, result) == ("ok", "'android'"), (status, result))
         run(client, "counter = 41")
         status, _, result = run(client, "counter += 1\ncounter")
         check("state persists across cells", (status, result) == ("ok", "42"), (status, result))

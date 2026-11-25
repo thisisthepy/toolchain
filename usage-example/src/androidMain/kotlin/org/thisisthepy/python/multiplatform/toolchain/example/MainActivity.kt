@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import python.multiplatform.env.PythonBootstrap
 
 
 class MainActivity : ComponentActivity() {
@@ -17,6 +18,11 @@ class MainActivity : ComponentActivity() {
             finish()
             return
         }
+
+        // The app's Python starts with the app, as on desktop: python-multiplatform starts its dev agent from
+        // Python3.initialize() (here through PythonBootstrap), and a debug build's payload marker carries the
+        // agent's port and token (live connection M2, toolchain#150).
+        PythonBootstrap.initialize(this)
 
         setContent {
             App()

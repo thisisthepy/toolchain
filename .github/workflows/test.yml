@@ -332,7 +332,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run the installed APK's Python on an emulator
+      - name: Run the installed APK's Python on an emulator, then drive it from a notebook (live connection M2)
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -340,8 +340,11 @@ jobs:
           target: google_apis
           disable-animations: true
           # On a failed check the step prints unfiltered logcat: a native crash logs under DEBUG/libc, not PythonSmoke.
+          # Then live connection M2 (toolchain#150): the APK's marker carries the agent's request,
+          # connectPythonAndroid forwards its port, and the M1 scenarios run through the proxy kernel on the device.
           script: |
             set -eu; apk=$(find usage-example/build/outputs/apk/debug -name '*.apk' | head -n 1); [ -n "$apk" ]; adb install -r "$apk"; adb logcat -c; adb shell am start -W -n org.thisisthepy.python.multiplatform.toolchain.example/.MainActivity --ez python-smoke true; sleep 20; adb logcat -d -s PythonSmoke:V > smoke.log; cat smoke.log; if ! grep 'PYTHON_SMOKE_OK ' smoke.log | grep -q '/data/'; then echo '--- smoke check failed: last 200 logcat lines, all tags ---'; adb logcat -d -t 200 || true; echo '--- crash buffer ---'; adb logcat -d -b crash || true; exit 1; fi
+            bash .github/scripts/live/m2_android.sh
 
   guide:
     runs-on: ubuntu-latest
