@@ -282,7 +282,7 @@ history removing.
 
 ## 16. Building and testing
 
-Prerequisites: `org.thisisthepy.python.multiplatform:packpack:0.1.0` in `~/.m2` (published from the
+Prerequisites: `org.thisisthepy.python.multiplatform:packpack:1.0.0` in `~/.m2` (published from the
 `pypackpack` repository), `uv` on `PATH`, and network access: `InstallDependenciesTaskTest` and
 `InstallerTest` run a real `uv add` against PyPI. `usage-example` additionally needs an Android SDK
 (`ANDROID_HOME`) and python-multiplatform in `~/.m2`: from a python-multiplatform checkout,

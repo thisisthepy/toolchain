@@ -48,6 +48,7 @@ class NativeLevelTest {
         val manifest = readTypedpythonEmitCManifest(manifestJson)
 
         assertEquals(File("/p/src/main"), manifest.projectRoot)
+        assertEquals(File("/p/rt"), manifest.runtimeInclude)
         assertEquals(
             listOf(ExtensionModuleSource("app.physics", listOf(File("/c/app_physics.c")), listOf(File("/p/rt")), mapOf("TP_X" to "1", "TP_Y" to null))),
             manifest.nativeModules,
@@ -151,6 +152,7 @@ class NativeLevelTest {
             extensionSuffix = ".cpython-315t-aarch64-linux-android.so",
             cpythonLibDir = File(dir, "prefix/lib"),
             cpythonLibraryName = "libpython3.15t.so",
+            nativeOptions = org.thisisthepy.python.multiplatform.packpack.compile.extension.ExtensionCompileOptions(includeDirs = listOf(File("/p/rt"))),
         )
         val request = bundleRequestFor(dir, "aarch64-linux-android", "release", File(dir, "out"), buildLevel = "native", native = native)
 
@@ -162,6 +164,7 @@ class NativeLevelTest {
         assertEquals(native.extensionSuffix, request.extensionSuffix)
         assertEquals(native.cpythonLibDir, request.cpythonLibDir)
         assertEquals("libpython3.15t.so", request.cpythonLibraryName)
+        assertEquals(listOf(File("/p/rt")), request.nativeOptions.includeDirs)
     }
 
     @Test
