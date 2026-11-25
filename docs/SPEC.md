@@ -844,8 +844,11 @@ and completion. Run locally on macOS against the packaged app (2026-11-25): 6/6.
 the step fails. Not yet: the design's window scenarios (state `getValue`/`setValue`, re-declaring the root, reading
 back what was typed). They need pythonx-compose in `usage-example`, which leaves `compose = true` out until
 pythonx-compose is published (§1.16). M2 (Android): the launch half is in §1.14 (the marker's request,
-`connectPythonAndroid`); its end-to-end check in `android-e2e` follows python-multiplatform's marker read. M3 (iOS
-simulator) follows.
+`connectPythonAndroid`). Its end-to-end check is the `android-e2e` emulator step's `.github/scripts/live/m2_android.sh`:
+the debug APK's marker carries a request, `connectPythonAndroid` forwards the port, and `m1_scenarios.py --android`
+runs the same scenarios on the device (plus `sys.platform == 'android'`). usage-example's `MainActivity` initialises
+Python at start, as its desktop `main` does. Not yet run: it needs python-multiplatform L-12 to read the marker
+when the variable is unset. M3 (iOS simulator) follows.
 
 ---
 
