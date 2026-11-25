@@ -93,6 +93,10 @@ def metadata(project: dict) -> str:
     if project.get("keywords"):
         lines.append(f"Keywords: {','.join(project['keywords'])}")
     lines.append(f"Requires-Python: {project['requires-python']}")
+    lines += [f"Requires-Dist: {d}" for d in project.get("dependencies", [])]
+    for extra, deps in project.get("optional-dependencies", {}).items():
+        lines.append(f"Provides-Extra: {extra}")
+        lines += [f'Requires-Dist: {d}; extra == "{extra}"' for d in deps]
     lines += [f"Project-URL: {label}, {url}" for label, url in project.get("urls", {}).items()]
     lines.append("Description-Content-Type: text/markdown")
     readme = (ROOT / project["readme"]).read_text(encoding="utf-8")

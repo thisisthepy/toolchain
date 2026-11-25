@@ -144,5 +144,60 @@ Then:
 - **M5, code push** (SPEC §1.15) reuses the file half of the channel against a server instead of a laptop;
   separate from FastTrack's deploy (pypackpack), which waits for the server-ownership decision.
 
-Open for the maintainer: whether the 2024 "JupyterLab on the device" mode (a notebook with no laptop) is a
-goal at all; if it is, A (or an in-app JupyterLab) comes back for that mode only.
+On-device notebook mode (a notebook with no laptop): the owner answered (2026-11-22 05:45, relayed by the team
+lead in the toolchain report, "Owner answers"): "목표 맞는데 주피터는 아니고 다크피닉스 커널로 바뀌었어". It is a goal,
+reached through the darkpyonix kernel instead of JupyterLab, so A is not brought back for it. M1 to M3 go on as planned.
+
+The darkpyonix team lead's answer (2026-11-22, team message to toolchain):
+- Location: repository DarkPyonix/darkpyonix, folder `darkpyonix/kernel/`, the Python package `darkpyonix`,
+  started with `python -m darkpyonix <notebook file>` (one kernel per source file per machine). A Rust
+  manager (`darkpyonix/manager/`) is an optional HTTP front.
+- Protocol: its own, not Jupyter messaging: `docs/PROTOCOL.md` (discovery datagrams plus JSON control frames
+  over a local socket), notebook format `docs/FORMAT.md`.
+- Standard library only, no native dependencies, CPython 3.8+ from source, so in-process use in the app is
+  plausible, but untested on free-threaded 3.15t and on Android and iOS. darkpyonix's INTENT D20 puts mobile
+  notebook execution in a fixed in-app process owned by the Ember mobile app.
+- Agent and kernel: the in-app agent (L-12) could be replaced by the darkpyonix kernel speaking PROTOCOL.md,
+  or front it. Not decided by either team. Next step (agent proposal, not confirmed): read PROTOCOL.md and
+  compare it with L-12's ops; darkpyonix offered a compatibility check by one of its core teammates.
+
+DKP/1 (darkpyonix `docs/PROTOCOL.md`, read 2026-11-22) against L-12 (agent proposal, not confirmed):
+
+| | L-12 dev agent | DKP/1 darkpyonix kernel |
+|---|---|---|
+| Discovery | the connection file the build or launcher writes (`build/pythonDevAgent/<task>.json`) | UDP multicast on 127.0.0.1 (`239.255.68.80:46880`, TTL 0), announce every 5 s |
+| Transport | TCP on 127.0.0.1, one port | a Unix domain socket (POSIX) or a named pipe (Windows); no TCP port |
+| Authentication | a 43-character token in `hello` | the OS peer account must be the kernel's own (`SO_PEERCRED` / `LOCAL_PEERCRED` / pipe SID); no secret |
+| Framing | one JSON object per line | 4-byte big-endian length plus a JSON object |
+| Unit of execution | `execute {code}`: any code into `__main__` | `run {mode: all/cells, cells or cell_ids, source?}` against the kernel's notebook file; outputs as nbformat events |
+| Completion, hot reload | `complete`, `push` (overlay files, re-import) | none (namespace listing, runs history, collaborative document instead) |
+
+What follows:
+- DKP/1 cannot be the laptop-to-app channel (M1 to M3) as it stands. Its account check rejects any client that is not the app's own OS user. Through `adb forward` the peer is `adbd`, and on Android a second app (Ember) has its own uid. It also has no TCP transport, no completion and no file push.
+- For the on-device mode, it fits when the darkpyonix kernel and its client share one process, or one app's uid. That is darkpyonix's own D20: notebook execution in a fixed in-app process owned by the Ember mobile app.
+- So for apps built with toolchain, the choices are:
+  - (a) Embed the darkpyonix kernel in the app beside the L-12 agent, with an on-device client inside the same app.
+  - (b) An L-12 to DKP bridge. A DKP `run` maps to L-12 `execute` cell by cell, and the outputs map back.
+  - (c) DKP/1 grows a token-authenticated TCP transport, so it can be reached from another uid.
+
+The darkpyonix lead's answers (2026-11-22, team message, checked against darkpyonix-core develop 001cde4):
+- (c) is ruled out: darkpyonix's D5 has no TCP port and the same account only, and "loopback TCP control
+  channel" is in its rejected table. Its remote path is client, then a manager that checks the kernel's tokens
+  (PROTOCOL §6), then a hand-off to the kernel (§3.7); on mobile that manager would live inside the app. Changing
+  D5 is darkpyonix's owner's decision.
+- Correction: the peer-account check is between processes of one uid, not one process. D20 runs kernels in
+  predeclared processes of the same app (`:kernel0` to `:kernel9`, the PyREPL model), and puts the mobile path in
+  Ember, status planned.
+- In-process as a thread is not supported today. User code runs on the kernel's main thread, `run()` installs
+  signal handlers, interrupts are SIGINT, and a hard restart is `os.execv`. A notebook file on disk is required
+  (the kernel takes its id and lock from the path). Changing that is a darkpyonix SPEC item.
+- There is no completion method, and none is planned. `run` with `source` replaces the file's text (an unsaved
+  buffer parsed as a notebook), not a snippet eval. Either would be a new darkpyonix SPEC or PROTOCOL item.
+
+So, for apps built with toolchain (agent proposal, not confirmed), what fits darkpyonix's rules today is:
+- (a) The darkpyonix kernel in its own same-uid process of the app (an Android `:kernelN` process), beside the
+  L-12 agent in the app process, with a notebook file in the app's storage.
+- (b) A manager-style bridge inside the app.
+
+Either is a design for the on-device mode, not part of M1 to M3. It is the owner's to choose, with the darkpyonix
+team for anything that touches their D20 or SPEC.

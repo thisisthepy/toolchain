@@ -789,6 +789,44 @@ it stops tcl at the start directory instead of an ancestor `pyproject.toml`. dev
 lead's 1.0 cut, 2026-11-21: every `tcl` item in this section is implemented; no behaviour change from 0.1.1;
 `packpack` 1.0.0). 1.0.0 is not on PyPI until the `toolchain-lite-v1.0.0` release.
 
+### 2.4 The live connection: `tcl kernel install` and `tcl connect`
+```shell
+uv tool install 'toolchain-lite[kernel]'
+tcl kernel install usage-example/build/pythonDevAgent/run.json --name usage-example
+tcl connect usage-example/build/pythonDevAgent/run.json
+```
+The developer side of `docs/design/live-connection.md` (option B; the team lead approved B and asked for M1,
+2026-11-22 05:40, toolchain report). The app's half is python-multiplatform's dev agent (its SPEC L-12), started
+by a debug build (§1.14, *The dev agent's launch*), which writes the connection file `build/pythonDevAgent/<task>.json`.
+
+- `toolchain_lite.agent` (stdlib only) is the agent's client. It sends `hello` with the token, then `execute`
+  (streams, a result, `done` with the status and, on error, the traceback), `complete` and `push`. A refusal
+  (a wrong token: `AuthError`), a closed connection or no agent at the port fails with a reason that names how
+  the agent is started.
+- `tcl connect <file>` (`python -m toolchain_lite.kernel console`) is a line REPL into the app; a line ending in
+  `:` opens a block that a blank line runs. It needs nothing beyond the standard library.
+- `tcl kernel install <file> [--name N] [--display-name T]` registers a Jupyter kernelspec whose `argv` runs
+  this interpreter's `toolchain_lite.kernel run --agent <file>`. The kernel is an `ipykernel.kernelbase.Kernel`
+  subclass: `execute_request` and `complete_request` go to the agent, `inspect_request` runs `pydoc` inside the
+  app, and the agent's streams, results and errors come back as Jupyter messages. It needs the `kernel` extra
+  (`ipykernel`, `jupyter_client`); without it the command fails naming the extra.
+- The native `tcl` hands both commands to the Python package installed beside it (the tool environment's
+  interpreter, else `TCL_PYTHON`, else `python3`). A missing connection file is refused before Python runs.
+
+**Status: partial**. `tcl/CliArgsTest.kt` (the hand-off and the refusals);
+`toolchain/src/cliTest/python/test_kernel.py` (the client, the REPL, the kernelspec, and a real
+`jupyter_client` driving the proxy kernel against a fake agent with the L-12 message shapes; CI `test`, the
+cliTest matrix entry). M1's end-to-end check is the `desktop-e2e` step *A notebook drives the running packaged
+app*: the packaged debug app (whose `main` initialises Python at start, so its agent starts with the app) runs
+under Xvfb with its agent, and `.github/scripts/live/m1_scenarios.py` runs, through
+the proxy kernel and Jupyter's client API: output and result, the cell running in the app's process, state across
+cells, the app's own payload importing (from a root on the app's `sys.path`: the staged `python/` directory,
+or python-multiplatform's extracted `python-multiplatform-payload/<sha256>` copy of a jar payload), an error,
+and completion. Run locally on macOS against the packaged app (2026-11-25): 6/6. Without the agent the kernel cannot start and
+the step fails. Not yet: the design's window scenarios (state `getValue`/`setValue`, re-declaring the root, reading
+back what was typed). They need pythonx-compose in `usage-example`, which leaves `compose = true` out until
+pythonx-compose is published (§1.16). M2 (Android) and M3 (iOS simulator) follow.
+
 ---
 
 ## Outside intent: needs a decision

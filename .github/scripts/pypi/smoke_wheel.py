@@ -6,7 +6,8 @@
 Adapted from pypackpack's smoke_wheel.py (pypackpack #53). Fails (exit 1) unless, from that venv:
   1. `tcl --help` exits 0 and prints the usage line;
   2. `tcl --version` and `python -m toolchain_lite --version` print "tcl <pyproject.toml's version>";
-  3. `tcl install six` in an empty directory creates a pyproject.toml that depends on six (a real
+  3. `python -m toolchain_lite.kernel --help` runs (the live connection's package, stdlib only);
+  4. `tcl install six` in an empty directory creates a pyproject.toml that depends on six (a real
      install, which needs uv: tcl finds it on PATH or pypackpack downloads it into ~/.pypackpack/uv).
 """
 from __future__ import annotations
@@ -46,6 +47,8 @@ def main() -> int:
         expected = f"tcl {version}"
         check([tcl, "--version"], expected)
         check([str(python), "-m", "toolchain_lite", "--version"], expected)
+        # The live connection's Python half ships in the wheel and starts on the standard library alone (SPEC 2.4).
+        check([str(python), "-m", "toolchain_lite.kernel", "--help"], "console")
 
         work = Path(tmp) / "work"
         work.mkdir()
