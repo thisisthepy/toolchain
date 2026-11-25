@@ -22,7 +22,9 @@ import org.thisisthepy.python.multiplatform.toolchain.bundle.AssemblePythonPacka
 import org.thisisthepy.python.multiplatform.toolchain.bundle.BuildPythonArtifactTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.PythonStagingPlatform
 import org.thisisthepy.python.multiplatform.toolchain.bundle.StagePythonBundleTask
+import org.thisisthepy.python.multiplatform.toolchain.devagent.ConnectPythonDevAgentTask
 import org.thisisthepy.python.multiplatform.toolchain.devagent.DEV_AGENT_CONNECTION_DIRECTORY
+import org.thisisthepy.python.multiplatform.toolchain.devagent.DEV_AGENT_CONNECT_ANDROID_TASK
 import org.thisisthepy.python.multiplatform.toolchain.devagent.DEV_AGENT_LAUNCH_ACTION
 import org.thisisthepy.python.multiplatform.toolchain.devagent.DevAgentLaunchAction
 import org.thisisthepy.python.multiplatform.toolchain.devagent.devAgentEnabled
@@ -768,6 +770,7 @@ private fun registerAndroidAssetSourceDirectory(project: Project, directory: Fil
  * every destination, and its desktop run tasks start an agent ([DevAgentLaunchAction]). Compose's `run` and
  * the Kotlin JVM target's `<target>Run` are the run tasks; a packaged distribution is launched by the OS, not
  * by Gradle, so it gets the marker (it was built from this build type) but no variable from here.
+ * Android and iOS stagings write the request into the marker, and `connectPythonAndroid` forwards its port.
  */
 private fun configureDevAgent(
     project: Project,
@@ -776,13 +779,25 @@ private fun configureDevAgent(
 ) {
     stageTasks.values.forEach { it.configure { devAgentMarker = enabled } }
     if (!enabled) return
+    val connectionDir = File(project.layout.buildDirectory.get().asFile, DEV_AGENT_CONNECTION_DIRECTORY)
+    // toolchain#150 M2/M3: the OS starts a mobile app, so its marker carries the request (Decision 15 (a)).
+    listOf(PythonStagingPlatform.ANDROID, PythonStagingPlatform.IOS).forEach { platform ->
+        stageTasks[platform]?.configure { devAgentConnectionFile = File(connectionDir, "${platform.directoryName}.json") }
+    }
+    if (stageTasks.containsKey(PythonStagingPlatform.ANDROID)) {
+        project.tasks.register(DEV_AGENT_CONNECT_ANDROID_TASK, ConnectPythonDevAgentTask::class.java) {
+            group = PythonPlugin.TASK_GROUP
+            description = "Forwards the laptop's dev-agent port to the installed debug Android app (adb forward)."
+            connectionFile = File(connectionDir, "${PythonStagingPlatform.ANDROID.directoryName}.json")
+            sdkDir = readAndroidSdkDir(project.rootDir)
+        }
+    }
     val runTaskNames = mutableSetOf("run")
     project.plugins.withId("org.jetbrains.kotlin.multiplatform") {
         project.extensions.findByType(KotlinMultiplatformExtension::class.java)?.targets
             ?.matching { it.platformType == KotlinPlatformType.jvm }
             ?.all { runTaskNames += "${name}Run" }
     }
-    val connectionDir = File(project.layout.buildDirectory.get().asFile, DEV_AGENT_CONNECTION_DIRECTORY)
     project.tasks.withType(JavaExec::class.java).matching { it.name in runTaskNames }.configureEach {
         doFirst(DEV_AGENT_LAUNCH_ACTION, DevAgentLaunchAction(File(connectionDir, "$name.json")))
     }
@@ -1203,3 +1218,11 @@ private fun declaredPlatformVariantNames(platforms: PlatformsExtension): List<St
         platforms.ios?.variants?.forEach { add(it.name) }
         platforms.desktop?.variants?.forEach { add(it.name) }
     }
+
+/** `sdk.dir` from [rootDir]'s `local.properties`, where Android Studio records the SDK; null when absent. */
+internal fun readAndroidSdkDir(rootDir: File): File? {
+    val file = File(rootDir, "local.properties")
+    if (!file.isFile) return null
+    val properties = java.util.Properties().apply { file.inputStream().use { load(it) } }
+    return properties.getProperty("sdk.dir")?.let(::File)
+}

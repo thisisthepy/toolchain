@@ -85,6 +85,22 @@ class StagePythonBundleTaskTest {
         assertFalse(marker.exists(), "a release staging kept the debug marker")
     }
 
+    /**
+     * toolchain#150 M2 (Decision 15 (a)): an Android or iOS app is launched by the OS, so no variable reaches it.
+     * Its marker carries the request instead, in the variable's form, and python-multiplatform reads it when the
+     * variable is unset.
+     */
+    @Test
+    fun `the dev-agent marker can carry the agent's request`() {
+        val bundle = bundleDir("fixture_pkg/__init__.py" to "VALUE = 1\n")
+        val destination = emptyDestination()
+        val request = "port=4719;token=${"t".repeat(43)}"
+
+        stagePythonPayload(bundle, destination, PythonStagingLayout.PAYLOAD_ROOT, devAgentMarker = true, devAgentRequest = request)
+
+        assertEquals(request, File(destination, "python/python_multiplatform_devagent.enable").readText())
+    }
+
     @Test
     fun `keeps nested package structure, since that is what import resolution reads`() {
         val bundle = bundleDir(

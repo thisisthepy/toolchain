@@ -511,14 +511,29 @@ file's `debug`) is the build-time switch for python-multiplatform's dev agent (i
 - the desktop run tasks (Compose's `run`, a JVM target's `<target>Run`) get, before each run, a free loopback
   port and a 32-byte random token (43 URL-safe characters, python-multiplatform's minimum). They are passed
   as `PYTHON_MULTIPLATFORM_DEV_AGENT=port=<n>;token=<t>` and written to `build/pythonDevAgent/<task>.json`
-  (`{"host", "port", "token"}`, owner-only on POSIX) for the laptop side to read.
+  (`{"host", "port", "token"}`, owner-only on POSIX) for the laptop side to read;
+- the Android and iOS stagings write the request into the marker instead (`port=<n>;token=<t>`, the
+  variable's form), because the OS launches a mobile app and passes it no variable (#150 M2 and M3; Decision 15
+  (a), team lead 2026-11-25). The port and token are made once and kept in `build/pythonDevAgent/android.json`
+  and `ios.json` (an `@OutputFile` of the stage task): the installed app holds them until it is reinstalled, so
+  a rebuild does not change them, and deleting the file (or `clean`) makes a new pair. The token is fixed per
+  build directory rather than per launch; the agent listens on loopback only and only in a debug build. The
+  desktop marker stays empty;
+- `connectPythonAndroid` runs `adb forward tcp:<n> tcp:<n>` for `android.json`'s port, after which `tcl connect`
+  and the proxy kernel take `android.json` as they take `run.json` on desktop. `adb` is `platform-tools/adb`
+  under `ANDROID_HOME`, `ANDROID_SDK_ROOT` or `local.properties`' `sdk.dir`, else `adb` on `PATH`
+  (`ANDROID_SERIAL` picks the device). A missing connection file fails naming it, before `adb` runs. The iOS
+  simulator shares the laptop's loopback, so `ios.json` needs no forward.
 
 `ptest/devagent/DevAgentLaunchTest.kt` (the switch, the token, the variable's form, the connection file's
-permissions), `ptest/bundle/StagePythonBundleTaskTest.kt` (the marker staged only when asked for, and removed by
-a later staging without it), `ptest/PythonPluginDevAgentTest.kt` (a hot-reload build marks every destination
-and its `run` starts an agent; a release build does neither). **Status: partial**: nothing on the laptop reads
-the connection file yet (`tcl connect`, the proxy kernel), a packaged desktop app or an Android or iOS launch
-gets no variable (M2, M3), and no CI job starts an app and connects.
+permissions, a mobile launch kept across calls and replaced when invalid, the `adb` command and its lookup,
+`connectPythonAndroid`'s forward and refusals), `ptest/bundle/StagePythonBundleTaskTest.kt` (the marker staged
+only when asked for, removed by a later staging without it, and carrying a request), `ptest/PythonPluginDevAgentTest.kt`
+(a hot-reload build marks every destination, its `run` starts an agent, its Android and iOS stagings carry a
+request matching their connection file and `connectPythonAndroid` reads Android's; a release build does none of
+it). **Status: partial**: the runtime half of the marker request (python-multiplatform L-12 reading the marker
+when the variable is unset) is asked of python-multiplatform and not yet in its develop, a packaged desktop
+app gets no variable, and no CI job connects to an Android or iOS app yet (M2, M3).
 
 ### 1.15 Code push: `codePushPython`
 `packaging { codePush { serverHost; cert; uploadConfig { forceUpload; login { id; password } } } }`
@@ -828,7 +843,9 @@ or python-multiplatform's extracted `python-multiplatform-payload/<sha256>` copy
 and completion. Run locally on macOS against the packaged app (2026-11-25): 6/6. Without the agent the kernel cannot start and
 the step fails. Not yet: the design's window scenarios (state `getValue`/`setValue`, re-declaring the root, reading
 back what was typed). They need pythonx-compose in `usage-example`, which leaves `compose = true` out until
-pythonx-compose is published (§1.16). M2 (Android) and M3 (iOS simulator) follow.
+pythonx-compose is published (§1.16). M2 (Android): the launch half is in §1.14 (the marker's request,
+`connectPythonAndroid`); its end-to-end check in `android-e2e` follows python-multiplatform's marker read. M3 (iOS
+simulator) follows.
 
 ---
 
