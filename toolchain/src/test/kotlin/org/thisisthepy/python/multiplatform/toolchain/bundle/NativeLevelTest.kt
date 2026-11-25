@@ -118,14 +118,34 @@ class NativeLevelTest {
     @Test
     fun `an Android prefix tree also gives libpython`() {
         write("prefix/include/python3.15t/Python.h")
-        write("prefix/lib/python3.15t/_sysconfigdata_t_android_aarch64-linux-android.py", "build_time_vars = {'EXT_SUFFIX': '.cpython-315t-aarch64-linux-android.so'}\n")
+        write("prefix/lib/python3.15t/_sysconfigdata_t_android_aarch64-linux-android.py", "build_time_vars = {'EXT_SUFFIX': '.cpython-315t-aarch64-linux-android.so', 'LDLIBRARY': 'libpython3.15t.so'}\n")
         write("prefix/lib/libpython3.15t.so")
 
         val (include, suffix, lib) = nativeRuntimeInputs(dir, "aarch64-linux-android", PythonAbi("3.15"))
 
         assertEquals(File(dir, "prefix/include/python3.15t"), include)
         assertEquals(".cpython-315t-aarch64-linux-android.so", suffix)
-        assertEquals(File(dir, "prefix/lib") to "libpython3.15t.so", lib)
+        assertEquals<Pair<File, String?>?>(File(dir, "prefix/lib") to "libpython3.15t.so", lib)
+    }
+
+    /** Windows and iOS link too: `python3XYt.lib` and the XCframework slice (pypackpack#155's slot needs `libDir`). */
+    @Test
+    fun `Windows gives python3XYt lib and iOS its framework slice`() {
+        write("win/python/python.exe")
+        write("win/python/include/Python.h")
+        write("win/python/libs/python315t.lib")
+        val (winInclude, winSuffix, winLib) = nativeRuntimeInputs(File(dir, "win"), "x86_64-pc-windows-msvc", PythonAbi("3.15"))
+        assertEquals(File(dir, "win/python/include").canonicalFile, winInclude.canonicalFile)
+        assertEquals(".cp315t-win_amd64.pyd", winSuffix)
+        assertEquals("python315t.lib", winLib?.second)
+
+        val slice = "ios/Python.xcframework/ios-arm64_x86_64-simulator"
+        write("$slice/Python.framework/Headers/Python.h")
+        write("$slice/lib-arm64/python3.15t/_sysconfigdata_t_ios.py", "build_time_vars = {'EXT_SUFFIX': '.cpython-315t-iphonesimulator.so'}\n")
+        val (_, iosSuffix, iosLib) = nativeRuntimeInputs(File(dir, "ios"), "arm64-apple-ios-simulator", PythonAbi("3.15"))
+        assertEquals(".cpython-315t-iphonesimulator.so", iosSuffix)
+        assertEquals(File(dir, slice).canonicalFile, iosLib?.first?.canonicalFile)
+        assertNull(iosLib?.second)
     }
 
     @Test
@@ -137,7 +157,7 @@ class NativeLevelTest {
         val noSuffix = assertFailsWith<IllegalStateException> { nativeRuntimeInputs(dir, "aarch64-linux-android", PythonAbi("3.15")) }
         assertTrue("EXT_SUFFIX" in noSuffix.message.orEmpty(), noSuffix.message)
 
-        write("prefix/lib/python3.15t/_sysconfigdata_t_android.py", "build_time_vars = {'EXT_SUFFIX': '.so'}\n")
+        write("prefix/lib/python3.15t/_sysconfigdata_t_android.py", "build_time_vars = {'EXT_SUFFIX': '.so', 'LDLIBRARY': 'libpython3.15t.so'}\n")
         val noLib = assertFailsWith<IllegalStateException> { nativeRuntimeInputs(dir, "aarch64-linux-android", PythonAbi("3.15")) }
         assertTrue("libpython3.15t.so" in noLib.message.orEmpty(), noLib.message)
     }

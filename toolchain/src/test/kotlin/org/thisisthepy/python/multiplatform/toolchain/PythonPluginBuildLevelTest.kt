@@ -43,10 +43,14 @@ class PythonPluginBuildLevelTest {
     }
 
     @Test
-    fun `only bytecode and mixed compile bytecode`() {
+    fun `every level but instant compiles bytecode, native included`() {
+        // pypackpack's ResourceBundler runs compileall at every level but instant: at native the
+        // modules TypedPython produced no extension for (an empty `__init__.py` too) become `.pyc`. So
+        // native needs the same `.venv` check, or the variant fails in pypackpack's words instead.
         assertTrue(compilesBytecode("bytecode"))
         assertTrue(compilesBytecode("mixed"))
-        listOf("instant", "native", "").forEach { assertTrue(!compilesBytecode(it), it) }
+        assertTrue(compilesBytecode("native"))
+        listOf("instant", "").forEach { assertTrue(!compilesBytecode(it), it) }
     }
 
     @Test

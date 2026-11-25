@@ -11,6 +11,7 @@ import org.thisisthepy.python.multiplatform.packpack.compile.extension.SkippedIt
 import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendInterface
 import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendType
 import org.thisisthepy.python.multiplatform.packpack.utils.Platforms
+import org.thisisthepy.python.multiplatform.packpack.compile.backend.external.targetPythonIn
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonVersion
 import java.io.File
 
@@ -143,50 +144,44 @@ fun nativePythonAbi(compileSdk: PythonVersion): PythonAbi = PythonAbi("${compile
 fun nativeRuntimeDir(buildDir: File, target: String, wheelVersion: String): File =
     File(buildDir, "pythonRuntime/${Platforms.normalizeTarget(target) ?: target}/$wheelVersion")
 
-/** Targets whose extensions link `libpython` (python-multiplatform `CPythonIncludeLayout.isLinkRequired`). */
-private fun linksLibpython(target: String): Boolean =
-    Platforms.normalizeTarget(target)?.endsWith("-linux-android") == true
-
 /**
- * The native slot's CPython inputs read from an installed [runtime] tree for [target] and [abi]:
- * the directory that holds `Python.h` (`include/python<X.Y>t`), `EXT_SUFFIX` from the
- * `_sysconfigdata_*.py` beside the stdlib, and on Android `libpython<X.Y>t.so`. Works for both layouts
- * `pypackpack` installs: python-build-standalone (`include/`, `lib/`) and the Android prefix
- * (`prefix/include/`, `prefix/lib/`). Throws naming what is missing.
+ * The native slot's CPython inputs read from an installed [runtime] tree for [target]: the directory that
+ * holds `Python.h`, `EXT_SUFFIX`, and what the extension links, as `pypackpack`'s `targetPythonIn` reads every
+ * layout its `installPython` writes (python-build-standalone, the Android prefix, the iOS XCframework slice,
+ * Windows' `include/` and `libs/python3XYt.lib`). The third value is the link directory and library: Android's
+ * `libpython3.Xt.so`, Windows' `python3XYt.lib`, iOS's slice holding `Python.framework` (no library name);
+ * `null` where nothing is linked. Throws naming what is missing.
  */
-fun nativeRuntimeInputs(runtime: File, target: String, abi: PythonAbi): Triple<File, String, Pair<File, String>?> {
+fun nativeRuntimeInputs(runtime: File, target: String, abi: PythonAbi): Triple<File, String, Pair<File, String?>?> {
+    val canonical = Platforms.normalizeTarget(target) ?: target
+    val python =
+        try {
+            targetPythonIn(runtime, canonical)
+        } catch (e: IllegalStateException) {
+            throw IllegalStateException("compileLevel 'native': ${e.message}", e)
+        }
     val tag = "python${abi.version}t"
-    val dirs = listOf(runtime, File(runtime, "prefix"))
-    val include = dirs.map { File(it, "include/$tag") }.firstOrNull { File(it, "Python.h").isFile }
-        ?: throw IllegalStateException(
-            "compileLevel 'native': no include/$tag/Python.h in the CPython for $target at $runtime.",
-        )
-    val sysconfig = dirs.map { File(it, "lib/$tag") }.filter { it.isDirectory }
-        .flatMap { it.listFiles().orEmpty().toList() }
-        .filter { it.isFile && it.name.startsWith("_sysconfigdata") && it.name.endsWith(".py") }
-        .minByOrNull { it.name }
-    val suffix = sysconfig?.readText()?.let { Regex("""'EXT_SUFFIX':\s*'([^']+)'""").find(it)?.groupValues?.get(1) }
-        ?: throw IllegalStateException(
-            "compileLevel 'native': no EXT_SUFFIX in a _sysconfigdata_*.py under lib/$tag of the CPython for $target at $runtime.",
-        )
-    val lib = if (linksLibpython(target)) {
-        val name = "lib$tag.so"
-        val dir = dirs.map { File(it, "lib") }.firstOrNull { File(it, name).isFile }
-            ?: throw IllegalStateException("compileLevel 'native': $target links $name, and the CPython at $runtime has none under lib/.")
-        dir to name
-    } else {
-        null
+    check(canonical.endsWith("-pc-windows-msvc") || canonical in IOS_SLICES || python.includeDir.name == tag) {
+        "compileLevel 'native': the CPython for $target at $runtime has ${python.includeDir.name}, not include/$tag (compileSdk ${abi.version})."
     }
-    return Triple(include, suffix, lib)
+    val lib = python.libDir?.let { dir ->
+        python.libraryName?.let { name ->
+            check(File(dir, name).isFile) { "compileLevel 'native': $target links $name, and the CPython at $runtime has none under ${dir.path}." }
+        }
+        dir to python.libraryName
+    }
+    return Triple(python.includeDir, python.extensionSuffix, lib)
 }
+
+private val IOS_SLICES = setOf("arm64-apple-ios", "arm64-apple-ios-simulator", "x86_64-apple-ios-simulator")
 
 /**
  * Installs [target]'s CPython [wheelVersion] into [runtimeDir] through `pypackpack`'s backend, unless
- * a previous run left headers there.
+ * a previous run left a readable tree there.
  */
 fun ensureNativeRuntime(runtimeDir: File, target: String, wheelVersion: String) {
-    val tag = Regex("""^(\d+\.\d+)""").find(wheelVersion)?.groupValues?.get(1)?.let { "python${it}t" }
-    if (tag != null && listOf(runtimeDir, File(runtimeDir, "prefix")).any { File(it, "include/$tag/Python.h").isFile }) return
+    val canonical = Platforms.normalizeTarget(target) ?: target
+    if (runtimeDir.isDirectory && runCatching { targetPythonIn(runtimeDir, canonical) }.isSuccess) return
     val installed = runBlocking {
         BackendInterface.create(BackendType.UV).installPython(wheelVersion, target, runtimeDir)
     }

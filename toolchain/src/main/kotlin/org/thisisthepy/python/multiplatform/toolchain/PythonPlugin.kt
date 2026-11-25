@@ -1120,8 +1120,8 @@ fun collectIntegrationDependencies(sourceSets: List<SourceSetConfig>): List<Stri
  * to be refused. See that task's `compileLevel` kdoc.
  *
  * `pypackpack`'s `ResourceBundler` (`bundle/resource/ResourceBundler.kt`, its `SUPPORTED_BUILD_LEVELS`)
- * implements `instant`, `bytecode` and `mixed`, so all three pass through (Issues #15, #128). `bytecode`
- * and `mixed` run `compileall -b` with the interpreter at `<project>/.venv`; the task checks that
+ * implements `instant`, `bytecode` and `mixed`, so all three pass through (Issues #15, #128). `bytecode`,
+ * `mixed` and `native` run `compileall -b` with the interpreter at `<project>/.venv`; the task checks that
  * interpreter first ([org.thisisthepy.python.multiplatform.toolchain.bundle.bytecodeInterpreterRejection],
  * selected by [compilesBytecode]). `mixed` ships the developer's modules as bytecode and the libraries'
  * prebuilt extensions (`libDirs`) as they are. `native` (python-multiplatform#25) also passes: the
@@ -1145,8 +1145,12 @@ fun resolveBuildLevel(compileLevel: String): String {
     }
 }
 
-/** Whether [buildLevel] (a [resolveBuildLevel] result) runs `compileall`, so needs a matching `.venv` interpreter. */
-fun compilesBytecode(buildLevel: String): Boolean = buildLevel == "bytecode" || buildLevel == "mixed"
+/**
+ * Whether [buildLevel] (a [resolveBuildLevel] result) runs `compileall`, so needs a matching `.venv` interpreter.
+ * Every level but `instant`: `ResourceBundler` also compiles at `native`, where the modules TypedPython
+ * produced no extension for (an empty `__init__.py` included) ship as bytecode.
+ */
+fun compilesBytecode(buildLevel: String): Boolean = buildLevel in setOf("bytecode", "mixed", "native")
 
 /**
  * Validates every variant declared under `python { }` platform maps to a real `pypackpack`
