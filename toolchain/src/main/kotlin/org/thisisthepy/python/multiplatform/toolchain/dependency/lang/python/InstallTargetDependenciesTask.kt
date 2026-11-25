@@ -5,10 +5,15 @@ import kotlinx.coroutines.runBlocking
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendType
+import org.thisisthepy.python.multiplatform.packpack.dependency.backend.CrossTargetInstaller
 import java.io.File
 import org.thisisthepy.python.multiplatform.packpack.dependency.backend.BackendInterface as DependencyBackend
 
@@ -61,6 +66,28 @@ open class InstallTargetDependenciesTask : DefaultTask() {
     @get:OutputDirectory
     lateinit var installDir: File
 
+    /**
+     * `pip { jit { localRecipes } }`'s directories, or `null` without `jit` (#152). With `jit`, a dependency that
+     * has no wheel for [pythonPlatform] is built in pypackpack's cross build environment under [crossDir].
+     */
+    @get:Internal
+    var jitRecipeDirs: List<File>? = null
+
+    /** Whether `jit` is declared: it changes how the set is installed. */
+    @get:Input
+    val jit: Boolean
+        get() = jitRecipeDirs != null
+
+    /** The recipe directories' contents: editing a recipe or a patch re-installs. */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    val jitRecipeFiles: List<File>
+        get() = jitRecipeDirs.orEmpty()
+
+    /** Where the cross build environment and the wheels it built live (`build/pythonCross`). */
+    @get:Internal
+    lateinit var crossDir: File
+
     init {
         outputs.upToDateWhen { !(it as InstallTargetDependenciesTask).installArguments.containsKey("upgrade") }
     }
@@ -70,7 +97,10 @@ open class InstallTargetDependenciesTask : DefaultTask() {
         rejection?.let { throw GradleException(it) }
         if (requirements.isNotEmpty()) pipRejection?.let { throw GradleException(it) }
 
-        val output = installDependenciesForTarget(requirements, pythonPlatform, installDir, temporaryDir, installArguments)
+        val output = installDependenciesForTarget(
+            requirements, pythonPlatform, installDir, temporaryDir, installArguments,
+            jit = jitRecipeDirs?.let { JitBuild(it, crossDir) },
+        )
         if (requirements.isEmpty()) {
             logger.lifecycle("No Python dependencies for $pythonPlatform; $installDir is left empty.")
         } else {
@@ -94,6 +124,11 @@ open class InstallTargetDependenciesTask : DefaultTask() {
  * passes them to `uv` as arguments; nothing is written. [requirementsDir] is only the directory `uv`
  * runs in, kept outside [installDir] so nothing `uv` might leave there is bundled.
  *
+ * With [jit] (`pip { jit { localRecipes } }`, #152) the requirements go to pypackpack's [CrossTargetInstaller]
+ * instead: it pins them for the target, installs the pins with `--only-binary :all:`, and builds each pin that has
+ * no wheel for [pythonPlatform] in pypackpack's cross build environment under [JitBuild.crossDir], with its recipe
+ * from [JitBuild.recipeDirs] when one exists. A recipe directory that does not exist fails before anything runs.
+ *
  * A failure -- including a requirement with no wheel for [pythonPlatform] under `only-binary` --
  * becomes a [GradleException] carrying uv's message, which names the package.
  */
@@ -103,6 +138,8 @@ fun installDependenciesForTarget(
     installDir: File,
     requirementsDir: File,
     extraArgs: Map<String, String> = emptyMap(),
+    jit: JitBuild? = null,
+    crossInstaller: CrossTargetInstaller = CrossTargetInstaller(),
 ): String {
     require(!requirementsDir.canonicalPath.startsWith(installDir.canonicalPath + File.separator) &&
         requirementsDir.canonicalFile != installDir.canonicalFile) {
@@ -115,6 +152,19 @@ fun installDependenciesForTarget(
     if (requirements.isEmpty()) return ""
 
     requirementsDir.mkdirs()
+
+    if (jit != null) {
+        jit.recipeDirs.firstOrNull { !it.isDirectory }?.let {
+            throw GradleException("pip { jit { localRecipes } } names $it, which is not a directory.")
+        }
+        return crossInstaller.install(jit.crossDir, installDir, pythonPlatform, requirements, extraArgs, requirementsDir, jit.recipeDirs)
+            .getOrElse { error ->
+                throw GradleException(
+                    "packpack could not install ${requirements.joinToString(", ")} for $pythonPlatform: ${error.message}",
+                    error,
+                )
+            }
+    }
 
     val backend = DependencyBackend.create(BackendType.UV)
     backend.initialize()
@@ -133,3 +183,9 @@ fun installDependenciesForTarget(
         )
     }
 }
+
+/** `pip { jit { localRecipes } }` for one target install (#152): the recipe directories and the cross build's directory. */
+data class JitBuild(
+    val recipeDirs: List<File>,
+    val crossDir: File,
+)

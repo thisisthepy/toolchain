@@ -15,6 +15,12 @@ import java.io.File
 /** `build/pythonDeps/<dependency set>/` holds one dependency set's installed wheels. */
 const val TARGET_DEPENDENCIES_DIRECTORY = "pythonDeps"
 
+/**
+ * `build/pythonCross`: where `pip { jit }` (#152) keeps pypackpack's cross build environment, the sdists it
+ * fetched and the wheels it built for each target (`build/pythonCross/build/packpack/cross/<triple>/`).
+ */
+const val CROSS_BUILD_DIRECTORY = "pythonCross"
+
 /** The dependency set of the host chain (no platform variant declared): `build/pythonDeps/host/`. */
 const val HOST_DEPENDENCY_SET = "host"
 

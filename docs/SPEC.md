@@ -146,12 +146,15 @@ spelled as the example build file spells it (INTENT §4.3), becomes options of t
 | `central { setUrl(a, b, …) }` | `--default-index a`; the other URLs, minus repeats of `a`, as `--index` |
 | `local { url = … }` | `--find-links <dir>`; a `file:` URI becomes a path |
 | `autoUpdate = true` | `--upgrade` |
-| `jit { … }` | **rejected**: pypackpack has no recipe build. The rejection fails `installPythonDependencies` and the per-target install tasks, each only when it has something to install. |
+| `jit { localRecipes { add(dir) } }` | no `uv add` option. Every per-target install (§1.10) goes through pypackpack's `CrossTargetInstaller` (pypackpack#168) instead (#152): the requirements are pinned for the target, the pins installed with `--only-binary :all:`, and each pin with no wheel for the target is built in pypackpack's cross build environment under `build/pythonCross/`, with its recipe when one of the directories has `<name>.toml` (keys as pypackpack's `[tool.ppp.recipes.<name>]`; format approved 2026-11-25, Decision 16). A relative directory resolves against the project directory; one that does not exist fails the install. The recipe files are task inputs. `jit { }` with no recipes still builds, without patches. |
+| `jit { url = … }` | **rejected**: it names a recipe server, and none exists (Decision 16). The rejection fails `installPythonDependencies` and the per-target install tasks, each only when it has something to install. |
 
 **Status: implemented**. `resolvePipArguments` / `resolvePipSettings` in
 `plugin/dependency/lang/python/PipRepositories.kt`; `ptest/dependency/lang/python/PipRepositoriesTest.kt`
-(including a real `uv add` sent to the declared index).
-→ *`jit` / `localRecipes`: **planned**, needs a recipe build in pypackpack.*
+(including a real `uv add` sent to the declared index). `jit { localRecipes }` (#152): `partial`, unit tests
+`PipRepositoriesTest` (directories resolved, `url` refused) and `InstallTargetDependenciesTaskTest` (the requirements
+reach `CrossTargetInstaller` with the recipe directories, a missing directory fails); the real Android build of
+numpy, safetensors, tokenizers and regex is torchnative's `examples/android` (torchnative#437).
 `versionCode` / `versionName` are the Python payload's version (decided 2026-10-03): handed to every
 `buildPython…` task and forwarded to pypackpack's `BundleRequest`, which records them in
 `resource-manifest.json` as `"versionName"` / `"versionCode"` beside the package's own `"version"`.

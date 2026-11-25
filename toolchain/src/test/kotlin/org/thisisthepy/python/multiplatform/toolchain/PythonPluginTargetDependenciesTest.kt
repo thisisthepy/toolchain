@@ -4,6 +4,7 @@ import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.testfixtures.ProjectBuilder
@@ -177,12 +178,16 @@ class PythonPluginTargetDependenciesTest {
      */
     @Test
     fun `every property of the install task is annotated`() {
-        val annotations = listOf(Input::class.java, OutputDirectory::class.java, Internal::class.java)
+        val annotations = listOf(Input::class.java, InputFiles::class.java, OutputDirectory::class.java, Internal::class.java)
         val getters = InstallTargetDependenciesTask::class.java.declaredMethods.filter {
             Modifier.isPublic(it.modifiers) && it.parameterCount == 0 && it.name.startsWith("get")
         }
         assertEquals(
-            setOf("getRequirements", "getPythonPlatform", "getInstallArguments", "getRejection", "getPipRejection", "getInstallDir"),
+            setOf(
+                "getRequirements", "getPythonPlatform", "getInstallArguments", "getRejection", "getPipRejection", "getInstallDir",
+                // pip { jit { localRecipes } } (#152): the switch and the recipe files are inputs, the directories internal.
+                "getJit", "getJitRecipeDirs", "getJitRecipeFiles", "getCrossDir",
+            ),
             getters.map { it.name }.toSet(),
         )
         getters.forEach { getter ->

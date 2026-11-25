@@ -17,7 +17,8 @@ import kotlin.test.assertTrue
  * | `central { setUrl(a, b, …) }` | `--default-index a`, `--index "b …"` (uv splits on spaces) |
  * | `local { url = … }` | `--find-links <dir>` (a `file:` URI becomes a path) |
  * | `autoUpdate = true` | `--upgrade` |
- * | `jit { url; localRecipes { … } }` | rejected: pypackpack cannot build from recipes yet |
+ * | `jit { localRecipes { … } }` | the recipe directories, resolved against the project directory (#152) |
+ * | `jit { url }` | rejected: no recipe server exists (Decision 16, 2026-11-25) |
  */
 class PipRepositoriesTest {
     @Test
@@ -67,7 +68,26 @@ class PipRepositoriesTest {
     }
 
     @Test
-    fun `a jit repository is rejected with the reason instead of being ignored`() {
+    fun `jit's local recipes are accepted and resolve against the project directory`() {
+        val project = File("/work/app")
+        val pip = PipExtension().apply {
+            repositories {
+                central { url = "https://mirror.example/simple" }
+                jit { localRecipes { add("recipes"); add("/shared/recipes") } }
+            }
+        }
+
+        val resolved = resolvePipSettings(pip, project)
+
+        assertNull(resolved.rejection)
+        assertEquals(mapOf("default-index" to "https://mirror.example/simple"), resolved.arguments, "jit adds no uv option")
+        assertEquals(listOf(File(project, "recipes"), File("/shared/recipes")), resolved.jitRecipeDirs)
+        assertEquals(emptyList(), resolvePipSettings(PipExtension().apply { repositories { jit { } } }, project).jitRecipeDirs, "jit without recipes still builds")
+        assertNull(resolvePipSettings(PipExtension(), project).jitRecipeDirs, "no jit, no cross builds")
+    }
+
+    @Test
+    fun `a jit url is rejected naming the missing recipe server, and the rejection is deferred to the install task`() {
         val pip = PipExtension().apply {
             repositories {
                 jit {
@@ -78,16 +98,8 @@ class PipRepositoriesTest {
         }
 
         val error = assertFailsWith<IllegalArgumentException> { resolvePipArguments(pip) }
-        assertTrue(error.message.orEmpty().contains("jit"), "was: ${error.message}")
-        assertTrue(error.message.orEmpty().contains("recipe"), "was: ${error.message}")
-    }
-
-    @Test
-    fun `the jit rejection is deferred to the install task rather than failing configuration`() {
-        val pip = PipExtension().apply { repositories { jit { url = "http://jitpack.io" } } }
-
-        val resolved = resolvePipSettings(pip)
-
+        assertTrue("http://jitpack.io" in error.message.orEmpty() && "localRecipes" in error.message.orEmpty(), "was: ${error.message}")
+        val resolved = resolvePipSettings(pip, File("/work/app"))
         assertNull(resolved.arguments)
         assertTrue(resolved.rejection.orEmpty().contains("jit"))
     }
