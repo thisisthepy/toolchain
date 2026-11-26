@@ -6,7 +6,7 @@ import org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig
 
 
 group = "org.thisisthepy.python.multiplatform"
-version = "1.0.0-alpha"
+version = "1.0.0"
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)

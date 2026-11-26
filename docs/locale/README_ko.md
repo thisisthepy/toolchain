@@ -10,7 +10,6 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7f52ff.svg?logo=kotlin&logoColor=white)
 ![Gradle](https://img.shields.io/badge/Gradle-8.9-02303a.svg?logo=gradle&logoColor=white)
 ![Targets](https://img.shields.io/badge/targets-Android%20%7C%20iOS%20%7C%20Desktop-0f9d76.svg)
-![Status](https://img.shields.io/badge/status-alpha-orange.svg)
 
 [가이드](https://thisisthepy.github.io/toolchain/index.html) · [시작하기](https://thisisthepy.github.io/toolchain/getting-started.html) · [상태](https://thisisthepy.github.io/toolchain/status.html) · [생태계](https://thisisthepy.github.io/toolchain/ecosystem.html)
 
@@ -80,7 +79,7 @@ Kotlin Multiplatform 옆에 플러그인을 적용하고 `pypackpack` 패키지�
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.application)
-    id("org.thisisthepy.python.multiplatform") version "1.0.0-alpha"
+    id("org.thisisthepy.python.multiplatform") version "1.0.0"
 }
 
 python {
