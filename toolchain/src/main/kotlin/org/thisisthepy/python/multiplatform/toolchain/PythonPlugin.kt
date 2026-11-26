@@ -20,6 +20,7 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
 import org.thisisthepy.python.multiplatform.packpack.utils.Platforms
 import org.thisisthepy.python.multiplatform.toolchain.bundle.AssemblePythonPackageTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.BuildPythonArtifactTask
+import org.thisisthepy.python.multiplatform.toolchain.bundle.PythonStagingLayout
 import org.thisisthepy.python.multiplatform.toolchain.bundle.PythonStagingPlatform
 import org.thisisthepy.python.multiplatform.toolchain.bundle.StagePythonBundleTask
 import org.thisisthepy.python.multiplatform.toolchain.devagent.ConnectPythonDevAgentTask
@@ -594,6 +595,10 @@ class PythonPlugin : Plugin<Project> {
                 // what they are grounded in. A destination with no eligible variant is left staging
                 // nothing rather than being handed a bundle built for a different platform.
                 val selected = selectStagingVariants(variants, activeBuildTypeName, Platforms.detectHostTarget(), activeFlavorName)
+                project.tasks.named(
+                    org.thisisthepy.python.multiplatform.toolchain.bundle.STAGE_ANDROID_RUNTIME_LIBRARIES_TASK,
+                    org.thisisthepy.python.multiplatform.toolchain.bundle.StageAndroidRuntimeLibrariesTask::class.java,
+                ).configure { target = selected[PythonStagingPlatform.ANDROID]?.target }
                 stageTasks.forEach { (platform, stageTask) ->
                     val variant = selected[platform]
                     if (variant == null) {
@@ -717,10 +722,27 @@ private fun attachStagingToPackaging(
     }
 
     val androidStage = stageTasks.getValue(PythonStagingPlatform.ANDROID)
-    val androidRoot = PythonStagingPlatform.ANDROID.rootIn(project.layout.buildDirectory.get().asFile)
+    val buildDir = project.layout.buildDirectory.get().asFile
+    val androidRoot = PythonStagingPlatform.ANDROID.rootIn(buildDir)
+    // toolchain#155: the NDK runtime libraries (libc++_shared.so) the staged extensions need, per ABI, in a
+    // jniLibs root; the staged variant's triple is filled in with the staging selection below.
+    val runtimeRoot = org.thisisthepy.python.multiplatform.toolchain.bundle.androidRuntimeLibrariesRoot(buildDir)
+    val runtimeStage = project.tasks.register<org.thisisthepy.python.multiplatform.toolchain.bundle.StageAndroidRuntimeLibrariesTask>(
+        org.thisisthepy.python.multiplatform.toolchain.bundle.STAGE_ANDROID_RUNTIME_LIBRARIES_TASK,
+    ) {
+        group = PythonPlugin.TASK_GROUP
+        description = "Puts the NDK runtime libraries (libc++_shared.so) the staged Android extensions need into jniLibs"
+        payloadDir = File(androidRoot, PythonStagingLayout.PAYLOAD_ROOT)
+        destinationDir = runtimeRoot
+        dependsOn(androidStage)
+    }
     listOf("com.android.application", "com.android.library").forEach { pluginId ->
         project.plugins.withId(pluginId) {
-            registerAndroidAssetSourceDirectory(project, androidRoot)
+            registerAndroidSourceDirectory(project, "getAssets", androidRoot, "the staged Python payload will not reach the APK")
+            registerAndroidSourceDirectory(
+                project, "getJniLibs", runtimeRoot,
+                "the NDK runtime libraries the staged extensions need will not reach the APK",
+            )
             // `assets.srcDir(File)` carries no task dependency, so the producing task has to be
             // named. `preBuild` is AGP's own documented anchor and is what the deleted copy used;
             // the merge tasks are added as well because they are what actually reads the directory
@@ -728,23 +750,28 @@ private fun attachStagingToPackaging(
             project.tasks.matching {
                 it.name == "preBuild" || (it.name.startsWith("merge") && it.name.endsWith("Assets"))
             }.configureEach { dependsOn(androidStage) }
+            // The same for jniLibs: `merge<Variant>JniLibFolders` reads the directory.
+            project.tasks.matching {
+                it.name == "preBuild" || (it.name.startsWith("merge") && it.name.endsWith("JniLibFolders"))
+            }.configureEach { dependsOn(runtimeStage) }
         }
     }
 }
 
 /**
- * `android.sourceSets.getByName("main").assets.srcDir(directory)`, reflectively.
+ * `android.sourceSets.getByName("main").<assets|jniLibs>.srcDir(directory)`, reflectively ([accessor] is
+ * `getAssets` or `getJniLibs`).
  *
  * AGP is not a dependency of this plugin, so there is no `AndroidSourceSet` type to call. Each hop
  * fails with a message naming what was not found rather than an NPE or a `ClassCastException`,
  * because the failure mode this replaces -- the payload silently not reaching the APK -- is the one
  * thing this whole change exists to stop.
  */
-private fun registerAndroidAssetSourceDirectory(project: Project, directory: File) {
+private fun registerAndroidSourceDirectory(project: Project, accessor: String, directory: File, consequence: String) {
     val android = project.extensions.findByName("android") ?: run {
         project.logger.warn(
-            "an Android plugin is applied but there is no `android` extension, so the staged " +
-                "Python payload was not added to the APK's assets.",
+            "an Android plugin is applied but there is no `android` extension, so '$directory' was " +
+                "not added to android.sourceSets.main; $consequence.",
         )
         return
     }
@@ -753,14 +780,14 @@ private fun registerAndroidAssetSourceDirectory(project: Project, directory: Fil
             .invoke(android)
         val main = sourceSets!!.javaClass.methods.first { it.name == "getByName" && it.parameterCount == 1 }
             .invoke(sourceSets, "main")
-        val assets = main!!.javaClass.methods.first { it.name == "getAssets" && it.parameterCount == 0 }
+        val sourceDirectories = main!!.javaClass.methods.first { it.name == accessor && it.parameterCount == 0 }
             .invoke(main)
-        assets!!.javaClass.methods.first { it.name == "srcDir" && it.parameterCount == 1 }
-            .invoke(assets, directory)
+        sourceDirectories!!.javaClass.methods.first { it.name == "srcDir" && it.parameterCount == 1 }
+            .invoke(sourceDirectories, directory)
     }.onFailure { error ->
         project.logger.warn(
-            "could not add '$directory' to android.sourceSets.main.assets " +
-                "(${error.message}); the staged Python payload will not reach the APK.",
+            "could not add '$directory' to android.sourceSets.main through $accessor " +
+                "(${error.message}); $consequence.",
         )
     }
 }

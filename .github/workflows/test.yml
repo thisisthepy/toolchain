@@ -36,26 +36,26 @@ jobs:
           - { name: toolchain, task: test }
           - { name: tcl, task: cliTest }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/pypackpack
           ref: develop
           path: .ci/pypackpack
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.4.0
 
       - name: Publish packpack to mavenLocal
         working-directory: .ci/pypackpack
@@ -95,7 +95,7 @@ jobs:
 
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}-test-reports
           path: toolchain/build/reports/tests/${{ matrix.task }}/
@@ -107,26 +107,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/pypackpack
           ref: develop
           path: .ci/pypackpack
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/python-multiplatform
           ref: develop
           path: .ci/python-multiplatform
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v4
-      - uses: actions/setup-python@v5
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.15"
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.4.0
 
       # usage-example applies three things from mavenLocal: packpack (through the plugin), the
       # toolchain plugin, and python-multiplatform's library and bindings plugin. Versions pinned in
@@ -195,26 +195,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/pypackpack
           ref: develop
           path: .ci/pypackpack
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/python-multiplatform
           ref: develop
           path: .ci/python-multiplatform
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v4
-      - uses: actions/setup-python@v5
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.15"
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.4.0
 
       - name: Publish packpack, the toolchain plugin and python-multiplatform to mavenLocal
         run: |
@@ -253,7 +253,7 @@ jobs:
       # Live connection M1 (docs/design/live-connection.md §5, SPEC §2.4): the packaged debug app keeps running
       # under Xvfb with its dev agent on; toolchain-lite's proxy kernel connects and a Jupyter client runs the
       # scenarios in it. Without the agent the kernel cannot start and the step fails.
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.4.0
       - name: A notebook drives the running packaged app (live connection M1)
         working-directory: usage-example
         run: |
@@ -279,23 +279,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/pypackpack
           ref: develop
           path: .ci/pypackpack
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/python-multiplatform
           ref: develop
           path: .ci/python-multiplatform
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: astral-sh/setup-uv@v10.4.0
 
       - name: Publish packpack, the toolchain plugin and python-multiplatform (Android too)
         run: |
@@ -325,6 +325,11 @@ jobs:
           unzip -l "$apk" > apk.txt
           grep -q 'assets/python/example_py/__init__.py' apk.txt || { echo "example_py is not in the APK's assets"; exit 1; }
           grep -q 'assets/python/iniconfig/__init__.py' apk.txt || { echo "iniconfig is not in the APK's assets"; exit 1; }
+          # #155: nothing in this payload needs libc++_shared.so, so the plugin's jniLibs root is created and empty.
+          ../gradlew mergeDebugJniLibFolders --dry-run --console=plain > jni-graph.log
+          grep -q ':stagePythonAndroidRuntimeLibraries ' jni-graph.log || { echo "mergeDebugJniLibFolders does not run stagePythonAndroidRuntimeLibraries"; exit 1; }
+          [ -d build/pythonStaging/androidJniLibs ] || { echo "stagePythonAndroidRuntimeLibraries did not run"; exit 1; }
+          [ -z "$(find build/pythonStaging/androidJniLibs -type f)" ] || { echo "the plugin packaged runtime libraries nothing needs"; find build/pythonStaging/androidJniLibs -type f; exit 1; }
 
       - name: Enable KVM for the emulator
         run: |
@@ -349,7 +354,7 @@ jobs:
   guide:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: python3 docs/guide/check_guide.py
 
   # The iOS end-to-end run, in the same dispatch so one run checks everything.
