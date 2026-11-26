@@ -10,7 +10,6 @@ English | [한국어](https://github.com/thisisthepy/toolchain/blob/develop/docs
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7f52ff.svg?logo=kotlin&logoColor=white)
 ![Gradle](https://img.shields.io/badge/Gradle-8.9-02303a.svg?logo=gradle&logoColor=white)
 ![Targets](https://img.shields.io/badge/targets-Android%20%7C%20iOS%20%7C%20Desktop-0f9d76.svg)
-![Status](https://img.shields.io/badge/status-alpha-orange.svg)
 
 [Guide](https://thisisthepy.github.io/toolchain/index.html) · [Getting started](https://thisisthepy.github.io/toolchain/getting-started.html) · [Status](https://thisisthepy.github.io/toolchain/status.html) · [Ecosystem](https://thisisthepy.github.io/toolchain/ecosystem.html)
 
@@ -81,7 +80,7 @@ Apply the plugin next to Kotlin Multiplatform and point it at a `pypackpack` pac
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.application)
-    id("org.thisisthepy.python.multiplatform") version "1.0.0-alpha"
+    id("org.thisisthepy.python.multiplatform") version "1.0.0"
 }
 
 python {
