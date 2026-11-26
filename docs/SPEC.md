@@ -469,6 +469,26 @@ Hand-off to the platform's packaging step:
   `usage-example`'s task graph `mergeDebugAssets` runs after `stagePythonBundleAndroid`, and the built debug APK
   holds `assets/python/example_py/__init__.py` and `assets/python/iniconfig/__init__.py` (toolchain 1.0 scope,
   owner 2026-11-21: no scope cuts).
+- Android native runtime libraries (#155; Decision 20 (a), approved by the leader 2026-11-25): an
+  extension the cross build compiles with C++ needs `libc++_shared.so`, and neither a wheel nor the Android
+  CPython ships it. `stagePythonAndroidRuntimeLibraries` (group `python`) runs after
+  `stagePythonBundleAndroid`.
+  - It clears `build/pythonStaging/androidJniLibs/`.
+  - For each NDK runtime library that a staged `.so` needs and the payload does not carry, it copies the
+    NDK's copy into `androidJniLibs/<abi>/` (`arm64-v8a`, `x86_64`). pypackpack's `androidRuntimeLibraries`
+    (pypackpack#172) decides which libraries, and its `androidNdkRoot` finds the NDK the way the cross build
+    does: `ANDROID_NDK_HOME`, else the newest `ANDROID_HOME/ndk/<version>`. So the copy comes from the NDK the
+    jit-built wheels were linked against.
+  - A needed library with no NDK found fails the build. The message names the library and the `.so` that
+    needs it.
+  - The directory is added to `android.sourceSets.main.jniLibs` (reflectively), and `merge*JniLibFolders`
+    depends on the task, so AGP packages it into the APK's `lib/<abi>/`.
+
+  **implemented**: `plugin/bundle/StageAndroidRuntimeLibrariesTask.kt`;
+  `ptest/bundle/StageAndroidRuntimeLibrariesTaskTest.kt` (needed: the NDK's copy under its ABI; not needed:
+  nothing, and an earlier copy removed; no NDK: the build fails) and `ptest/PythonPluginAttachmentTest.kt`
+  (the root is a `main` jniLibs source directory and the task runs after `stagePythonBundleAndroid`).
+  Not tested here: a device load. torchnative's example checks that on its Galaxy Z Flip4.
 - iOS: toolchain stages and exposes the path; python-multiplatform (#59) owns the Xcode build phase
   that attaches it. `stagePythonBundleIosForXcode` (group `python`) depends on `stagePythonBundleIos`
   and prints exactly one line `PYTHON_PAYLOAD_DIR=<absolute path>` (stdout, visible under `--quiet`).
