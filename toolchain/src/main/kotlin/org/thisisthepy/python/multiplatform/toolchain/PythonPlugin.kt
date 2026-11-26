@@ -28,6 +28,7 @@ import org.thisisthepy.python.multiplatform.toolchain.devagent.DEV_AGENT_CONNECT
 import org.thisisthepy.python.multiplatform.toolchain.devagent.DEV_AGENT_CONNECT_ANDROID_TASK
 import org.thisisthepy.python.multiplatform.toolchain.devagent.DEV_AGENT_LAUNCH_ACTION
 import org.thisisthepy.python.multiplatform.toolchain.devagent.DevAgentLaunchAction
+import org.thisisthepy.python.multiplatform.toolchain.devagent.devAgentAndroidManifest
 import org.thisisthepy.python.multiplatform.toolchain.devagent.devAgentEnabled
 import org.thisisthepy.python.multiplatform.toolchain.hotreload.CodePushPendingTask
 import org.thisisthepy.python.multiplatform.toolchain.hotreload.HotReloadPushTask
@@ -143,6 +144,14 @@ class PythonPlugin : Plugin<Project> {
         // ---------------------------------------------------------------------------------------
         val stageTasks = registerStagingTasks(project)
         attachStagingToPackaging(project, stageTasks)
+        // toolchain#162: the AGP variants of the build type that stages the dev-agent marker get INTERNET, so the
+        // agent can listen. Decided per variant inside AGP's callback, when the `python { }` block is read.
+        attachDevAgentInternetPermission(project) {
+            val requested = (project.findProperty("python.buildType") as? String) ?: DEFAULT_BUILD_TYPE
+            // An unknown build type is reported by the staging selection in `afterEvaluate`, not here.
+            runCatching { resolveActiveBuildType(extension.buildTypes, requested) }.getOrNull()
+                ?.takeIf { devAgentEnabled(extension.buildTypes, it) }
+        }
         org.thisisthepy.python.multiplatform.toolchain.bundle.registerStagePythonBundleIosForXcode(
             project, stageTasks.getValue(PythonStagingPlatform.IOS),
         )
@@ -755,6 +764,68 @@ private fun attachStagingToPackaging(
                 it.name == "preBuild" || (it.name.startsWith("merge") && it.name.endsWith("JniLibFolders"))
             }.configureEach { dependsOn(runtimeStage) }
         }
+    }
+}
+
+/**
+ * toolchain#162 (docs/SPEC.md §1.14; Decision (a), team lead 2026-11-27): Android refuses a socket, even on
+ * loopback, to an app without `android.permission.INTERNET`, so the dev agent could not listen in the debug APK.
+ * Every AGP variant whose build type is [agentBuildType]'s answer (the active Python build type, when it enables
+ * hot reload) merges [devAgentAndroidManifest], which declares INTERNET and nothing else. Other variants, a
+ * release among them, get nothing from this plugin; an app that declares INTERNET itself merges to one entry.
+ *
+ * `androidComponents.onVariants(selector().all(), Action)` and `variant.sources.manifests.addStaticManifestFile`
+ * (AGP 8.3+), reflectively for the same reason as [registerAndroidSourceDirectory]: AGP is not on this plugin's
+ * compile classpath. The callback is registered when AGP is applied and runs once the build script is evaluated,
+ * so [agentBuildType] reads the finished `python { }` block whichever plugin is applied first.
+ */
+private fun attachDevAgentInternetPermission(project: Project, agentBuildType: () -> String?) {
+    val consequence = "the debug APK gets no android.permission.INTERNET, so python-multiplatform's dev agent " +
+        "cannot listen (declare the permission in the app's debug manifest)"
+    listOf("com.android.application", "com.android.library").forEach { pluginId ->
+        project.plugins.withId(pluginId) {
+            val components = project.extensions.findByName("androidComponents") ?: run {
+                project.logger.warn("an Android plugin is applied but there is no `androidComponents` extension; $consequence.")
+                return@withId
+            }
+            val addDevAgentManifest = project.devAgentManifestAdder(agentBuildType, consequence)
+            runCatching {
+                val selector = components.javaClass.methods.first { it.name == "selector" && it.parameterCount == 0 }
+                    .invoke(components)
+                val all = selector!!.javaClass.methods.first { it.name == "all" && it.parameterCount == 0 }.invoke(selector)
+                val onVariants = components.javaClass.methods.first {
+                    it.name == "onVariants" && it.parameterCount == 2 &&
+                        it.parameterTypes[1] == org.gradle.api.Action::class.java
+                }
+                onVariants.invoke(
+                    components, all,
+                    object : org.gradle.api.Action<Any> {
+                        override fun execute(variant: Any) = addDevAgentManifest(variant)
+                    },
+                )
+            }.onFailure { error ->
+                project.logger.warn("could not register an Android variant callback (${error.message}); $consequence.")
+            }
+        }
+    }
+}
+
+/** The per-variant half of [attachDevAgentInternetPermission]; see there. */
+private fun Project.devAgentManifestAdder(agentBuildType: () -> String?, consequence: String): (Any) -> Unit = { variant ->
+    runCatching {
+        val buildType = variant.javaClass.methods.first { it.name == "getBuildType" && it.parameterCount == 0 }
+            .invoke(variant) as String?
+        val wanted = agentBuildType() ?: return@runCatching
+        if (buildType != wanted) return@runCatching
+        val sources = variant.javaClass.methods.first { it.name == "getSources" && it.parameterCount == 0 }
+            .invoke(variant)
+        val manifests = sources!!.javaClass.methods.first { it.name == "getManifests" && it.parameterCount == 0 }
+            .invoke(sources)
+        val manifest = devAgentAndroidManifest(layout.buildDirectory.get().asFile)
+        manifests!!.javaClass.methods.first { it.name == "addStaticManifestFile" && it.parameterCount == 1 }
+            .invoke(manifests, manifest.absolutePath)
+    }.onFailure { error ->
+        logger.warn("could not add the dev-agent manifest to an Android variant (${error.message}); $consequence.")
     }
 }
 

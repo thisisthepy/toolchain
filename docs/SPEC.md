@@ -544,6 +544,13 @@ file's `debug`) is the build-time switch for python-multiplatform's dev agent (i
   under `ANDROID_HOME`, `ANDROID_SDK_ROOT` or `local.properties`' `sdk.dir`, else `adb` on `PATH`
   (`ANDROID_SERIAL` picks the device). A missing connection file fails naming it, before `adb` runs. The iOS
   simulator shares the laptop's loopback, so `ios.json` needs no forward.
+- the AGP variants whose build type is that active build type merge `build/pythonStaging/androidDevAgent/AndroidManifest.xml`,
+  which declares `android.permission.INTERNET` and nothing else (#162; Decision (a), team lead 2026-11-27). Android
+  refuses a socket, even on loopback, to an app without it, so the agent would fail with `[Errno 1] Operation not
+  permitted`. python-multiplatform's AAR serves debug and release alike and cannot declare a debug-only permission.
+  Other variants (a release) get nothing from the plugin, and an app that declares INTERNET itself still merges to
+  one entry. It goes through `androidComponents.onVariants` and `sources.manifests.addStaticManifestFile` (AGP 8.3+),
+  reflectively, and a missing surface is a warning naming the consequence.
 
 `ptest/devagent/DevAgentLaunchTest.kt` (the switch, the token, the variable's form, the connection file's
 permissions, a mobile launch kept across calls and replaced when invalid, the `adb` command and its lookup,
@@ -551,7 +558,10 @@ permissions, a mobile launch kept across calls and replaced when invalid, the `a
 only when asked for, removed by a later staging without it, and carrying a request), `ptest/PythonPluginDevAgentTest.kt`
 (a hot-reload build marks every destination, its `run` starts an agent, its Android and iOS stagings carry a
 request matching their connection file and `connectPythonAndroid` reads Android's; a release build does none of
-it). **Status: partial**: the runtime half of the marker request (python-multiplatform L-12 reading the marker
+it), `ptest/PythonPluginDevAgentManifestTest.kt` (with the real AGP: the debug variant of a hot-reload build merges
+the INTERNET manifest and release does not, a build type without hot reload adds it nowhere, and AGP's manifest
+merger merges it into an app that already declares INTERNET, leaving one). android-e2e checks usage-example's merged
+debug manifest has INTERNET and its release manifest has none. **Status: partial**: the runtime half of the marker request (python-multiplatform L-12 reading the marker
 when the variable is unset) is asked of python-multiplatform and not yet in its develop, a packaged desktop
 app gets no variable, and no CI job connects to an Android or iOS app yet (M2, M3).
 
@@ -867,8 +877,11 @@ pythonx-compose is published (§1.16). M2 (Android): the launch half is in §1.1
 `connectPythonAndroid`). Its end-to-end check is the `android-e2e` emulator step's `.github/scripts/live/m2_android.sh`:
 the debug APK's marker carries a request, `connectPythonAndroid` forwards the port, and `m1_scenarios.py --android`
 runs the same scenarios on the device (plus `sys.platform == 'android'`). usage-example's `MainActivity` initialises
-Python at start, as its desktop `main` does. Not yet run: it needs python-multiplatform L-12 to read the marker
-when the variable is unset. M3 (iOS simulator) follows.
+Python at start, as its desktop `main` does. It needs python-multiplatform L-12 to read the marker when the variable
+is unset (its #544) and the debug APK's INTERNET (§1.14, #162). Run locally on one arm64 emulator (API 36) with
+#544 (2026-11-27): 7/7. Without #544 the agent never answers; with #544 and without INTERNET it fails with
+`[Errno 1] Operation not permitted`. Not yet in CI until #544 is in python-multiplatform's develop. M3 (iOS simulator)
+follows.
 
 ---
 

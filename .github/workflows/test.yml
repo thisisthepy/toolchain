@@ -330,6 +330,13 @@ jobs:
           grep -q ':stagePythonAndroidRuntimeLibraries ' jni-graph.log || { echo "mergeDebugJniLibFolders does not run stagePythonAndroidRuntimeLibraries"; exit 1; }
           [ -d build/pythonStaging/androidJniLibs ] || { echo "stagePythonAndroidRuntimeLibraries did not run"; exit 1; }
           [ -z "$(find build/pythonStaging/androidJniLibs -type f)" ] || { echo "the plugin packaged runtime libraries nothing needs"; find build/pythonStaging/androidJniLibs -type f; exit 1; }
+          # #162: the debug build carries the dev agent, so its merged manifest has INTERNET (an agent cannot listen
+          # without it); the release manifest gets none from the plugin (usage-example declares none itself).
+          ../gradlew processReleaseMainManifest --console=plain
+          debug_manifest=build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml
+          release_manifest=build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml
+          grep -q '"android.permission.INTERNET"' "$debug_manifest" || { echo "the debug manifest has no INTERNET"; cat "$debug_manifest"; exit 1; }
+          if grep -q '"android.permission.INTERNET"' "$release_manifest"; then echo "the release manifest has INTERNET"; cat "$release_manifest"; exit 1; fi
 
       - name: Enable KVM for the emulator
         run: |
