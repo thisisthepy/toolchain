@@ -68,4 +68,46 @@ class DevAgentLaunchTest {
             )
         }
     }
+
+    @Test
+    fun `a mobile launch is made once and read back from its connection file`() {
+        val file = File(createTempDirectory("dev-agent-mobile").toFile(), "pythonDevAgent/android.json")
+
+        val first = readOrCreateDevAgentLaunch(file)
+        assertTrue(file.isFile, "the first call writes $file")
+        // The marker in an installed APK carries this token, so a rebuild must not change it.
+        assertEquals(first, readOrCreateDevAgentLaunch(file))
+
+        file.writeText("""{"host": "127.0.0.1", "port": 4719, "token": "short"}""")
+        val replaced = readOrCreateDevAgentLaunch(file)
+        assertTrue(replaced.token.length >= 43 && replaced.port != 0, "$replaced")
+        assertEquals(replaced, readOrCreateDevAgentLaunch(file))
+    }
+
+    @Test
+    fun `adb forwards the laptop's port to the same port on the device`() {
+        assertEquals(listOf("/sdk/platform-tools/adb", "forward", "tcp:4719", "tcp:4719"), adbForwardCommand("/sdk/platform-tools/adb", 4719))
+        val sdk = createTempDirectory("dev-agent-sdk").toFile()
+        File(sdk, "platform-tools/adb").apply { parentFile.mkdirs(); writeText("") }
+        assertEquals(File(sdk, "platform-tools/adb").path, resolveAdb(mapOf("ANDROID_HOME" to sdk.path), null))
+        assertEquals(File(sdk, "platform-tools/adb").path, resolveAdb(emptyMap(), sdk))
+        assertEquals("adb", resolveAdb(emptyMap(), null))
+    }
+
+    @Test
+    fun `connecting forwards the port of the connection file, and fails naming it when it is missing`() {
+        val file = File(createTempDirectory("dev-agent-connect").toFile(), "android.json")
+        val ran = mutableListOf<List<String>>()
+
+        val missing = runCatching { forwardDevAgent(file, "adb") { ran += it; 0 } }
+        assertTrue(missing.exceptionOrNull()?.message.orEmpty().contains(file.path), "${missing.exceptionOrNull()}")
+        assertTrue(ran.isEmpty())
+
+        DevAgentLaunch(port = 4719, token = "t".repeat(43)).writeConnectionFile(file)
+        assertEquals(4719, forwardDevAgent(file, "adb") { ran += it; 0 }.port)
+        assertEquals(listOf(listOf("adb", "forward", "tcp:4719", "tcp:4719")), ran)
+
+        val failed = runCatching { forwardDevAgent(file, "adb") { 1 } }
+        assertTrue(failed.exceptionOrNull()?.message.orEmpty().contains("adb forward"), "${failed.exceptionOrNull()}")
+    }
 }

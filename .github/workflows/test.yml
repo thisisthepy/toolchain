@@ -330,6 +330,13 @@ jobs:
           grep -q ':stagePythonAndroidRuntimeLibraries ' jni-graph.log || { echo "mergeDebugJniLibFolders does not run stagePythonAndroidRuntimeLibraries"; exit 1; }
           [ -d build/pythonStaging/androidJniLibs ] || { echo "stagePythonAndroidRuntimeLibraries did not run"; exit 1; }
           [ -z "$(find build/pythonStaging/androidJniLibs -type f)" ] || { echo "the plugin packaged runtime libraries nothing needs"; find build/pythonStaging/androidJniLibs -type f; exit 1; }
+          # #162: the debug build carries the dev agent, so its merged manifest has INTERNET (an agent cannot listen
+          # without it); the release manifest gets none from the plugin (usage-example declares none itself).
+          ../gradlew processReleaseMainManifest --console=plain
+          debug_manifest=build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml
+          release_manifest=build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml
+          grep -q '"android.permission.INTERNET"' "$debug_manifest" || { echo "the debug manifest has no INTERNET"; cat "$debug_manifest"; exit 1; }
+          if grep -q '"android.permission.INTERNET"' "$release_manifest"; then echo "the release manifest has INTERNET"; cat "$release_manifest"; exit 1; fi
 
       - name: Enable KVM for the emulator
         run: |
@@ -337,7 +344,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run the installed APK's Python on an emulator
+      - name: Run the installed APK's Python on an emulator, then drive it from a notebook (live connection M2)
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -345,8 +352,11 @@ jobs:
           target: google_apis
           disable-animations: true
           # On a failed check the step prints unfiltered logcat: a native crash logs under DEBUG/libc, not PythonSmoke.
+          # Then live connection M2 (toolchain#150): the APK's marker carries the agent's request,
+          # connectPythonAndroid forwards its port, and the M1 scenarios run through the proxy kernel on the device.
           script: |
             set -eu; apk=$(find usage-example/build/outputs/apk/debug -name '*.apk' | head -n 1); [ -n "$apk" ]; adb install -r "$apk"; adb logcat -c; adb shell am start -W -n org.thisisthepy.python.multiplatform.toolchain.example/.MainActivity --ez python-smoke true; sleep 20; adb logcat -d -s PythonSmoke:V > smoke.log; cat smoke.log; if ! grep 'PYTHON_SMOKE_OK ' smoke.log | grep -q '/data/'; then echo '--- smoke check failed: last 200 logcat lines, all tags ---'; adb logcat -d -t 200 || true; echo '--- crash buffer ---'; adb logcat -d -b crash || true; exit 1; fi
+            bash .github/scripts/live/m2_android.sh
 
   guide:
     runs-on: ubuntu-latest

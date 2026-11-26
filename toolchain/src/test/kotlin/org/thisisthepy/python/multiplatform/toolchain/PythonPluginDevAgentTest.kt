@@ -7,6 +7,7 @@ import org.gradle.api.tasks.JavaExec
 import org.gradle.testfixtures.ProjectBuilder
 import org.thisisthepy.python.multiplatform.toolchain.bundle.StagePythonBundleTask
 import org.thisisthepy.python.multiplatform.toolchain.devagent.DEV_AGENT_ENVIRONMENT_VARIABLE
+import org.thisisthepy.python.multiplatform.toolchain.devagent.ConnectPythonDevAgentTask
 import org.thisisthepy.python.multiplatform.toolchain.devagent.DEV_AGENT_LAUNCH_ACTION
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonExtension
 import java.io.File
@@ -61,6 +62,29 @@ class PythonPluginDevAgentTest {
         assertTrue(connection.isFile && value.substringAfter("token=") in connection.readText(), "$connection")
     }
 
+    /** toolchain#150 M2 (Decision 15 (a)): the OS launches a mobile app, so its marker carries the request. */
+    @Test
+    fun `a hot-reload build's mobile stagings carry a request the laptop can connect to`() {
+        val project = evaluated()
+        val connections = File(project.layout.buildDirectory.get().asFile, "pythonDevAgent")
+        val (android, ios, desktop) = project.stageTasks()
+
+        assertEquals(File(connections, "android.json"), android.devAgentConnectionFile)
+        assertEquals(File(connections, "ios.json"), ios.devAgentConnectionFile)
+        // A desktop app gets the variable from its run task (or from whoever starts it): its marker stays empty.
+        assertEquals(null, desktop.devAgentConnectionFile)
+
+        android.stage()
+        val marker = File(android.destinationDir, "python/python_multiplatform_devagent.enable").readText()
+        assertTrue(Regex("port=\\d+;token=[A-Za-z0-9_-]{43,}").matches(marker), marker)
+        val connection = File(connections, "android.json").readText()
+        assertTrue("\"port\": ${marker.substringAfter("port=").substringBefore(";")}" in connection, connection)
+        assertTrue(marker.substringAfter("token=") in connection, connection)
+
+        val connect = project.tasks.getByName("connectPythonAndroid") as ConnectPythonDevAgentTask
+        assertEquals(File(connections, "android.json"), connect.connectionFile)
+    }
+
     @Test
     fun `a release build stages no marker and its desktop run starts nothing`() {
         val project = evaluated(buildType = "release")
@@ -69,5 +93,7 @@ class PythonPluginDevAgentTest {
         val run = project.tasks.getByName("run") as JavaExec
         assertTrue(run.actions.none { DEV_AGENT_LAUNCH_ACTION in it.name }, "${run.actions.map { it.name }}")
         assertEquals(null, run.environment[DEV_AGENT_ENVIRONMENT_VARIABLE])
+        project.stageTasks().forEach { assertEquals(null, it.devAgentConnectionFile, it.name) }
+        assertEquals(null, project.tasks.findByName("connectPythonAndroid"))
     }
 }
