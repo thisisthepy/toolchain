@@ -325,6 +325,8 @@ jobs:
           unzip -l "$apk" > apk.txt
           grep -q 'assets/python/example_py/__init__.py' apk.txt || { echo "example_py is not in the APK's assets"; exit 1; }
           grep -q 'assets/python/iniconfig/__init__.py' apk.txt || { echo "iniconfig is not in the APK's assets"; exit 1; }
+          # toolchain#166: AGP's default ignoreAssetsPatterns drops directories starting with `_` (numpy's _core).
+          grep -q 'assets/python/example_py/_private/__init__.py' apk.txt || { echo "the _-prefixed package example_py/_private is not in the APK's assets"; exit 1; }
           # #155: nothing in this payload needs libc++_shared.so, so the plugin's jniLibs root is created and empty.
           ../gradlew mergeDebugJniLibFolders --dry-run --console=plain > jni-graph.log
           grep -q ':stagePythonAndroidRuntimeLibraries ' jni-graph.log || { echo "mergeDebugJniLibFolders does not run stagePythonAndroidRuntimeLibraries"; exit 1; }

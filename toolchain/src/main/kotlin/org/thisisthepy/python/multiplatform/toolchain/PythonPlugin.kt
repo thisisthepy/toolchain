@@ -144,6 +144,7 @@ class PythonPlugin : Plugin<Project> {
         // ---------------------------------------------------------------------------------------
         val stageTasks = registerStagingTasks(project)
         attachStagingToPackaging(project, stageTasks)
+        keepUnderscoreAssetDirectories(project)
         // toolchain#162: the AGP variants of the build type that stages the dev-agent marker get INTERNET, so the
         // agent can listen. Decided per variant inside AGP's callback, when the `python { }` block is read.
         attachDevAgentInternetPermission(project) {
@@ -829,6 +830,78 @@ private fun attachDevAgentInternetPermission(project: Project, agentBuildType: (
                 project.logger.warn("could not register an Android variant callback (${error.message}); $consequence.")
             }
         }
+    }
+}
+
+/**
+ * AGP's built-in `ignoreAssetsPatterns` when an app sets none (sdk-common's `PatternBasedFileFilter`, AGP 8.5),
+ * written out because AGP applies it only at merge time, after a plugin could edit it.
+ */
+const val ANDROID_DEFAULT_IGNORE_ASSETS_PATTERN = "!.svn:!.git:!.ds_store:!*.scc:.*:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"
+
+/** The entry of [ANDROID_DEFAULT_IGNORE_ASSETS_PATTERN] that drops every asset directory whose name starts with `_`. */
+const val ANDROID_UNDERSCORE_DIRECTORY_PATTERN = "<dir>_*"
+
+/**
+ * The app's `ignoreAssetsPatterns` without [ANDROID_UNDERSCORE_DIRECTORY_PATTERN]: every other entry kept in order,
+ * AGP's default standing in for an empty list. Null when there is nothing to remove.
+ */
+fun ignoreAssetsPatternsKeepingUnderscoreDirectories(patterns: Collection<String>): List<String>? {
+    val effective = patterns.ifEmpty { ANDROID_DEFAULT_IGNORE_ASSETS_PATTERN.split(':') }
+    return if (ANDROID_UNDERSCORE_DIRECTORY_PATTERN in effective) effective.filter { it != ANDROID_UNDERSCORE_DIRECTORY_PATTERN } else null
+}
+
+/**
+ * toolchain#166 (docs/SPEC.md §1.13; Decision (a), team lead 2026-11-27): AGP's default `ignoreAssetsPatterns`
+ * holds [ANDROID_UNDERSCORE_DIRECTORY_PATTERN], so `merge*Assets` dropped every staged Python directory starting
+ * with `_` (torch's `_dynamo`, numpy's `_core`) and the app failed with "No module named". Once the app's DSL is
+ * final (`androidComponents.finalizeDsl`), that one entry is removed and every other pattern kept, the app's own
+ * included. AGP applies the patterns to the whole app, so its own `_` asset directories are packaged too. One line
+ * is logged when something was removed.
+ */
+private fun keepUnderscoreAssetDirectories(project: Project) {
+    val consequence = "Python packages with a directory starting with `_` (numpy's `_core`) are missing from the APK; " +
+        "remove \"$ANDROID_UNDERSCORE_DIRECTORY_PATTERN\" from android { androidResources { ignoreAssetsPatterns } } yourself"
+    listOf("com.android.application", "com.android.library").forEach { pluginId ->
+        project.plugins.withId(pluginId) {
+            val components = project.extensions.findByName("androidComponents") ?: run {
+                project.logger.warn("an Android plugin is applied but there is no `androidComponents` extension; $consequence.")
+                return@withId
+            }
+            runCatching {
+                val finalizeDsl = components.javaClass.methods.first {
+                    it.name == "finalizeDsl" && it.parameterCount == 1 && it.parameterTypes[0] == org.gradle.api.Action::class.java
+                }
+                finalizeDsl.invoke(
+                    components,
+                    object : org.gradle.api.Action<Any> {
+                        override fun execute(android: Any) = removeUnderscoreDirectoryPattern(project, android, consequence)
+                    },
+                )
+            }.onFailure { error ->
+                project.logger.warn("could not register an Android finalizeDsl callback (${error.message}); $consequence.")
+            }
+        }
+    }
+}
+
+/** The `finalizeDsl` half of [keepUnderscoreAssetDirectories]: edits `android.androidResources.ignoreAssetsPatterns`. */
+private fun removeUnderscoreDirectoryPattern(project: Project, android: Any, consequence: String) {
+    runCatching {
+        val resources = android.javaClass.methods.first { it.name == "getAndroidResources" && it.parameterCount == 0 }
+            .invoke(android)
+        @Suppress("UNCHECKED_CAST")
+        val patterns = resources!!.javaClass.methods.first { it.name == "getIgnoreAssetsPatterns" && it.parameterCount == 0 }
+            .invoke(resources) as MutableCollection<String>
+        val kept = ignoreAssetsPatternsKeepingUnderscoreDirectories(patterns) ?: return
+        patterns.clear()
+        patterns.addAll(kept)
+        project.logger.lifecycle(
+            "python: removed \"$ANDROID_UNDERSCORE_DIRECTORY_PATTERN\" from ignoreAssetsPatterns, which would drop the staged " +
+                "Python directories starting with `_` (toolchain#166); the other patterns are kept.",
+        )
+    }.onFailure { error ->
+        project.logger.warn("could not adjust android.androidResources.ignoreAssetsPatterns (${error.message}); $consequence.")
     }
 }
 

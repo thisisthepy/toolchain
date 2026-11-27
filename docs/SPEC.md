@@ -469,6 +469,20 @@ Hand-off to the platform's packaging step:
   `usage-example`'s task graph `mergeDebugAssets` runs after `stagePythonBundleAndroid`, and the built debug APK
   holds `assets/python/example_py/__init__.py` and `assets/python/iniconfig/__init__.py` (toolchain 1.0 scope,
   owner 2026-11-21: no scope cuts).
+- Android asset directories starting with `_` (#166; Decision (a), team lead 2026-11-27). AGP's default
+  `ignoreAssetsPatterns` (`!.svn:!.git:!.ds_store:!*.scc:.*:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~`, sdk-common's
+  `PatternBasedFileFilter`, AGP 8.5) has `<dir>_*`, so `merge*Assets` dropped every staged Python directory whose
+  name starts with `_` (torch's `_dynamo`, numpy's `_core`) and the app failed with "No module named". When the
+  plugin stages an Android payload (an Android application or library plugin is applied), it removes that one
+  entry from `android.androidResources.ignoreAssetsPatterns` once the app's DSL is final
+  (`androidComponents.finalizeDsl`, reflectively). Every other pattern stays, the app's own included, and an app that
+  set none gets AGP's default without that entry. It logs one line naming the removed entry and why. **Side effect:**
+  AGP applies the patterns to the whole app, so the app's own non-Python asset directories starting with `_` are
+  packaged too. A missing surface is a warning naming the consequence. `ptest/PythonPluginAndroidAssetsPatternTest.kt`
+  (real AGP: `mergeDebugAssets` and `mergeReleaseAssets` apply AGP's defaults without `<dir>_*`; an app's own patterns
+  keep their order and lose only that entry). android-e2e checks the debug APK holds
+  `assets/python/example_py/_private/__init__.py` (a fixture package in `usage-example`). Run locally (2026-11-27):
+  without the change that file is missing from the APK, with it the file is there. **implemented**.
 - Android native runtime libraries (#155; Decision 20 (a), approved by the leader 2026-11-25): an
   extension the cross build compiles with C++ needs `libc++_shared.so`, and neither a wheel nor the Android
   CPython ships it. `stagePythonAndroidRuntimeLibraries` (group `python`) runs after
