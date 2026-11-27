@@ -251,8 +251,9 @@ val cliJar = tasks.register<Jar>("cliJar") {
 }
 
 // The native `tcl` binary that the toolchain-lite wheel carries (publish-pypi.yml). The same
-// settings as pypackpack's CLI, which tcl links: io.ktor reaches org.slf4j (slf4j-nop, no I/O at
-// init), which GraalVM 21 otherwise refuses to initialize at build time.
+// settings as pypackpack's CLI, which tcl links. Since pypackpack#170 packpack downloads with
+// java.net.http, so io.ktor, kotlinx.io and org.slf4j are no longer on cliMain's runtime classpath
+// and are not listed for build-time initialization.
 graalvmNative {
     binaries {
         named("main") {
@@ -265,7 +266,7 @@ graalvmNative {
             buildArgs.addAll(
                 "--no-fallback",
                 "--install-exit-handlers",
-                "--initialize-at-build-time=kotlin,kotlinx.coroutines,io.ktor,kotlinx.io,org.slf4j",
+                "--initialize-at-build-time=kotlin,kotlinx.coroutines",
                 "-H:+AddAllCharsets",
                 "--gc=serial",
             )
