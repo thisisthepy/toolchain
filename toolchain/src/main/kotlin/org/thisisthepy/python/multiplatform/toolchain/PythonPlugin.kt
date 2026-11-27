@@ -583,7 +583,14 @@ class PythonPlugin : Plugin<Project> {
                             minSdk = variant.minSdk
                             bundleDir = variantBundleDir
                             pythonVersionRejection = pythonVersionRejectionFor(variantEmbedLevel, variant.target)
-                            dependsOn(installTask, targetInstall, typedpythonCheckTask)
+                            dependsOn(targetInstall, typedpythonCheckTask)
+                            // docs/SPEC.md §1.10 (Decision (a), team lead 2026-11-27): the host `uv add` leaves the
+                            // `<package>/.venv` whose interpreter `bytecode`, `mixed` and `native` compile with; an
+                            // `instant` variant reads nothing from it, so a dependency without a host wheel must not
+                            // stop it. A level that is not one keeps the dependency; this task refuses it at execution.
+                            if (runCatching { compilesBytecode(resolveBuildLevel(variant.compileLevel)) }.getOrDefault(true)) {
+                                dependsOn(installTask)
+                            }
                         }
 
                     val variantPackageTask =

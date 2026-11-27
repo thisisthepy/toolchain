@@ -332,7 +332,13 @@ read these declarations.
 `pypackpack`: `BackendInterface.create(BackendType.UV)` → `addDependencies(…, workingDir = packageDir)`
 (a real `uv add`). This records the dependencies in the package's `pyproject.toml` and leaves the
 `<package>/.venv` that `compileLevel = "bytecode"` compiles with (§1.6). It does not feed a bundle. An
-empty list or no package directory is a skip, not a failure.
+empty list or no package directory is a skip, not a failure. A platform variant's `buildPython<Variant>` depends on it only
+when the variant's compile level reads that venv, `bytecode`, `mixed` or `native` (they run `compileall` with its
+interpreter); an `instant` variant, the debug default, does not, and a value that is not a level keeps it (its own
+task refuses that value). Decision (a), team lead 2026-11-27, after torchnative's debug build failed on a
+dependency without a host wheel. `ptest/PythonPluginTargetDependenciesTest.kt` (`a variant depends on the host
+install only when its compile level reads the venv`). The host chain's `buildPython` (no platform variant) still
+depends on it.
 
 **Per target: `installPythonDependencies<Set>`.** What reaches a bundle is installed separately,
 once per *dependency set*: a platform variant crossed with a flavor (§1.17). The build type is not
@@ -376,7 +382,8 @@ install directories, `libDirs` and dependencies on an applied plugin),
 `iniconfig` is in the bundle and the zip.
 → *Known limits: without `compileSdk` no `python-version` is passed and uv uses the interpreter it
 finds. `installPythonDependencies` still `uv add`s every source set for the host, so a package with
-no host wheel fails it even if only `androidMain` declares it. `pypackpack`'s `ResourceBundler` drops
+no host wheel fails it even if only `androidMain` declares it; a platform variant runs it only at `bytecode`,
+`mixed` and `native`, so this stops a release build of such a package, not an `instant` debug one. `pypackpack`'s `ResourceBundler` drops
 `.pyd` files and directories named `build`/`dist`, so a Windows extension module does not reach a
 `mingwX64` bundle.*
 
