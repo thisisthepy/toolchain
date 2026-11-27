@@ -509,17 +509,40 @@ Hand-off to the platform's packaging step:
 validated when any build type sets `enableHotReload = true`: `serverHost` must be non-blank, and
 `keyStore` and `autoGenerate` are mutually exclusive.
 
-**Hot reload does not work yet (toolchain#103).** With hot reload enabled, `hotReloadPython` fails, saying
-so and why: it used to `adb push` every `.py` to `/data/local/tmp/<fileName>/python/…` and send
-`adb shell am broadcast -a org.thisisthepy.python.RELOAD_PYTHON`, but python-multiplatform has no receiver
-for that broadcast, so the push looked like a working hot reload while the app never changed. Disabled, the
-task prints how to enable it. `ptest/PythonPluginHotReloadTest.kt` (the validation; the enabled task fails
-naming the reason and runs no `adb`; the disabled task only prints its guide).
+**Hot reload goes over the live channel (toolchain#150 M2; `docs/design/live-connection.md` §4 and M2).**
+`hotReloadPython` sends changed Python files to the running debug app's dev agent with its `push` request; the
+agent writes them into its overlay and re-imports the modules among them. It replaces the old `adb push` of every
+`.py` to `/data/local/tmp/<fileName>/python/…` plus an `am broadcast` of `org.thisisthepy.python.RELOAD_PYTHON`,
+which python-multiplatform never received (#103); that path and `hotreload/WatchAndPush.kt` are removed, and no
+`adb push` runs. With hot reload enabled:
 
-**Status: planned**: a live connection to the running app on desktop, Android and iOS replaces it
-(`docs/design/live-connection.md`: M1 desktop, M2 Android, where this task moves onto the channel).
-`plugin/hotreload/WatchAndPush.kt`'s `adb` command builder and desktop copy helper are tested but unused;
-they go with M2.
+- the destination is `-Ppython.hotReloadTarget=<name>`, the name of a connection file under
+  `build/pythonDevAgent/` (`android`, `ios`, or a desktop run task such as `run`); without it, `android` when the
+  project stages Android, else `run`. `android` and `ios` push the Android and iOS stagings, any other name the
+  desktop staging. The task depends on that staging (so what is pushed is what a fresh build would carry, with
+  pypackpack deciding the payload), and `android` also on `connectPythonAndroid`. A missing connection file fails
+  naming it and the task that writes it;
+- the files are the staged payload's `.py` files (`python/`, paths relative to it, UTF-8). Only those whose
+  SHA-256 differs from the app's copy are pushed (Decision (b), team lead 2026-11-27). The app's copy is read once
+  per running app with one `execute` that hashes, for each staged path, the first match on the app's `sys.path`
+  (the overlay comes first), prints them as JSON and leaves no name in `__main__`. The result is cached in
+  `build/pythonDevAgent/<name>.digest.json` keyed by the port, a SHA-256 of the token (never the token) and the
+  agent's `pid` from `hello`, and each push updates it; another `pid` (the app restarted) or token reads it again.
+  A dependency the app already has is therefore never pushed, and an edited app file is;
+- nothing to push prints that and sends no `push`. A `push` whose `done` is not `ok` fails with the agent's
+  `ename` and `evalue`; the modules it re-imported are printed (`reloaded`). A staging without `.py` files (a
+  `bytecode` or `native` build level) fails saying hot reload needs source;
+- watch mode is Gradle's own: `./gradlew hotReloadPython --continuous` re-runs it when a source changes.
+
+Disabled, the task prints how to enable it. `ptest/PythonPluginHotReloadTest.kt` (the validation; the disabled
+task only prints its guide; with an agent stand-in: the first run reads the app's digest once and pushes only the
+edited app file, not an unchanged dependency; a second run uses the cache and pushes only the next edit; nothing
+changed sends no push; a restarted app is read again; a missing connection file fails naming it; a refused push
+fails), `ptest/hotreload/HotReloadPlanTest.kt` (the comparison). android-e2e's `m2_android.sh` edits a module of
+the installed app, runs `hotReloadPython` and checks the running app sees the change, then that a second run pushes
+nothing. Run locally on one arm64 emulator (API 36) with python-multiplatform's develop (2026-11-27): the digest of
+the 5 staged `.py` files read once, only the edited module pushed and re-imported, the new value read back, the
+second run pushed nothing. **Status: partial** until that check is green in CI; iOS is M3.
 
 **The dev agent's launch (toolchain#105).** The active Python build type's `enableHotReload` (the example build
 file's `debug`) is the build-time switch for python-multiplatform's dev agent (its SPEC L-12). With it:
@@ -561,9 +584,7 @@ request matching their connection file and `connectPythonAndroid` reads Android'
 it), `ptest/PythonPluginDevAgentManifestTest.kt` (with the real AGP: the debug variant of a hot-reload build merges
 the INTERNET manifest and release does not, a build type without hot reload adds it nowhere, and AGP's manifest
 merger merges it into an app that already declares INTERNET, leaving one). android-e2e checks usage-example's merged
-debug manifest has INTERNET and its release manifest has none. **Status: partial**: the runtime half of the marker request (python-multiplatform L-12 reading the marker
-when the variable is unset) is asked of python-multiplatform and not yet in its develop, a packaged desktop
-app gets no variable, and no CI job connects to an Android or iOS app yet (M2, M3).
+debug manifest has INTERNET and its release manifest has none. **Status: partial**: a packaged desktop app gets no variable, and no CI job connects to an iOS app yet (M3). Android is checked by android-e2e (run 45875836347, 2026-11-27), with python-multiplatform L-12 reading the marker (its #544, in its develop).
 
 ### 1.15 Code push: `codePushPython`
 `packaging { codePush { serverHost; cert; uploadConfig { forceUpload; login { id; password } } } }`
@@ -880,7 +901,7 @@ runs the same scenarios on the device (plus `sys.platform == 'android'`). usage-
 Python at start, as its desktop `main` does. It needs python-multiplatform L-12 to read the marker when the variable
 is unset (its #544) and the debug APK's INTERNET (§1.14, #162). Run locally on one arm64 emulator (API 36) with
 #544 (2026-11-27): 7/7. Without #544 the agent never answers; with #544 and without INTERNET it fails with
-`[Errno 1] Operation not permitted`. Not yet in CI until #544 is in python-multiplatform's develop. M3 (iOS simulator)
+`[Errno 1] Operation not permitted`. Green in CI with #544 in python-multiplatform's develop (run 45875836347, 2026-11-27). M3 (iOS simulator)
 follows.
 
 ---
@@ -890,12 +911,12 @@ follows.
 These exist in the code but are not asked for by the example build file or the issues.
 
 1. **`python { localLibraryPath = "…" }`**: not in the example build file, which uses
-   `sourceSets { commonMain { srcDirs(…) } }`. It overrides `srcDirs` and is the only source root
-   hot reload reads. `usage-example` depends on it.
+   `sourceSets { commonMain { srcDirs(…) } }`. It overrides `srcDirs`. `usage-example` depends on it.
 2. **`-Ppython.buildType=<name>`**: a project property choosing the active build type when no
    platform variant is declared. The example build file says nothing about selecting a build type.
-3. **Hot reload over `adb push` + broadcast.** The example describes an HTTPS `serverHost` with a
-   certificate; the implemented transport is Android-only `adb`.
+3. **`hotReload { serverHost; cert }`.** The example describes an HTTPS `serverHost` with a certificate;
+   they are validated, but the live channel (§1.14) is loopback and reads neither. The design maps them onto
+   the iOS-device and remote cases (`docs/design/live-connection.md`, M4 and M5).
 4. **Unreferenced code**: `PythonMultiplatformPlugin.kt` (a second `Plugin` that is not registered
    in `gradlePlugin { }`), `dependency/reslover.kt`, `dependency/lang/kotlin/decompileKotlinMeta.kt`
    (a `main()` generating Python from Kotlin metadata, related to `buildFeatures.metaclass` but not

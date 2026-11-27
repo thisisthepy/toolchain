@@ -400,9 +400,8 @@ class PythonPlugin : Plugin<Project> {
             //
             // "성립하는 부분": DSL 검증 + 태스크 등록. 태스크가 하는 것과 못 하는 것을 태스크 자체가 말한다.
             //
-            // hotReload: file-watch + adb-push + am-broadcast until python-multiplatform's runtime
-            //   receives HOT_RELOAD_BROADCAST_ACTION and calls importlib.reload(). That boundary
-            //   is the device runtime's job, not this task's.
+            // hotReload: the changed staged .py files over the live channel to the running debug app's dev agent
+            //   (docs/SPEC.md §1.14, toolchain#150 M2). Re-importing them is python-multiplatform's job.
             //
             // codePush: DSL validation only. Upload is NOT implemented -- there is no server.
             //   CodePushPendingTask prints this explicitly when run, matching pypackpack's
@@ -421,19 +420,42 @@ class PythonPlugin : Plugin<Project> {
                 ext = extension.packaging.codePush,
             )
 
+            val hotReloadTarget = (project.findProperty("python.hotReloadTarget") as? String)?.takeIf { it.isNotBlank() }
+                ?: if (project.plugins.hasPlugin("com.android.application") || project.plugins.hasPlugin("com.android.library")) {
+                    PythonStagingPlatform.ANDROID.directoryName
+                } else {
+                    "run"
+                }
+            val hotReloadPlatform = when (hotReloadTarget) {
+                PythonStagingPlatform.ANDROID.directoryName -> PythonStagingPlatform.ANDROID
+                PythonStagingPlatform.IOS.directoryName -> PythonStagingPlatform.IOS
+                else -> PythonStagingPlatform.DESKTOP
+            }
             project.tasks.register<HotReloadPushTask>(HOT_RELOAD_TASK) {
                 group = TASK_GROUP
                 description = if (anyBuildTypeEnablesHotReload) {
-                    "Pushes changed Python source files to the connected device and signals a reload " +
-                        "(adb push + am broadcast ${org.thisisthepy.python.multiplatform.toolchain.hotreload.HOT_RELOAD_BROADCAST_ACTION})"
+                    "Pushes the changed staged Python files to the running debug app's dev agent " +
+                        "(-Ppython.hotReloadTarget=$hotReloadTarget; --continuous to watch)."
                 } else {
                     "Hot reload is not enabled for any build type. " +
                         "Set enableHotReload = true in python { buildTypes { getByName(\"debug\") { } } }."
                 }
                 hotReloadEnabled = hotReloadConfig.enabled
-                sourceRoot = extension.localLibraryPath?.let { project.file(it) }
-                remoteBasePath = "/data/local/tmp/${extension.packaging.fileName}/python"
-                serverHost = hotReloadConfig.serverHost
+                if (hotReloadConfig.enabled) {
+                    val stage = stageTasks.getValue(hotReloadPlatform)
+                    dependsOn(stage)
+                    payloadDir = stage.get().let { File(it.destinationDir, it.payloadPath) }
+                    connectionFile = File(project.layout.buildDirectory.get().asFile, "$DEV_AGENT_CONNECTION_DIRECTORY/$hotReloadTarget.json")
+                    connectionHint = when (hotReloadPlatform) {
+                        PythonStagingPlatform.ANDROID -> {
+                            // Registered only when the active build type carries the agent; matching tolerates its absence.
+                            dependsOn(project.tasks.matching { it.name == DEV_AGENT_CONNECT_ANDROID_TASK })
+                            "Install and start the debug app; $DEV_AGENT_CONNECT_ANDROID_TASK (which this task runs first) forwards its port"
+                        }
+                        PythonStagingPlatform.IOS -> "Build, install and start the debug iOS app; its staging writes this file"
+                        else -> "Start the app with its run task ('$hotReloadTarget'), which writes this file, or pass -Ppython.hotReloadTarget=<name>"
+                    }
+                }
             }
 
             project.tasks.register<CodePushPendingTask>(CODE_PUSH_TASK) {
