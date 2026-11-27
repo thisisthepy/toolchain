@@ -61,8 +61,26 @@ jobs:
         working-directory: .ci/pypackpack
         run: ./gradlew :packpack:publishToMavenLocal --console=plain
 
+      # The TypedPython gate tests (SPEC §1.18) need the gate's wheels; under CI a missing one fails them
+      # instead of skipping (GatePrecondition.kt; team lead 2026-11-27). The gate zip comes from the pinned
+      # coordinates (DEFAULT_TYPEDPYTHON_GATE) published by python-multiplatform-ksp, and pyrefly from PyPI,
+      # checked against the zip's manifest.
+      - uses: actions/checkout@v7
+        if: matrix.task == 'test'
+        with:
+          repository: thisisthepy/python-multiplatform
+          ref: develop
+          path: .ci/python-multiplatform
+
+      - name: The TypedPython gate's wheels
+        if: matrix.task == 'test'
+        run: |
+          (cd .ci/python-multiplatform && ./gradlew :python-multiplatform-ksp:publishToMavenLocal --console=plain)
+          python3 .github/scripts/typedpython/gate_wheels.py "$RUNNER_TEMP/typedpython-wheels"
+          echo "GATE_WHEELS=-Ptypedpython.wheelDir=$RUNNER_TEMP/typedpython-wheels" >> "$GITHUB_ENV"
+
       - name: Test ${{ matrix.name }}
-        run: ./gradlew :toolchain:${{ matrix.task }} --rerun --console=plain
+        run: ./gradlew :toolchain:${{ matrix.task }} ${GATE_WHEELS:-} --rerun --console=plain
 
       # tcl's Python half (SPEC §2.4): the dev agent client, `tcl connect`'s REPL and the proxy kernel under
       # a real Jupyter client, against a fake agent. ipykernel and jupyter_client come from PyPI for this step.

@@ -8,7 +8,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import org.junit.Assume.assumeTrue
 import kotlin.test.BeforeTest
 
 /**
@@ -44,10 +43,10 @@ class TypedpythonCheckTaskTest {
      */
     @BeforeTest
     fun requireWheelDir() {
-        assumeTrue(
+        requireGatePrecondition(
+            wheelDir.isNotBlank(),
             "SKIPPED: needs the typedpython and pyrefly wheels; run with " +
                 "-Ptypedpython.wheelDir=<directory holding typedpython-0.1.0-py3-none-any.whl and the pyrefly wheel>",
-            wheelDir.isNotBlank(),
         )
     }
 
