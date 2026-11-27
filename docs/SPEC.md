@@ -713,6 +713,14 @@ bundled. Every `buildPython<Variant><BuildType>` and the single host `buildPytho
 - **Stubs.** The plugin creates a resolvable configuration `typedpythonStubs`; its files are
   `@InputFiles` and each is passed as `--search-path`, in order. With nothing in it, the check runs
   without stubs and logs that once.
+- **The app's dependencies.** Each dependency set's target install, `build/pythonDeps/<set>` (`host` without a
+  platform variant, else one per platform variant and flavor, §1.10), is passed as `--search-path` after the stubs,
+  so a stub still wins (Decision (i), team lead 2026-11-27). The gate's own venv holds none of the app's
+  dependencies, and a target-only one (torchnative's `torch`, `transformers`, `torchnative`, Android cp315t) cannot
+  be installed there, so an import of one was reported as a missing import. Only `.py` and `.pyi` are read, and
+  only they are inputs of the check, so an extension module neither resolves nor re-runs it. The check depends on
+  those install tasks. `TypedpythonCheckTaskTest` (`a dependency installed for the target is resolved through its
+  install directory`, red before: "Cannot find module `iniconfig`").
 - **Result.** Exit 0 passes and prints any `WARNING` lines. Exit 1 with diagnostics fails the build
   with them. Exit 2 (or exit 1 with no diagnostic line, which is how an uncaught exception in the
   gate exits) fails the build with the tool's own output. A passing run writes
