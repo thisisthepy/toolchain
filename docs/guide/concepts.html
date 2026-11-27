@@ -46,7 +46,7 @@ packagePython               build/distributions/&lt;fileName&gt;.zip
 
 stagePythonBundle           → stagePythonBundleAndroid / Ios / Desktop
                               build/pythonStaging/&lt;platform&gt;/python/
-hotReloadPython             adb push *.py + RELOAD_PYTHON broadcast
+hotReloadPython             changed staged *.py → the running debug app's dev agent
 codePushPython              validation only; reports that upload is not implemented</code></pre>
 <p data-lang="en">All tasks live in the <code>python</code> group. A missing package directory makes install and bundle skip with a message rather than fail: a module that has not configured Python yet builds as before.</p><p data-lang="ko">모든 태스크는 <code>python</code> 그룹에 있습니다. 패키지 디렉터리가 없으면 설치와 번들은 실패하지 않고 메시지와 함께 건너뜁니다. 아직 Python 을 설정하지 않은 모듈도 전처럼 빌드됩니다.</p>
 </section>
