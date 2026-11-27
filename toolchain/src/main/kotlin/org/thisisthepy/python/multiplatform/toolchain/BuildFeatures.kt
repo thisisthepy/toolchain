@@ -19,6 +19,13 @@ const val COMPOSE_KOTLIN_PROPERTY = "python.compose.kotlinModule"
 const val PYTHONX_COMPOSE = "pythonx-compose"
 
 /**
+ * The requirement the [COMPOSE_PYTHON_PROPERTY] messages give as an example: the newest
+ * `pythonx-compose` on PyPI (a pre-release, so it is pinned; `InstallDependenciesTaskTest` installs it
+ * for real, so the example stays one that works).
+ */
+const val PYTHONX_COMPOSE_EXAMPLE = "$PYTHONX_COMPOSE==0.1.0a3"
+
+/**
  * The `metaDirs` one bundle task forwards to `pypackpack`'s `BundleRequest.metaDirs`.
  *
  * [metaDirs] (`resolveMetaDirs`) are kept only when `buildFeatures { metaclass }` is on (the default,
@@ -46,12 +53,12 @@ data class ComposePythonInstall(
 
 /**
  * Decides the Python half of `compose = true` from the [COMPOSE_PYTHON_PROPERTY] value
- * [pythonxCompose]. `pythonx-compose` is not on a package index yet, so there is no default.
+ * [pythonxCompose]. `pythonx-compose` has only pre-releases on PyPI, so there is no default.
  *
  * - An existing directory (absolute, relative to [projectDir], or a `file:` URI): install
  *   `pythonx-compose` and search that directory (`--find-links`).
  * - Otherwise a PEP 508 requirement whose name is `pythonx-compose` (any case, `-`/`_`/`.`
- *   equivalent): installed as written, e.g. `pythonx-compose==0.1.0`.
+ *   equivalent): installed as written, e.g. [PYTHONX_COMPOSE_EXAMPLE].
  * - Anything else, or no value: a rejection naming [COMPOSE_PYTHON_PROPERTY].
  */
 fun resolveComposePythonInstall(
@@ -66,9 +73,9 @@ fun resolveComposePythonInstall(
         return rejected(
             "python { buildFeatures { compose = true } } needs the Gradle property " +
                 "'$COMPOSE_PYTHON_PROPERTY': the $PYTHONX_COMPOSE pip requirement (e.g. " +
-                "$PYTHONX_COMPOSE==0.1.0) or a local directory of its wheels, which " +
-                "installPythonDependencies installs. $PYTHONX_COMPOSE is not published to a package " +
-                "index yet, so there is no default. Set it in gradle.properties or pass " +
+                "$PYTHONX_COMPOSE_EXAMPLE, from PyPI) or a local directory of its wheels, which " +
+                "installPythonDependencies installs. $PYTHONX_COMPOSE has only pre-releases on PyPI, " +
+                "so there is no default. Set it in gradle.properties or pass " +
                 "-P$COMPOSE_PYTHON_PROPERTY=<requirement or directory>.",
         )
     }
@@ -82,7 +89,7 @@ fun resolveComposePythonInstall(
     return rejected(
         "'$COMPOSE_PYTHON_PROPERTY' is '$value', which is neither an existing directory of " +
             "$PYTHONX_COMPOSE wheels nor a pip requirement for $PYTHONX_COMPOSE " +
-            "(e.g. $PYTHONX_COMPOSE==0.1.0).",
+            "(e.g. $PYTHONX_COMPOSE_EXAMPLE).",
     )
 }
 
