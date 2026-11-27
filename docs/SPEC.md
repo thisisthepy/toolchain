@@ -538,11 +538,12 @@ Disabled, the task prints how to enable it. `ptest/PythonPluginHotReloadTest.kt`
 task only prints its guide; with an agent stand-in: the first run reads the app's digest once and pushes only the
 edited app file, not an unchanged dependency; a second run uses the cache and pushes only the next edit; nothing
 changed sends no push; a restarted app is read again; a missing connection file fails naming it; a refused push
-fails), `ptest/hotreload/HotReloadPlanTest.kt` (the comparison). android-e2e's `m2_android.sh` edits a module of
-the installed app, runs `hotReloadPython` and checks the running app sees the change, then that a second run pushes
-nothing. Run locally on one arm64 emulator (API 36) with python-multiplatform's develop (2026-11-27): the digest of
-the 5 staged `.py` files read once, only the edited module pushed and re-imported, the new value read back, the
-second run pushed nothing. **Status: partial** until that check is green in CI; iOS is M3.
+fails), `ptest/hotreload/HotReloadPlanTest.kt` (the comparison). `.github/scripts/live/hot_reload_check.sh`, run by
+android-e2e's `m2_android.sh` and ios-e2e's `m3_ios.sh`, edits a module of the installed app, runs `hotReloadPython`
+and checks the running app sees the change, then that a second run pushes nothing. Run locally (2026-11-27) with
+python-multiplatform's develop on one arm64 emulator (API 36) and on an iOS 26.5 simulator: each read the digest of
+the 5 staged `.py` files once, pushed and re-imported only the edited module, read the new value back, and pushed
+nothing the second time. **Status: partial** until those checks are green in CI.
 
 **The dev agent's launch (toolchain#105).** The active Python build type's `enableHotReload` (the example build
 file's `debug`) is the build-time switch for python-multiplatform's dev agent (its SPEC L-12). With it:
@@ -584,7 +585,7 @@ request matching their connection file and `connectPythonAndroid` reads Android'
 it), `ptest/PythonPluginDevAgentManifestTest.kt` (with the real AGP: the debug variant of a hot-reload build merges
 the INTERNET manifest and release does not, a build type without hot reload adds it nowhere, and AGP's manifest
 merger merges it into an app that already declares INTERNET, leaving one). android-e2e checks usage-example's merged
-debug manifest has INTERNET and its release manifest has none. **Status: partial**: a packaged desktop app gets no variable, and no CI job connects to an iOS app yet (M3). Android is checked by android-e2e (run 45875836347, 2026-11-27), with python-multiplatform L-12 reading the marker (its #544, in its develop).
+debug manifest has INTERNET and its release manifest has none. **Status: partial**: a packaged desktop app gets no variable, and ios-e2e's iOS check (M3, `m3_ios.sh`) is not yet green in CI. Android is checked by android-e2e (run 45875836347, 2026-11-27), with python-multiplatform L-12 reading the marker (its #544, in its develop).
 
 ### 1.15 Code push: `codePushPython`
 `packaging { codePush { serverHost; cert; uploadConfig { forceUpload; login { id; password } } } }`
@@ -901,8 +902,13 @@ runs the same scenarios on the device (plus `sys.platform == 'android'`). usage-
 Python at start, as its desktop `main` does. It needs python-multiplatform L-12 to read the marker when the variable
 is unset (its #544) and the debug APK's INTERNET (§1.14, #162). Run locally on one arm64 emulator (API 36) with
 #544 (2026-11-27): 7/7. Without #544 the agent never answers; with #544 and without INTERNET it fails with
-`[Errno 1] Operation not permitted`. Green in CI with #544 in python-multiplatform's develop (run 45875836347, 2026-11-27). M3 (iOS simulator)
-follows.
+`[Errno 1] Operation not permitted`. Green in CI with #544 in python-multiplatform's develop (run 45875836347, 2026-11-27). M3 (iOS
+simulator): ios-e2e's `.github/scripts/live/m3_ios.sh`, after the smoke check, checks the `.app`'s marker carries a
+request, launches the app, and runs `m1_scenarios.py --ios` against `build/pythonDevAgent/ios.json` as it is (the
+simulator shares the Mac's loopback, so no forward), plus `sys.platform == 'ios'`, then the hot-reload check.
+usage-example's iOS `MainViewController` initialises Python at start, as `MainActivity` does. Run locally on an iOS 26.5
+simulator (2026-11-27): 7/7 and the hot-reload check; built without that start-up initialisation the agent never
+answers and the script fails. Not yet green in CI.
 
 ---
 

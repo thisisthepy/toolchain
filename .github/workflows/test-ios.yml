@@ -88,6 +88,7 @@ jobs:
           udid=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone")))')
           xcrun simctl boot "$udid" || true
           xcrun simctl bootstatus "$udid" -b
+          echo "UDID=$udid" >> "$GITHUB_ENV"
           for i in $(seq 1 60); do
             xcrun simctl spawn "$udid" launchctl list 2>/dev/null | grep -q com.apple.SpringBoard && break
             sleep 5
@@ -116,3 +117,8 @@ jobs:
             *.app/python-multiplatform-home/*) echo "stdlib from the app: $stdlib" ;;
             *) echo "stdlib not from the app: '$stdlib'"; exit 1 ;;
           esac
+
+      - name: Live connection M3 (dev agent through the simulator's loopback, M1 scenarios, hot reload)
+        # toolchain#150 M3: the debug .app's marker carries the agent's port and token; the simulator shares the
+        # runner's loopback, so build/pythonDevAgent/ios.json connects as it is.
+        run: bash .github/scripts/live/m3_ios.sh
