@@ -252,22 +252,26 @@ jobs:
 
       # Live connection M1 (docs/design/live-connection.md §5, SPEC §2.4): the packaged debug app keeps running
       # under Xvfb with its dev agent on; toolchain-lite's proxy kernel connects and a Jupyter client runs the
-      # scenarios in it. Without the agent the kernel cannot start and the step fails.
+      # scenarios in it. Without the agent the kernel cannot start and the step fails. The connection file sits
+      # in build/pythonDevAgent/ so hotReloadPython can push to the same app (-Ppython.hotReloadTarget=e2e, SPEC §1.14).
       - uses: astral-sh/setup-uv@v10.4.0
-      - name: A notebook drives the running packaged app (live connection M1)
+      - name: A notebook drives the running packaged app, and hot reload pushes to it (live connection M1)
         working-directory: usage-example
         run: |
           set -euo pipefail
           sudo apt-get install -y xvfb > /dev/null
           app=$(find build/compose/binaries/main/app -maxdepth 3 -type f -path '*/bin/*' | head -n 1)
           read port token < <(python3 -c 'import secrets, socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1], secrets.token_urlsafe(32))')
-          printf '{"host": "127.0.0.1", "port": %s, "token": "%s"}\n' "$port" "$token" > agent.json
+          mkdir -p build/pythonDevAgent
+          connection=build/pythonDevAgent/e2e.json
+          printf '{"host": "127.0.0.1", "port": %s, "token": "%s"}\n' "$port" "$token" > "$connection"
           PYTHON_MULTIPLATFORM_DEV_AGENT="port=$port;token=$token" xvfb-run -a "$app" > app.log 2>&1 &
           app_pid=$!
           for i in $(seq 1 90); do grep -q 'dev agent: listening' app.log && break; sleep 1; done
           grep -q 'dev agent: listening' app.log || { echo "the app's dev agent never started"; cat app.log; exit 1; }
-          uv run --no-project --python 3.13 --with ipykernel --with jupyter_client python ../.github/scripts/live/m1_scenarios.py agent.json \
+          uv run --no-project --python 3.13 --with ipykernel --with jupyter_client python ../.github/scripts/live/m1_scenarios.py "$connection" \
             || { cat app.log; kill "$app_pid" || true; exit 1; }
+          bash ../.github/scripts/live/hot_reload_check.sh e2e "$connection" || { cat app.log; kill "$app_pid" || true; exit 1; }
           kill "$app_pid" || true
 
   # toolchain#22, Android: the debug APK on an x86_64 emulator runs Python with the stdlib
