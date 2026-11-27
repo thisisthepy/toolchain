@@ -515,7 +515,9 @@ Hand-off to the platform's packaging step:
   python-multiplatform: the guide's staging page has the safe phase snippet (capture, parse, check
   the directory, then `rsync --delete`); the repository no longer ships it as a script (#62).
   **partial**: `xcodePayloadLine`, `ptest/bundle/StagePythonBundleIosForXcodeTaskTest.kt`,
-  `ptest/bundle/StagePythonPayloadScriptTest.kt`. Not tested: an actual Xcode build.
+  `ptest/bundle/StagePythonPayloadScriptTest.kt`; the actual Xcode build is ios-e2e's (`test-ios.yml`: `xcodebuild`
+  runs `install-python-phase.sh`, then checks the `.app` holds `python/example_py`, `python/iniconfig`,
+  `python-multiplatform-home/lib` and `Python.framework`, and runs it on a simulator). Not tested: a device build.
 - Putting the staged `python/` on `sys.path` at run time is `python-multiplatform`'s side.
 
 ### 1.14 Hot reload: `hotReloadPython`
@@ -553,11 +555,14 @@ task only prints its guide; with an agent stand-in: the first run reads the app'
 edited app file, not an unchanged dependency; a second run uses the cache and pushes only the next edit; nothing
 changed sends no push; a restarted app is read again; a missing connection file fails naming it; a refused push
 fails), `ptest/hotreload/HotReloadPlanTest.kt` (the comparison). `.github/scripts/live/hot_reload_check.sh`, run by
-android-e2e's `m2_android.sh` and ios-e2e's `m3_ios.sh`, edits a module of the installed app, runs `hotReloadPython`
+android-e2e's `m2_android.sh`, ios-e2e's `m3_ios.sh` and desktop-e2e (against the packaged app, whose connection
+file it writes as `build/pythonDevAgent/e2e.json`, so `-Ppython.hotReloadTarget=e2e` pushes the desktop staging), edits a module of the installed app, runs `hotReloadPython`
 and checks the running app sees the change, then that a second run pushes nothing. Run locally (2026-11-27) with
-python-multiplatform's develop on one arm64 emulator (API 36) and on an iOS 26.5 simulator: each read the digest of
+python-multiplatform's develop on one arm64 emulator (API 36), on an iOS 26.5 simulator and against the packaged
+macOS app: each read the digest of
 the 5 staged `.py` files once, pushed and re-imported only the edited module, read the new value back, and pushed
-nothing the second time. **Status: partial** until those checks are green in CI.
+nothing the second time. With `hotReloadPushPlan` mutated to push every staged file, the desktop check fails
+(all 5 files pushed). **Status: partial** until those checks are green in CI.
 
 **The dev agent's launch (toolchain#105).** The active Python build type's `enableHotReload` (the example build
 file's `debug`) is the build-time switch for python-multiplatform's dev agent (its SPEC L-12). With it:
