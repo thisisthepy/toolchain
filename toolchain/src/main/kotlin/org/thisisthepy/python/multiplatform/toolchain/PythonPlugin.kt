@@ -351,6 +351,17 @@ class PythonPlugin : Plugin<Project> {
                 unreachableSourceSetRejection(declaredSourceSets, extension.projectFlavors.all().map { it.name })
             val targetArguments = targetInstallArguments(pythonSdk?.version, pipArgumentsWithCompose)
             val hasPackage = resolvedPackageDir != null
+            // docs/SPEC.md §1.18 (Decision (i), team lead 2026-11-27): the check resolves the app's dependencies from
+            // what each dependency set installs for its target, so it waits for those installs.
+            fun checkAgainstTargetInstall(dependencySet: String, install: TaskProvider<InstallTargetDependenciesTask>) {
+                val dir = targetDependenciesDir(projectBuildDir, dependencySet)
+                typedpythonCheckTask.configure {
+                    targetSearchPaths = targetSearchPaths + dir
+                    targetSearchSources.from(project.fileTree(dir) { include("**/*.py", "**/*.pyi") })
+                    dependsOn(install)
+                }
+            }
+
             fun registerTargetInstall(
                 taskSuffix: String,
                 dependencySet: String,
@@ -502,6 +513,7 @@ class PythonPlugin : Plugin<Project> {
                 // defaults to. Installed packages come first in `libDirs`, so a directory the
                 // consumer declares with `libDirs(...)` (a vendored tree) overrides them.
                 val hostInstall = registerTargetInstall("Host", HOST_DEPENDENCY_SET, Platforms.detectHostTarget(), null)
+                checkAgainstTargetInstall(HOST_DEPENDENCY_SET, hostInstall)
                 buildTask.configure {
                     pythonVersionRejection = pythonVersionRejectionFor(hostEmbedLevel, Platforms.detectHostTarget())
                     libDirs = listOf(targetDependenciesDir(projectBuildDir, HOST_DEPENDENCY_SET)) + resolvedLibDirs
@@ -545,7 +557,7 @@ class PythonPlugin : Plugin<Project> {
                             variant.dependencySetName,
                             variant.target,
                             variant.flavorName,
-                        )
+                        ).also { checkAgainstTargetInstall(variant.dependencySetName, it) }
                     }
 
                     val variantFamily = Platforms.getPlatformFamily(variant.target)

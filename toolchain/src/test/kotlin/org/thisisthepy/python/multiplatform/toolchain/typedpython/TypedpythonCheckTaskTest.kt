@@ -152,6 +152,32 @@ class TypedpythonCheckTaskTest {
         assertFalse(NO_STUBS_NOTICE in wired.output, "a wired stub directory is not reported as missing")
     }
 
+    /**
+     * docs/SPEC.md §1.18 (Decision (i), team lead 2026-11-27): a dependency the app ships is checked against what is
+     * installed for its target (`build/pythonDeps/<set>`, `.py` and `.pyi`), not left as a missing import. The
+     * gate's own venv holds no app dependency, so torchnative's `torch`, `transformers` and `torchnative` could not
+     * be found. `iniconfig` ships typed Python; the check uses it only through the host chain's target install.
+     */
+    @Test
+    fun `a dependency installed for the target is resolved through its install directory`() {
+        val dir = newProject(
+            "targetdeps",
+            DEFAULT_BUILD_SCRIPT.replace(
+                "localLibraryPath = \"pkg\"",
+                "localLibraryPath = \"pkg\"\n    sourceSets { getByName(\"commonMain\").dependencies { implementation(\"iniconfig\") } }",
+            ),
+        )
+        write(
+            dir, "pkg/src/main/demo/uses.py",
+            "from iniconfig import IniConfig\n\n\ndef load(path: str) -> IniConfig:\n    return IniConfig(path)\n",
+        )
+
+        val result = runner(dir, "typedpythonCheck").build()
+
+        assertEquals(TaskOutcome.SUCCESS, result.outcomeOf("typedpythonCheck"), result.output)
+        assertEquals(TaskOutcome.SUCCESS, result.outcomeOf("installPythonDependenciesHost"), "the check waits for the target install")
+    }
+
     @Test
     fun `with nothing in typedpythonStubs the check runs and says so once`() {
         val dir = newProject("nostubs")
