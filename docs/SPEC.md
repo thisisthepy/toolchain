@@ -743,12 +743,17 @@ instead of being fetched; `metaDirs`/`libDirs` are not checked),
 `ptest/typedpython/TypedpythonGateTest.kt` (coordinates, manifest, hash-pinned requirements, pyrefly's
 wheel for the host), `ptest/typedpython/TypedpythonGateArtifactTest.kt` (TestKit with the real gate zip
 from `~/.m2`: installed and run without a wheel directory; a missing artifact is a skip; a tampered
-pyrefly hash fails the task. Skipped without the zip, as on CI unless python-multiplatform-ksp was
-published to `mavenLocal`),
+pyrefly hash fails the task. Skipped without the zip locally),
 `ptest/typedpython/TypedpythonDecisionsTest.kt` (source selection, import root, `--no-index`
 commands, skip warning, mode, exit-code interpretation). The TestKit tests in
 `TypedpythonCheckTaskTest` need `-Ptypedpython.wheelDir=<dir>` (holding the `typedpython` and
-`pyrefly` wheels) and `uv`; without it they are **skipped** with that reason, as on CI.
+`pyrefly` wheels) and `uv`; without it they are **skipped** with that reason when run locally. Under CI
+(`CI=true`) a missing wheel directory or gate zip fails these tests instead (`ptest/typedpython/GatePrecondition.kt`;
+team lead 2026-11-27: a gate test CI skips never ran). test.yml's `toolchain` job publishes python-multiplatform-ksp to
+`mavenLocal` and runs `.github/scripts/typedpython/gate_wheels.py`, which takes the typedpython wheel from the gate zip
+at `DEFAULT_TYPEDPYTHON_GATE` and the manifest's pyrefly wheel for the runner from PyPI (each checked against the
+manifest's SHA-256), and passes the directory as `-Ptypedpython.wheelDir`. Before this, develop under `CI=true` skipped
+the 10 `TypedpythonCheckTaskTest` tests (and the gate-zip test on CI).
 Not covered by a test here: exit 2 end to end (only `interpretTypedpythonResult`), and the install
 in a *consumer's* classpath: `withPluginClasspath()` bypasses the Kotlin DSL's `kotlin-stdlib` pin;
 that was verified by building usage-example's `buildPython`.
