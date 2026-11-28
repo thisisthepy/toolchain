@@ -859,7 +859,7 @@ message on stderr for a missing argument, an unknown command or a failed install
 prints `Usage: tcl install <package>`.
 
 **Status: implemented**. `tcl/Cli.kt`, `tcl/Installer.kt`; `tcl/CliArgsTest.kt`,
-`tcl/InstallerTest.kt` (needs `uv` and network). Run with `./gradlew :toolchain:runTcl --args="install <pkg>"`.
+`tcl/InstallerTest.kt` (needs `uv` and network). Run from your project with `<toolchain>/gradlew -p <toolchain> :toolchain:runTcl --args="install <pkg>"`: runTcl runs in the caller's directory (`-Ptcl.dir`, else the shell's `PWD`, else Gradle's start directory) and every time it is asked for. It used to run in this repository's root, where tcl found toolchain-lite's own `pyproject.toml` and `uv add`ed the package to it. Checked by hand (2026-11-27): from a user repository the package lands there and toolchain's pyproject.toml is unchanged.
 
 ### 2.2 `tcl --help` and `tcl --version`
 `--help` (or `-h`) prints the usage line on stdout and exits 0. `--version` prints `tcl <version>`

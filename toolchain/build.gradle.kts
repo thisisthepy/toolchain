@@ -221,13 +221,23 @@ val cliTestTask = tasks.register<Test>("cliTest") {
 }
 tasks.check { dependsOn(cliTestTask) }
 
-// `./gradlew :toolchain:runTcl --args="install <package>"`
+// `cd <your project> && <toolchain>/gradlew -p <toolchain> :toolchain:runTcl --args="install <package>"`
+// tcl acts on the project it is run in (Installer.findProjectRoot), so runTcl runs in the caller's directory, not in
+// this repository: with `rootDir` it found toolchain-lite's own pyproject.toml and `uv add`ed the package to it.
+// `-p` moves Gradle's own current directory to this build, so the caller's is the shell's PWD (Gradle hands the
+// client's environment to the build); `-Ptcl.dir=<dir>` names it where there is no PWD (Windows cmd).
 tasks.register<JavaExec>("runTcl") {
-    description = "Runs tcl from source."
+    description = "Runs tcl from source, in the directory you run Gradle from (or -Ptcl.dir=<dir>)."
     group = "application"
     mainClass.set(tclMainClass)
     classpath = cliMain.runtimeClasspath
-    workingDir = rootDir
+    workingDir = file(
+        providers.gradleProperty("tcl.dir")
+            .orElse(providers.environmentVariable("PWD"))
+            .getOrElse(gradle.startParameter.currentDir.path),
+    )
+    // A command, not a build step: it runs every time it is asked for (a second `install` was reported UP-TO-DATE).
+    outputs.upToDateWhen { false }
 }
 
 // `BuildInfo` reads this resource, so the version is not a literal in the source.
