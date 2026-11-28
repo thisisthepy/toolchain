@@ -626,13 +626,14 @@ upload client exists.
 as §1.9 describes; `false` forwards none, from every bundle task. A build type's `excludeMetaclass`
 (§1.7) also drops them, for that build type only.
 
-**`compose`** (default `false`): `true` wires the Compose wrapper in two halves. Neither artifact is
-published to a remote yet, so their locations come from Gradle project properties (`gradle.properties`
+**`compose`** (default `false`): `true` wires the Compose wrapper in two halves. The Python half has
+only pre-releases on PyPI (`pythonx-compose` 0.1.0a1 to 0.1.0a3, checked 2026-11-27) and the Kotlin half
+is not on a remote yet, so their locations come from Gradle project properties (`gradle.properties`
 or `-P`) with no default:
 
 | Property | Value | Effect |
 |---|---|---|
-| `python.compose.pythonxCompose` | a pip requirement naming `pythonx-compose` (`pythonx-compose==0.1.0`), or an existing directory of wheels (absolute, relative to the project directory, or a `file:` URI) | The requirement (or `pythonx-compose` for a directory) is appended to `installPythonDependencies`' list and to every per-target list (§1.10). A directory is appended to the `find-links` option `pip { repositories { local } }` produces, comma-separated after it (uv splits `--find-links` on commas). |
+| `python.compose.pythonxCompose` | a pip requirement naming `pythonx-compose` (`pythonx-compose==0.1.0a3`, the example the messages give: `PYTHONX_COMPOSE_EXAMPLE`), or an existing directory of wheels (absolute, relative to the project directory, or a `file:` URI) | The requirement (or `pythonx-compose` for a directory) is appended to `installPythonDependencies`' list and to every per-target list (§1.10). A directory is appended to the `find-links` option `pip { repositories { local } }` produces, comma-separated after it (uv splits `--find-links` on commas). |
 | `python.compose.kotlinModule` | a Maven coordinate `group:artifact:version` of `python-multiplatform-compose` | Added to Kotlin Multiplatform `commonMain`'s `implementation` when `org.jetbrains.kotlin.multiplatform` is applied. |
 
 Failures, each naming the property and what it is for:
@@ -648,8 +649,10 @@ Failures, each naming the property and what it is for:
 **Status: implemented**. `resolveBundledMetaDirs`, `resolveComposePythonInstall`,
 `mergeComposeFindLinks`, `resolveComposeKotlinDependency` in `plugin/BuildFeatures.kt`;
 `ptest/BuildFeaturesTest.kt`, `ptest/PythonPluginBuildFeaturesTest.kt` (task wiring on a ProjectBuilder
-project, the Kotlin dependency with `org.jetbrains.kotlin.multiplatform` applied). Installing a real
-`pythonx-compose` is not exercised: the package is not published.
+project, the Kotlin dependency with `org.jetbrains.kotlin.multiplatform` applied). The Python half's
+install with real `uv` from PyPI: `InstallDependenciesTaskTest` (`compose installs the PyPI
+pythonx-compose the plugin names as its example`). The Kotlin half is not exercised with a real
+artifact: `python-multiplatform-compose` is not on a remote.
 
 ### 1.17 `projectFlavors { }`
 `projectFlavors { create("free"); create("paid") }`, AGP-style (decided 2026-10-03; the example
@@ -934,7 +937,7 @@ or python-multiplatform's extracted `python-multiplatform-payload/<sha256>` copy
 and completion. Run locally on macOS against the packaged app (2026-11-25): 6/6. Without the agent the kernel cannot start and
 the step fails. Not yet: the design's window scenarios (state `getValue`/`setValue`, re-declaring the root, reading
 back what was typed). They need pythonx-compose in `usage-example`, which leaves `compose = true` out until
-pythonx-compose is published (§1.16). M2 (Android): the launch half is in §1.14 (the marker's request,
+both halves are on a remote (§1.16; the Kotlin half is not). M2 (Android): the launch half is in §1.14 (the marker's request,
 `connectPythonAndroid`). Its end-to-end check is the `android-e2e` emulator step's `.github/scripts/live/m2_android.sh`:
 the debug APK's marker carries a request, `connectPythonAndroid` forwards the port, and `m1_scenarios.py --android`
 runs the same scenarios on the device (plus `sys.platform == 'android'`). usage-example's `MainActivity` initialises
