@@ -176,10 +176,10 @@ class PythonPluginVariantGraphTest {
         platforms.android(); platforms.androidArm64()
         val buildTypes = BuildTypesContainer()
         buildTypes.getByName("debug")
-        buildTypes.getByName("release") { compileLevel = "native" }
+        buildTypes.getByName("release") { compileLevel = "nativ" }
 
         // Resolving the graph must not throw -- the rejection belongs to one variant's task action,
-        // not to configuration, or declaring `release { compileLevel = "native" }` would take the
+        // not to configuration, or declaring `release { compileLevel = "nativ" }` would take the
         // whole build down with it and `--continue` would have nothing left to continue.
         val variants = resolveVariants(platforms, buildTypes)
 

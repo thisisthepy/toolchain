@@ -95,6 +95,21 @@ abstract class TypedpythonCheckTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val stubDirs: ConfigurableFileCollection
 
+    /**
+     * Each dependency set's `build/pythonDeps/<set>` (the packages the app ships, installed for its target), passed
+     * as `--search-path` after the stubs, so a stub still wins (docs/SPEC.md §1.18; Decision (i), team lead
+     * 2026-11-27). The gate's own venv holds none of the app's dependencies, so without these an import of one was a
+     * missing import. Set by `PythonPlugin`, which also makes this task depend on those installs.
+     */
+    @get:Internal
+    var targetSearchPaths: List<File> = emptyList()
+
+    /** The `.py` and `.pyi` files under [targetSearchPaths]: a changed library re-runs the check, an extension does not. */
+    @get:InputFiles
+    @get:IgnoreEmptyDirectories
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val targetSearchSources: ConfigurableFileCollection
+
     /** Where the gate is installed. Never the project's `.venv`. */
     @get:Internal
     abstract val venvDir: DirectoryProperty
@@ -136,7 +151,9 @@ abstract class TypedpythonCheckTask : DefaultTask() {
 
         val stubs = stubDirs.files.toList()
         if (stubs.isEmpty()) logger.lifecycle(TYPEDPYTHON_NO_STUBS_NOTICE)
-        val command = typedpythonCheckCommand(executable, checkMode, listOf(typedpythonImportRoot(dir)) + stubs, files)
+        val command = typedpythonCheckCommand(
+            executable, checkMode, listOf(typedpythonImportRoot(dir)) + stubs + targetSearchPaths.filter { it.isDirectory }, files,
+        )
         logger.info("typedpythonCheck: ${command.joinToString(" ")}")
 
         val work = venv.parentFile
@@ -318,7 +335,8 @@ fun typedpythonInstallCommand(venv: File, version: String, pyreflyVersion: Strin
         "typedpython==$version", "pyrefly==$pyreflyVersion",
     )
 
-private fun typedpythonExecutable(venv: File): File =
+/** The gate's `typedpython` console script in [venv]; also what `compileLevel = "native"` runs `emit-c` with. */
+fun typedpythonExecutable(venv: File): File =
     if (System.getProperty("os.name").orEmpty().startsWith("Windows")) {
         File(venv, "Scripts/typedpython.exe")
     } else {

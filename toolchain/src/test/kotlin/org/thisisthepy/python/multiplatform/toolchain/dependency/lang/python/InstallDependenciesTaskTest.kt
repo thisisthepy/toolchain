@@ -1,10 +1,13 @@
 package org.thisisthepy.python.multiplatform.toolchain.dependency.lang.python
 
+import org.thisisthepy.python.multiplatform.toolchain.PYTHONX_COMPOSE_EXAMPLE
 import org.thisisthepy.python.multiplatform.toolchain.bundle.locateVenvInterpreter
 import org.thisisthepy.python.multiplatform.toolchain.bundle.venvPythonVersion
+import org.thisisthepy.python.multiplatform.toolchain.resolveComposePythonInstall
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -85,5 +88,27 @@ class InstallDependenciesTaskTest {
 
         assertTrue(output.isEmpty())
         assertTrue(!File(packageDir, "pyproject.toml").readText().contains("dependencies = [\n"))
+    }
+
+    /**
+     * `buildFeatures { compose = true }` with the PyPI requirement the plugin's own messages give as
+     * the example (SPEC §1.16): the compose decision and `installPythonDependencies`' install, with
+     * real `uv` against PyPI. It fails if the example names a version PyPI does not have.
+     */
+    @Test
+    fun `compose installs the PyPI pythonx-compose the plugin names as its example`() {
+        val packageDir = fixturePackageDir()
+        val install = resolveComposePythonInstall(true, PYTHONX_COMPOSE_EXAMPLE, packageDir)
+        assertNull(install.rejection)
+        assertNull(install.findLinks)
+
+        installWithPackpack(packageDir, install.requirements)
+
+        val interpreter = assertNotNull(locateVenvInterpreter(packageDir), "uv add should create <package>/.venv")
+        val version = ProcessBuilder(
+            interpreter.path, "-c", "import importlib.metadata as m; print(m.version('pythonx-compose'))",
+        ).redirectErrorStream(true).start().let { p -> p.inputStream.bufferedReader().readText().trim().also { p.waitFor() } }
+        assertEquals(PYTHONX_COMPOSE_EXAMPLE.substringAfter("=="), version, "installed pythonx-compose")
+        assertTrue(File(packageDir, "pyproject.toml").readText().contains(PYTHONX_COMPOSE_EXAMPLE))
     }
 }

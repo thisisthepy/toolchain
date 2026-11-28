@@ -191,7 +191,7 @@ signing {
 // `tclVersion` is tcl's own version, which `tcl --version` prints and the toolchain-lite wheel
 // carries; publish-pypi.yml refuses to publish unless it equals pyproject.toml's. The plugin keeps
 // rootProject.version.
-val tclVersion = "0.1.1"
+val tclVersion = "1.0.0"
 val tclMainClass = "org.thisisthepy.python.multiplatform.tcl.CliKt"
 
 val cliMain: SourceSet by sourceSets.creating
@@ -221,13 +221,23 @@ val cliTestTask = tasks.register<Test>("cliTest") {
 }
 tasks.check { dependsOn(cliTestTask) }
 
-// `./gradlew :toolchain:runTcl --args="install <package>"`
+// `cd <your project> && <toolchain>/gradlew -p <toolchain> :toolchain:runTcl --args="install <package>"`
+// tcl acts on the project it is run in (Installer.findProjectRoot), so runTcl runs in the caller's directory, not in
+// this repository: with `rootDir` it found toolchain-lite's own pyproject.toml and `uv add`ed the package to it.
+// `-p` moves Gradle's own current directory to this build, so the caller's is the shell's PWD (Gradle hands the
+// client's environment to the build); `-Ptcl.dir=<dir>` names it where there is no PWD (Windows cmd).
 tasks.register<JavaExec>("runTcl") {
-    description = "Runs tcl from source."
+    description = "Runs tcl from source, in the directory you run Gradle from (or -Ptcl.dir=<dir>)."
     group = "application"
     mainClass.set(tclMainClass)
     classpath = cliMain.runtimeClasspath
-    workingDir = rootDir
+    workingDir = file(
+        providers.gradleProperty("tcl.dir")
+            .orElse(providers.environmentVariable("PWD"))
+            .getOrElse(gradle.startParameter.currentDir.path),
+    )
+    // A command, not a build step: it runs every time it is asked for (a second `install` was reported UP-TO-DATE).
+    outputs.upToDateWhen { false }
 }
 
 // `BuildInfo` reads this resource, so the version is not a literal in the source.
@@ -251,8 +261,9 @@ val cliJar = tasks.register<Jar>("cliJar") {
 }
 
 // The native `tcl` binary that the toolchain-lite wheel carries (publish-pypi.yml). The same
-// settings as pypackpack's CLI, which tcl links: io.ktor reaches org.slf4j (slf4j-nop, no I/O at
-// init), which GraalVM 21 otherwise refuses to initialize at build time.
+// settings as pypackpack's CLI, which tcl links. Since pypackpack#170 packpack downloads with
+// java.net.http, so io.ktor, kotlinx.io and org.slf4j are no longer on cliMain's runtime classpath
+// and are not listed for build-time initialization.
 graalvmNative {
     binaries {
         named("main") {
@@ -265,7 +276,7 @@ graalvmNative {
             buildArgs.addAll(
                 "--no-fallback",
                 "--install-exit-handlers",
-                "--initialize-at-build-time=kotlin,kotlinx.coroutines,io.ktor,kotlinx.io,org.slf4j",
+                "--initialize-at-build-time=kotlin,kotlinx.coroutines",
                 "-H:+AddAllCharsets",
                 "--gc=serial",
             )

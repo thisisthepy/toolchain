@@ -20,11 +20,15 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
 import org.thisisthepy.python.multiplatform.packpack.utils.Platforms
 import org.thisisthepy.python.multiplatform.toolchain.bundle.AssemblePythonPackageTask
 import org.thisisthepy.python.multiplatform.toolchain.bundle.BuildPythonArtifactTask
+import org.thisisthepy.python.multiplatform.toolchain.bundle.PythonStagingLayout
 import org.thisisthepy.python.multiplatform.toolchain.bundle.PythonStagingPlatform
 import org.thisisthepy.python.multiplatform.toolchain.bundle.StagePythonBundleTask
+import org.thisisthepy.python.multiplatform.toolchain.devagent.ConnectPythonDevAgentTask
 import org.thisisthepy.python.multiplatform.toolchain.devagent.DEV_AGENT_CONNECTION_DIRECTORY
+import org.thisisthepy.python.multiplatform.toolchain.devagent.DEV_AGENT_CONNECT_ANDROID_TASK
 import org.thisisthepy.python.multiplatform.toolchain.devagent.DEV_AGENT_LAUNCH_ACTION
 import org.thisisthepy.python.multiplatform.toolchain.devagent.DevAgentLaunchAction
+import org.thisisthepy.python.multiplatform.toolchain.devagent.devAgentAndroidManifest
 import org.thisisthepy.python.multiplatform.toolchain.devagent.devAgentEnabled
 import org.thisisthepy.python.multiplatform.toolchain.hotreload.CodePushPendingTask
 import org.thisisthepy.python.multiplatform.toolchain.hotreload.HotReloadPushTask
@@ -140,6 +144,15 @@ class PythonPlugin : Plugin<Project> {
         // ---------------------------------------------------------------------------------------
         val stageTasks = registerStagingTasks(project)
         attachStagingToPackaging(project, stageTasks)
+        keepUnderscoreAssetDirectories(project)
+        // toolchain#162: the AGP variants of the build type that stages the dev-agent marker get INTERNET, so the
+        // agent can listen. Decided per variant inside AGP's callback, when the `python { }` block is read.
+        attachDevAgentInternetPermission(project) {
+            val requested = (project.findProperty("python.buildType") as? String) ?: DEFAULT_BUILD_TYPE
+            // An unknown build type is reported by the staging selection in `afterEvaluate`, not here.
+            runCatching { resolveActiveBuildType(extension.buildTypes, requested) }.getOrNull()
+                ?.takeIf { devAgentEnabled(extension.buildTypes, it) }
+        }
         org.thisisthepy.python.multiplatform.toolchain.bundle.registerStagePythonBundleIosForXcode(
             project, stageTasks.getValue(PythonStagingPlatform.IOS),
         )
@@ -317,7 +330,7 @@ class PythonPlugin : Plugin<Project> {
                 project.findProperty(COMPOSE_PYTHON_PROPERTY)?.toString(),
                 project.projectDir,
             )
-            val pip = resolvePipSettings(extension.defaultConfig.pip)
+            val pip = resolvePipSettings(extension.defaultConfig.pip, project.projectDir)
             val pipArgumentsWithCompose = mergeComposeFindLinks(pip.arguments.orEmpty(), composePython.findLinks)
             installTask.configure {
                 dependenciesList = collectInstallDependencies(extension.sourceSets.allSourceSets()) +
@@ -338,6 +351,17 @@ class PythonPlugin : Plugin<Project> {
                 unreachableSourceSetRejection(declaredSourceSets, extension.projectFlavors.all().map { it.name })
             val targetArguments = targetInstallArguments(pythonSdk?.version, pipArgumentsWithCompose)
             val hasPackage = resolvedPackageDir != null
+            // docs/SPEC.md §1.18 (Decision (i), team lead 2026-11-27): the check resolves the app's dependencies from
+            // what each dependency set installs for its target, so it waits for those installs.
+            fun checkAgainstTargetInstall(dependencySet: String, install: TaskProvider<InstallTargetDependenciesTask>) {
+                val dir = targetDependenciesDir(projectBuildDir, dependencySet)
+                typedpythonCheckTask.configure {
+                    targetSearchPaths = targetSearchPaths + dir
+                    targetSearchSources.from(project.fileTree(dir) { include("**/*.py", "**/*.pyi") })
+                    dependsOn(install)
+                }
+            }
+
             fun registerTargetInstall(
                 taskSuffix: String,
                 dependencySet: String,
@@ -358,6 +382,8 @@ class PythonPlugin : Plugin<Project> {
                     rejection = composePython.rejection ?: sourceSetRejection
                     pipRejection = pip.rejection
                     installDir = targetDependenciesDir(projectBuildDir, dependencySet)
+                    jitRecipeDirs = pip.jitRecipeDirs
+                    crossDir = File(projectBuildDir, CROSS_BUILD_DIRECTORY)
                     // No package means no bundle reads this directory (`BuildPythonArtifactTask` skips
                     // too), so nothing is downloaded for it.
                     onlyIf { hasPackage }
@@ -386,9 +412,8 @@ class PythonPlugin : Plugin<Project> {
             //
             // "성립하는 부분": DSL 검증 + 태스크 등록. 태스크가 하는 것과 못 하는 것을 태스크 자체가 말한다.
             //
-            // hotReload: file-watch + adb-push + am-broadcast until python-multiplatform's runtime
-            //   receives HOT_RELOAD_BROADCAST_ACTION and calls importlib.reload(). That boundary
-            //   is the device runtime's job, not this task's.
+            // hotReload: the changed staged .py files over the live channel to the running debug app's dev agent
+            //   (docs/SPEC.md §1.14, toolchain#150 M2). Re-importing them is python-multiplatform's job.
             //
             // codePush: DSL validation only. Upload is NOT implemented -- there is no server.
             //   CodePushPendingTask prints this explicitly when run, matching pypackpack's
@@ -407,19 +432,42 @@ class PythonPlugin : Plugin<Project> {
                 ext = extension.packaging.codePush,
             )
 
+            val hotReloadTarget = (project.findProperty("python.hotReloadTarget") as? String)?.takeIf { it.isNotBlank() }
+                ?: if (project.plugins.hasPlugin("com.android.application") || project.plugins.hasPlugin("com.android.library")) {
+                    PythonStagingPlatform.ANDROID.directoryName
+                } else {
+                    "run"
+                }
+            val hotReloadPlatform = when (hotReloadTarget) {
+                PythonStagingPlatform.ANDROID.directoryName -> PythonStagingPlatform.ANDROID
+                PythonStagingPlatform.IOS.directoryName -> PythonStagingPlatform.IOS
+                else -> PythonStagingPlatform.DESKTOP
+            }
             project.tasks.register<HotReloadPushTask>(HOT_RELOAD_TASK) {
                 group = TASK_GROUP
                 description = if (anyBuildTypeEnablesHotReload) {
-                    "Pushes changed Python source files to the connected device and signals a reload " +
-                        "(adb push + am broadcast ${org.thisisthepy.python.multiplatform.toolchain.hotreload.HOT_RELOAD_BROADCAST_ACTION})"
+                    "Pushes the changed staged Python files to the running debug app's dev agent " +
+                        "(-Ppython.hotReloadTarget=$hotReloadTarget; --continuous to watch)."
                 } else {
                     "Hot reload is not enabled for any build type. " +
                         "Set enableHotReload = true in python { buildTypes { getByName(\"debug\") { } } }."
                 }
                 hotReloadEnabled = hotReloadConfig.enabled
-                sourceRoot = extension.localLibraryPath?.let { project.file(it) }
-                remoteBasePath = "/data/local/tmp/${extension.packaging.fileName}/python"
-                serverHost = hotReloadConfig.serverHost
+                if (hotReloadConfig.enabled) {
+                    val stage = stageTasks.getValue(hotReloadPlatform)
+                    dependsOn(stage)
+                    payloadDir = stage.get().let { File(it.destinationDir, it.payloadPath) }
+                    connectionFile = File(project.layout.buildDirectory.get().asFile, "$DEV_AGENT_CONNECTION_DIRECTORY/$hotReloadTarget.json")
+                    connectionHint = when (hotReloadPlatform) {
+                        PythonStagingPlatform.ANDROID -> {
+                            // Registered only when the active build type carries the agent; matching tolerates its absence.
+                            dependsOn(project.tasks.matching { it.name == DEV_AGENT_CONNECT_ANDROID_TASK })
+                            "Install and start the debug app; $DEV_AGENT_CONNECT_ANDROID_TASK (which this task runs first) forwards its port"
+                        }
+                        PythonStagingPlatform.IOS -> "Build, install and start the debug iOS app; its staging writes this file"
+                        else -> "Start the app with its run task ('$hotReloadTarget'), which writes this file, or pass -Ppython.hotReloadTarget=<name>"
+                    }
+                }
             }
 
             project.tasks.register<CodePushPendingTask>(CODE_PUSH_TASK) {
@@ -465,6 +513,7 @@ class PythonPlugin : Plugin<Project> {
                 // defaults to. Installed packages come first in `libDirs`, so a directory the
                 // consumer declares with `libDirs(...)` (a vendored tree) overrides them.
                 val hostInstall = registerTargetInstall("Host", HOST_DEPENDENCY_SET, Platforms.detectHostTarget(), null)
+                checkAgainstTargetInstall(HOST_DEPENDENCY_SET, hostInstall)
                 buildTask.configure {
                     pythonVersionRejection = pythonVersionRejectionFor(hostEmbedLevel, Platforms.detectHostTarget())
                     libDirs = listOf(targetDependenciesDir(projectBuildDir, HOST_DEPENDENCY_SET)) + resolvedLibDirs
@@ -508,7 +557,7 @@ class PythonPlugin : Plugin<Project> {
                             variant.dependencySetName,
                             variant.target,
                             variant.flavorName,
-                        )
+                        ).also { checkAgainstTargetInstall(variant.dependencySetName, it) }
                     }
 
                     val variantFamily = Platforms.getPlatformFamily(variant.target)
@@ -546,7 +595,14 @@ class PythonPlugin : Plugin<Project> {
                             minSdk = variant.minSdk
                             bundleDir = variantBundleDir
                             pythonVersionRejection = pythonVersionRejectionFor(variantEmbedLevel, variant.target)
-                            dependsOn(installTask, targetInstall, typedpythonCheckTask)
+                            dependsOn(targetInstall, typedpythonCheckTask)
+                            // docs/SPEC.md §1.10 (Decision (a), team lead 2026-11-27): the host `uv add` leaves the
+                            // `<package>/.venv` whose interpreter `bytecode`, `mixed` and `native` compile with; an
+                            // `instant` variant reads nothing from it, so a dependency without a host wheel must not
+                            // stop it. A level that is not one keeps the dependency; this task refuses it at execution.
+                            if (runCatching { compilesBytecode(resolveBuildLevel(variant.compileLevel)) }.getOrDefault(true)) {
+                                dependsOn(installTask)
+                            }
                         }
 
                     val variantPackageTask =
@@ -590,6 +646,10 @@ class PythonPlugin : Plugin<Project> {
                 // what they are grounded in. A destination with no eligible variant is left staging
                 // nothing rather than being handed a bundle built for a different platform.
                 val selected = selectStagingVariants(variants, activeBuildTypeName, Platforms.detectHostTarget(), activeFlavorName)
+                project.tasks.named(
+                    org.thisisthepy.python.multiplatform.toolchain.bundle.STAGE_ANDROID_RUNTIME_LIBRARIES_TASK,
+                    org.thisisthepy.python.multiplatform.toolchain.bundle.StageAndroidRuntimeLibrariesTask::class.java,
+                ).configure { target = selected[PythonStagingPlatform.ANDROID]?.target }
                 stageTasks.forEach { (platform, stageTask) ->
                     val variant = selected[platform]
                     if (variant == null) {
@@ -713,10 +773,27 @@ private fun attachStagingToPackaging(
     }
 
     val androidStage = stageTasks.getValue(PythonStagingPlatform.ANDROID)
-    val androidRoot = PythonStagingPlatform.ANDROID.rootIn(project.layout.buildDirectory.get().asFile)
+    val buildDir = project.layout.buildDirectory.get().asFile
+    val androidRoot = PythonStagingPlatform.ANDROID.rootIn(buildDir)
+    // toolchain#155: the NDK runtime libraries (libc++_shared.so) the staged extensions need, per ABI, in a
+    // jniLibs root; the staged variant's triple is filled in with the staging selection below.
+    val runtimeRoot = org.thisisthepy.python.multiplatform.toolchain.bundle.androidRuntimeLibrariesRoot(buildDir)
+    val runtimeStage = project.tasks.register<org.thisisthepy.python.multiplatform.toolchain.bundle.StageAndroidRuntimeLibrariesTask>(
+        org.thisisthepy.python.multiplatform.toolchain.bundle.STAGE_ANDROID_RUNTIME_LIBRARIES_TASK,
+    ) {
+        group = PythonPlugin.TASK_GROUP
+        description = "Puts the NDK runtime libraries (libc++_shared.so) the staged Android extensions need into jniLibs"
+        payloadDir = File(androidRoot, PythonStagingLayout.PAYLOAD_ROOT)
+        destinationDir = runtimeRoot
+        dependsOn(androidStage)
+    }
     listOf("com.android.application", "com.android.library").forEach { pluginId ->
         project.plugins.withId(pluginId) {
-            registerAndroidAssetSourceDirectory(project, androidRoot)
+            registerAndroidSourceDirectory(project, "getAssets", androidRoot, "the staged Python payload will not reach the APK")
+            registerAndroidSourceDirectory(
+                project, "getJniLibs", runtimeRoot,
+                "the NDK runtime libraries the staged extensions need will not reach the APK",
+            )
             // `assets.srcDir(File)` carries no task dependency, so the producing task has to be
             // named. `preBuild` is AGP's own documented anchor and is what the deleted copy used;
             // the merge tasks are added as well because they are what actually reads the directory
@@ -724,23 +801,162 @@ private fun attachStagingToPackaging(
             project.tasks.matching {
                 it.name == "preBuild" || (it.name.startsWith("merge") && it.name.endsWith("Assets"))
             }.configureEach { dependsOn(androidStage) }
+            // The same for jniLibs: `merge<Variant>JniLibFolders` reads the directory.
+            project.tasks.matching {
+                it.name == "preBuild" || (it.name.startsWith("merge") && it.name.endsWith("JniLibFolders"))
+            }.configureEach { dependsOn(runtimeStage) }
         }
     }
 }
 
 /**
- * `android.sourceSets.getByName("main").assets.srcDir(directory)`, reflectively.
+ * toolchain#162 (docs/SPEC.md §1.14; Decision (a), team lead 2026-11-27): Android refuses a socket, even on
+ * loopback, to an app without `android.permission.INTERNET`, so the dev agent could not listen in the debug APK.
+ * Every AGP variant whose build type is [agentBuildType]'s answer (the active Python build type, when it enables
+ * hot reload) merges [devAgentAndroidManifest], which declares INTERNET and nothing else. Other variants, a
+ * release among them, get nothing from this plugin; an app that declares INTERNET itself merges to one entry.
+ *
+ * `androidComponents.onVariants(selector().all(), Action)` and `variant.sources.manifests.addStaticManifestFile`
+ * (AGP 8.3+), reflectively for the same reason as [registerAndroidSourceDirectory]: AGP is not on this plugin's
+ * compile classpath. The callback is registered when AGP is applied and runs once the build script is evaluated,
+ * so [agentBuildType] reads the finished `python { }` block whichever plugin is applied first.
+ */
+private fun attachDevAgentInternetPermission(project: Project, agentBuildType: () -> String?) {
+    val consequence = "the debug APK gets no android.permission.INTERNET, so python-multiplatform's dev agent " +
+        "cannot listen (declare the permission in the app's debug manifest)"
+    listOf("com.android.application", "com.android.library").forEach { pluginId ->
+        project.plugins.withId(pluginId) {
+            val components = project.extensions.findByName("androidComponents") ?: run {
+                project.logger.warn("an Android plugin is applied but there is no `androidComponents` extension; $consequence.")
+                return@withId
+            }
+            val addDevAgentManifest = project.devAgentManifestAdder(agentBuildType, consequence)
+            runCatching {
+                val selector = components.javaClass.methods.first { it.name == "selector" && it.parameterCount == 0 }
+                    .invoke(components)
+                val all = selector!!.javaClass.methods.first { it.name == "all" && it.parameterCount == 0 }.invoke(selector)
+                val onVariants = components.javaClass.methods.first {
+                    it.name == "onVariants" && it.parameterCount == 2 &&
+                        it.parameterTypes[1] == org.gradle.api.Action::class.java
+                }
+                onVariants.invoke(
+                    components, all,
+                    object : org.gradle.api.Action<Any> {
+                        override fun execute(variant: Any) = addDevAgentManifest(variant)
+                    },
+                )
+            }.onFailure { error ->
+                project.logger.warn("could not register an Android variant callback (${error.message}); $consequence.")
+            }
+        }
+    }
+}
+
+/**
+ * AGP's built-in `ignoreAssetsPatterns` when an app sets none (sdk-common's `PatternBasedFileFilter`, AGP 8.5),
+ * written out because AGP applies it only at merge time, after a plugin could edit it.
+ */
+const val ANDROID_DEFAULT_IGNORE_ASSETS_PATTERN = "!.svn:!.git:!.ds_store:!*.scc:.*:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"
+
+/** The entry of [ANDROID_DEFAULT_IGNORE_ASSETS_PATTERN] that drops every asset directory whose name starts with `_`. */
+const val ANDROID_UNDERSCORE_DIRECTORY_PATTERN = "<dir>_*"
+
+/**
+ * The app's `ignoreAssetsPatterns` without [ANDROID_UNDERSCORE_DIRECTORY_PATTERN]: every other entry kept in order,
+ * AGP's default standing in for an empty list. Null when there is nothing to remove.
+ */
+fun ignoreAssetsPatternsKeepingUnderscoreDirectories(patterns: Collection<String>): List<String>? {
+    val effective = patterns.ifEmpty { ANDROID_DEFAULT_IGNORE_ASSETS_PATTERN.split(':') }
+    return if (ANDROID_UNDERSCORE_DIRECTORY_PATTERN in effective) effective.filter { it != ANDROID_UNDERSCORE_DIRECTORY_PATTERN } else null
+}
+
+/**
+ * toolchain#166 (docs/SPEC.md §1.13; Decision (a), team lead 2026-11-27): AGP's default `ignoreAssetsPatterns`
+ * holds [ANDROID_UNDERSCORE_DIRECTORY_PATTERN], so `merge*Assets` dropped every staged Python directory starting
+ * with `_` (torch's `_dynamo`, numpy's `_core`) and the app failed with "No module named". Once the app's DSL is
+ * final (`androidComponents.finalizeDsl`), that one entry is removed and every other pattern kept, the app's own
+ * included. AGP applies the patterns to the whole app, so its own `_` asset directories are packaged too. One line
+ * is logged when something was removed.
+ */
+private fun keepUnderscoreAssetDirectories(project: Project) {
+    val consequence = "Python packages with a directory starting with `_` (numpy's `_core`) are missing from the APK; " +
+        "remove \"$ANDROID_UNDERSCORE_DIRECTORY_PATTERN\" from android { androidResources { ignoreAssetsPatterns } } yourself"
+    listOf("com.android.application", "com.android.library").forEach { pluginId ->
+        project.plugins.withId(pluginId) {
+            val components = project.extensions.findByName("androidComponents") ?: run {
+                project.logger.warn("an Android plugin is applied but there is no `androidComponents` extension; $consequence.")
+                return@withId
+            }
+            runCatching {
+                val finalizeDsl = components.javaClass.methods.first {
+                    it.name == "finalizeDsl" && it.parameterCount == 1 && it.parameterTypes[0] == org.gradle.api.Action::class.java
+                }
+                finalizeDsl.invoke(
+                    components,
+                    object : org.gradle.api.Action<Any> {
+                        override fun execute(android: Any) = removeUnderscoreDirectoryPattern(project, android, consequence)
+                    },
+                )
+            }.onFailure { error ->
+                project.logger.warn("could not register an Android finalizeDsl callback (${error.message}); $consequence.")
+            }
+        }
+    }
+}
+
+/** The `finalizeDsl` half of [keepUnderscoreAssetDirectories]: edits `android.androidResources.ignoreAssetsPatterns`. */
+private fun removeUnderscoreDirectoryPattern(project: Project, android: Any, consequence: String) {
+    runCatching {
+        val resources = android.javaClass.methods.first { it.name == "getAndroidResources" && it.parameterCount == 0 }
+            .invoke(android)
+        @Suppress("UNCHECKED_CAST")
+        val patterns = resources!!.javaClass.methods.first { it.name == "getIgnoreAssetsPatterns" && it.parameterCount == 0 }
+            .invoke(resources) as MutableCollection<String>
+        val kept = ignoreAssetsPatternsKeepingUnderscoreDirectories(patterns) ?: return
+        patterns.clear()
+        patterns.addAll(kept)
+        project.logger.lifecycle(
+            "python: removed \"$ANDROID_UNDERSCORE_DIRECTORY_PATTERN\" from ignoreAssetsPatterns, which would drop the staged " +
+                "Python directories starting with `_` (toolchain#166); the other patterns are kept.",
+        )
+    }.onFailure { error ->
+        project.logger.warn("could not adjust android.androidResources.ignoreAssetsPatterns (${error.message}); $consequence.")
+    }
+}
+
+/** The per-variant half of [attachDevAgentInternetPermission]; see there. */
+private fun Project.devAgentManifestAdder(agentBuildType: () -> String?, consequence: String): (Any) -> Unit = { variant ->
+    runCatching {
+        val buildType = variant.javaClass.methods.first { it.name == "getBuildType" && it.parameterCount == 0 }
+            .invoke(variant) as String?
+        val wanted = agentBuildType() ?: return@runCatching
+        if (buildType != wanted) return@runCatching
+        val sources = variant.javaClass.methods.first { it.name == "getSources" && it.parameterCount == 0 }
+            .invoke(variant)
+        val manifests = sources!!.javaClass.methods.first { it.name == "getManifests" && it.parameterCount == 0 }
+            .invoke(sources)
+        val manifest = devAgentAndroidManifest(layout.buildDirectory.get().asFile)
+        manifests!!.javaClass.methods.first { it.name == "addStaticManifestFile" && it.parameterCount == 1 }
+            .invoke(manifests, manifest.absolutePath)
+    }.onFailure { error ->
+        logger.warn("could not add the dev-agent manifest to an Android variant (${error.message}); $consequence.")
+    }
+}
+
+/**
+ * `android.sourceSets.getByName("main").<assets|jniLibs>.srcDir(directory)`, reflectively ([accessor] is
+ * `getAssets` or `getJniLibs`).
  *
  * AGP is not a dependency of this plugin, so there is no `AndroidSourceSet` type to call. Each hop
  * fails with a message naming what was not found rather than an NPE or a `ClassCastException`,
  * because the failure mode this replaces -- the payload silently not reaching the APK -- is the one
  * thing this whole change exists to stop.
  */
-private fun registerAndroidAssetSourceDirectory(project: Project, directory: File) {
+private fun registerAndroidSourceDirectory(project: Project, accessor: String, directory: File, consequence: String) {
     val android = project.extensions.findByName("android") ?: run {
         project.logger.warn(
-            "an Android plugin is applied but there is no `android` extension, so the staged " +
-                "Python payload was not added to the APK's assets.",
+            "an Android plugin is applied but there is no `android` extension, so '$directory' was " +
+                "not added to android.sourceSets.main; $consequence.",
         )
         return
     }
@@ -749,14 +965,14 @@ private fun registerAndroidAssetSourceDirectory(project: Project, directory: Fil
             .invoke(android)
         val main = sourceSets!!.javaClass.methods.first { it.name == "getByName" && it.parameterCount == 1 }
             .invoke(sourceSets, "main")
-        val assets = main!!.javaClass.methods.first { it.name == "getAssets" && it.parameterCount == 0 }
+        val sourceDirectories = main!!.javaClass.methods.first { it.name == accessor && it.parameterCount == 0 }
             .invoke(main)
-        assets!!.javaClass.methods.first { it.name == "srcDir" && it.parameterCount == 1 }
-            .invoke(assets, directory)
+        sourceDirectories!!.javaClass.methods.first { it.name == "srcDir" && it.parameterCount == 1 }
+            .invoke(sourceDirectories, directory)
     }.onFailure { error ->
         project.logger.warn(
-            "could not add '$directory' to android.sourceSets.main.assets " +
-                "(${error.message}); the staged Python payload will not reach the APK.",
+            "could not add '$directory' to android.sourceSets.main through $accessor " +
+                "(${error.message}); $consequence.",
         )
     }
 }
@@ -766,6 +982,7 @@ private fun registerAndroidAssetSourceDirectory(project: Project, directory: Fil
  * every destination, and its desktop run tasks start an agent ([DevAgentLaunchAction]). Compose's `run` and
  * the Kotlin JVM target's `<target>Run` are the run tasks; a packaged distribution is launched by the OS, not
  * by Gradle, so it gets the marker (it was built from this build type) but no variable from here.
+ * Android and iOS stagings write the request into the marker, and `connectPythonAndroid` forwards its port.
  */
 private fun configureDevAgent(
     project: Project,
@@ -774,13 +991,25 @@ private fun configureDevAgent(
 ) {
     stageTasks.values.forEach { it.configure { devAgentMarker = enabled } }
     if (!enabled) return
+    val connectionDir = File(project.layout.buildDirectory.get().asFile, DEV_AGENT_CONNECTION_DIRECTORY)
+    // toolchain#150 M2/M3: the OS starts a mobile app, so its marker carries the request (Decision 15 (a)).
+    listOf(PythonStagingPlatform.ANDROID, PythonStagingPlatform.IOS).forEach { platform ->
+        stageTasks[platform]?.configure { devAgentConnectionFile = File(connectionDir, "${platform.directoryName}.json") }
+    }
+    if (stageTasks.containsKey(PythonStagingPlatform.ANDROID)) {
+        project.tasks.register(DEV_AGENT_CONNECT_ANDROID_TASK, ConnectPythonDevAgentTask::class.java) {
+            group = PythonPlugin.TASK_GROUP
+            description = "Forwards the laptop's dev-agent port to the installed debug Android app (adb forward)."
+            connectionFile = File(connectionDir, "${PythonStagingPlatform.ANDROID.directoryName}.json")
+            sdkDir = readAndroidSdkDir(project.rootDir)
+        }
+    }
     val runTaskNames = mutableSetOf("run")
     project.plugins.withId("org.jetbrains.kotlin.multiplatform") {
         project.extensions.findByType(KotlinMultiplatformExtension::class.java)?.targets
             ?.matching { it.platformType == KotlinPlatformType.jvm }
             ?.all { runTaskNames += "${name}Run" }
     }
-    val connectionDir = File(project.layout.buildDirectory.get().asFile, DEV_AGENT_CONNECTION_DIRECTORY)
     project.tasks.withType(JavaExec::class.java).matching { it.name in runTaskNames }.configureEach {
         doFirst(DEV_AGENT_LAUNCH_ACTION, DevAgentLaunchAction(File(connectionDir, "$name.json")))
     }
@@ -1120,14 +1349,15 @@ fun collectIntegrationDependencies(sourceSets: List<SourceSetConfig>): List<Stri
  * to be refused. See that task's `compileLevel` kdoc.
  *
  * `pypackpack`'s `ResourceBundler` (`bundle/resource/ResourceBundler.kt`, its `SUPPORTED_BUILD_LEVELS`)
- * implements `instant`, `bytecode` and `mixed`, so all three pass through (Issues #15, #128). `bytecode`
- * and `mixed` run `compileall -b` with the interpreter at `<project>/.venv`; the task checks that
+ * implements `instant`, `bytecode` and `mixed`, so all three pass through (Issues #15, #128). `bytecode`,
+ * `mixed` and `native` run `compileall -b` with the interpreter at `<project>/.venv`; the task checks that
  * interpreter first ([org.thisisthepy.python.multiplatform.toolchain.bundle.bytecodeInterpreterRejection],
  * selected by [compilesBytecode]). `mixed` ships the developer's modules as bytecode and the libraries'
- * prebuilt extensions (`libDirs`) as they are. `native` needs TypedPython's generated C and each
- * target's CPython headers and extension suffix, which this build has no source for, so it is refused
- * here -- per variant, because this runs in the task action (AGENTS.md §14). Anything else is
- * refused as well rather than handed to `ResourceBundler` to refuse in its own words.
+ * prebuilt extensions (`libDirs`) as they are. `native` (python-multiplatform#25) also passes: the
+ * task then gathers TypedPython's generated C and the target's CPython headers, extension suffix and
+ * `libpython` ([org.thisisthepy.python.multiplatform.toolchain.bundle.NativeLevelInputs]) and fails that
+ * variant alone when one is missing (AGENTS.md §14). Anything else is refused rather than handed to
+ * `ResourceBundler` to refuse in its own words.
  *
  * `BuildType.compileLevel` defaults to `""` for both `DebugBuildType` and `ReleaseBuildType`, which
  * is why blank resolves to `"instant"` -- that keeps `usage-example` (which never sets
@@ -1136,22 +1366,20 @@ fun collectIntegrationDependencies(sourceSets: List<SourceSetConfig>): List<Stri
 fun resolveBuildLevel(compileLevel: String): String {
     val normalized = compileLevel.ifBlank { "instant" }
     return when (normalized) {
-        "instant", "bytecode", "mixed" -> normalized
-        "native" -> throw IllegalArgumentException(
-            "Python compileLevel 'native' is not available yet: it needs TypedPython's generated C and, " +
-                "for each target, the CPython headers (Python.h) and the extension suffix, and this build " +
-                "has no source for them. Use 'mixed' (your code as bytecode, libraries' extensions as " +
-                "they are), 'bytecode' or 'instant'.",
-        )
+        "instant", "bytecode", "mixed", "native" -> normalized
         else -> throw IllegalArgumentException(
-            "Python compileLevel '$normalized' is not a build level; use 'instant', 'bytecode' or " +
-                "'mixed' ('native' is planned).",
+            "Python compileLevel '$normalized' is not a build level; use 'instant', 'bytecode', " +
+                "'mixed' or 'native'.",
         )
     }
 }
 
-/** Whether [buildLevel] (a [resolveBuildLevel] result) runs `compileall`, so needs a matching `.venv` interpreter. */
-fun compilesBytecode(buildLevel: String): Boolean = buildLevel == "bytecode" || buildLevel == "mixed"
+/**
+ * Whether [buildLevel] (a [resolveBuildLevel] result) runs `compileall`, so needs a matching `.venv` interpreter.
+ * Every level but `instant`: `ResourceBundler` also compiles at `native`, where the modules TypedPython
+ * produced no extension for (an empty `__init__.py` included) ship as bytecode.
+ */
+fun compilesBytecode(buildLevel: String): Boolean = buildLevel in setOf("bytecode", "mixed", "native")
 
 /**
  * Validates every variant declared under `python { }` platform maps to a real `pypackpack`
@@ -1202,3 +1430,11 @@ private fun declaredPlatformVariantNames(platforms: PlatformsExtension): List<St
         platforms.ios?.variants?.forEach { add(it.name) }
         platforms.desktop?.variants?.forEach { add(it.name) }
     }
+
+/** `sdk.dir` from [rootDir]'s `local.properties`, where Android Studio records the SDK; null when absent. */
+internal fun readAndroidSdkDir(rootDir: File): File? {
+    val file = File(rootDir, "local.properties")
+    if (!file.isFile) return null
+    val properties = java.util.Properties().apply { file.inputStream().use { load(it) } }
+    return properties.getProperty("sdk.dir")?.let(::File)
+}

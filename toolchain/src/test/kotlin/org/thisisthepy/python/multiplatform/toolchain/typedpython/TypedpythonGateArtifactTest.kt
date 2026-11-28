@@ -2,7 +2,6 @@ package org.thisisthepy.python.multiplatform.toolchain.typedpython
 
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
-import org.junit.Assume.assumeTrue
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
@@ -31,10 +30,10 @@ class TypedpythonGateArtifactTest {
 
     @BeforeTest
     fun requireGate() {
-        assumeTrue(
+        requireGatePrecondition(
+            mavenLocalZip.isFile,
             "SKIPPED: needs $DEFAULT_TYPEDPYTHON_GATE:$TYPEDPYTHON_GATE_CLASSIFIER@zip in ~/.m2 " +
                 "(python-multiplatform: ./gradlew :python-multiplatform-ksp:publishToMavenLocal)",
-            mavenLocalZip.isFile,
         )
     }
 

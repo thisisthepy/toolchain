@@ -2,12 +2,15 @@ package org.thisisthepy.python.multiplatform.toolchain.bundle
 
 import org.thisisthepy.python.multiplatform.toolchain.deleteWithoutFollowingLinks
 import org.thisisthepy.python.multiplatform.toolchain.devagent.DEV_AGENT_ENABLE_MARKER
+import org.thisisthepy.python.multiplatform.toolchain.devagent.readOrCreateDevAgentLaunch
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.FileTree
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
@@ -100,6 +103,16 @@ open class StagePythonBundleTask : DefaultTask() {
     @get:Input
     var devAgentMarker: Boolean = false
 
+    /**
+     * An Android or iOS staging's connection file (`<buildDir>/pythonDevAgent/<platform>.json`, toolchain#150 M2):
+     * with [devAgentMarker], the marker carries that launch's request, made once by [readOrCreateDevAgentLaunch].
+     * An output, so deleting it re-stages with a new token. Null (desktop) leaves the marker empty: a desktop
+     * app gets the variable from whoever starts it.
+     */
+    @get:Optional
+    @get:OutputFile
+    var devAgentConnectionFile: File? = null
+
     /** Only for the log line, so it says which variant landed where. */
     @get:Internal
     var variantName: String? = null
@@ -111,7 +124,8 @@ open class StagePythonBundleTask : DefaultTask() {
     @TaskAction
     fun stage() {
         val source = resolvedBundleDir()
-        val result = stagePythonPayload(source, destinationDir, payloadPath, devAgentMarker)
+        val request = devAgentConnectionFile?.takeIf { devAgentMarker }?.let { readOrCreateDevAgentLaunch(it).environmentValue }
+        val result = stagePythonPayload(source, destinationDir, payloadPath, devAgentMarker, request)
         logger.lifecycle(
             "Staged ${result.fileCount} Python file(s)" +
                 (variantName?.let { " for $it" } ?: "") +
@@ -153,12 +167,15 @@ data class PythonStagingResult(
  * - **[devAgentMarker] writes [DEV_AGENT_ENABLE_MARKER] at the payload root** (toolchain#105), the switch
  *   python-multiplatform's runtime requires before it starts a dev agent. It is not counted in
  *   [PythonStagingResult.fileCount]. The clean sync above is what removes it from a later staging without it.
+ *   Its content is [devAgentRequest] (`port=<n>;token=<t>`, for an app the OS launches, toolchain#150 M2), or
+ *   empty.
  */
 fun stagePythonPayload(
     bundleDir: File,
     destinationRoot: File,
     payloadPath: String = PythonStagingLayout.PAYLOAD_ROOT,
     devAgentMarker: Boolean = false,
+    devAgentRequest: String? = null,
 ): PythonStagingResult {
     val payloadDir = File(destinationRoot, payloadPath)
     payloadDir.deleteWithoutFollowingLinks()
@@ -166,7 +183,7 @@ fun stagePythonPayload(
         throw java.io.IOException("could not create $payloadDir to stage the Python payload into")
     }
 
-    if (devAgentMarker) File(payloadDir, DEV_AGENT_ENABLE_MARKER).writeText("")
+    if (devAgentMarker) File(payloadDir, DEV_AGENT_ENABLE_MARKER).writeText(devAgentRequest.orEmpty())
 
     val source = File(bundleDir, PythonStagingLayout.PAYLOAD_ROOT)
     if (!source.isDirectory) return PythonStagingResult(payloadDir, 0)

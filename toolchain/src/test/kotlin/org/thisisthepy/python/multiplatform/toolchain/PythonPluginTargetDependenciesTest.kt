@@ -4,6 +4,7 @@ import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.testfixtures.ProjectBuilder
@@ -94,8 +95,35 @@ class PythonPluginTargetDependenciesTest {
         val dependencies = bundle.dependencyNames()
         assertTrue("installPythonDependenciesAndroidArm64" in dependencies, "$dependencies")
         assertFalse("installPythonDependenciesIosArm64" in dependencies, "$dependencies")
-        // `installPythonDependencies` (uv add) still runs: it leaves the venv `bytecode` compiles with.
-        assertTrue(PythonPlugin.INSTALL_TASK in dependencies, "$dependencies")
+        // An `instant` debug bundle reads nothing from the venv `installPythonDependencies` (uv add) leaves (§1.10).
+        assertFalse(PythonPlugin.INSTALL_TASK in dependencies, "$dependencies")
+    }
+
+    /**
+     * docs/SPEC.md §1.10 (Decision (a), team lead 2026-11-27): only the compile levels that run `compileall` with
+     * `<package>/.venv`'s interpreter (`bytecode`, `mixed`, `native`) need the host `installPythonDependencies`. An
+     * `instant` variant (the debug default) no longer depends on it, so a dependency with no host wheel (torch's
+     * cp314) does not stop a debug build. A level that is not one stays as it was; its own task refuses it.
+     */
+    @Test
+    fun `a variant depends on the host install only when its compile level reads the venv`() {
+        fun hostInstallFor(debugLevel: String, releaseLevel: String): Map<String, Boolean> {
+            val project = newProject {
+                androidArm64()
+                buildTypes {
+                    getByName("debug") { compileLevel = debugLevel }
+                    getByName("release") { compileLevel = releaseLevel }
+                }
+            }
+            return listOf("Debug", "Release").associate { buildType ->
+                val bundle = project.tasks.getByName("buildPythonAndroidArm64$buildType")
+                buildType to (PythonPlugin.INSTALL_TASK in bundle.dependencyNames())
+            }
+        }
+
+        assertEquals(mapOf("Debug" to false, "Release" to true), hostInstallFor(debugLevel = "", releaseLevel = "mixed"))
+        assertEquals(mapOf("Debug" to false, "Release" to true), hostInstallFor(debugLevel = "instant", releaseLevel = "bytecode"))
+        assertEquals(mapOf("Debug" to true, "Release" to true), hostInstallFor(debugLevel = "native", releaseLevel = "not-a-level"))
     }
 
     @Test
@@ -177,12 +205,16 @@ class PythonPluginTargetDependenciesTest {
      */
     @Test
     fun `every property of the install task is annotated`() {
-        val annotations = listOf(Input::class.java, OutputDirectory::class.java, Internal::class.java)
+        val annotations = listOf(Input::class.java, InputFiles::class.java, OutputDirectory::class.java, Internal::class.java)
         val getters = InstallTargetDependenciesTask::class.java.declaredMethods.filter {
             Modifier.isPublic(it.modifiers) && it.parameterCount == 0 && it.name.startsWith("get")
         }
         assertEquals(
-            setOf("getRequirements", "getPythonPlatform", "getInstallArguments", "getRejection", "getPipRejection", "getInstallDir"),
+            setOf(
+                "getRequirements", "getPythonPlatform", "getInstallArguments", "getRejection", "getPipRejection", "getInstallDir",
+                // pip { jit { localRecipes } } (#152): the switch and the recipe files are inputs, the directories internal.
+                "getJit", "getJitRecipeDirs", "getJitRecipeFiles", "getCrossDir",
+            ),
             getters.map { it.name }.toSet(),
         )
         getters.forEach { getter ->

@@ -10,10 +10,15 @@ import org.thisisthepy.python.multiplatform.packpack.bundle.BundlerInterface
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleRequest
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleResult
 import org.thisisthepy.python.multiplatform.packpack.bundle.BundleType
+import org.thisisthepy.python.multiplatform.packpack.compile.extension.ExtensionCompileOptions
 import org.thisisthepy.python.multiplatform.packpack.utils.Platforms
 import org.thisisthepy.python.multiplatform.toolchain.dsl.PythonVersion
 import org.thisisthepy.python.multiplatform.toolchain.compilesBytecode
 import org.thisisthepy.python.multiplatform.toolchain.resolveBuildLevel
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.TYPEDPYTHON_WHEEL_DIR_PROPERTY
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.collectTypedpythonSources
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.typedpythonExecutable
+import org.thisisthepy.python.multiplatform.toolchain.typedpython.typedpythonImportRoot
 import java.io.File
 
 /**
@@ -98,9 +103,9 @@ open class BuildPythonArtifactTask : DefaultTask() {
      * [org.thisisthepy.python.multiplatform.toolchain.resolveBuildLevel] **inside the task action,
      * not at configuration time**.
      *
-     * Where that resolution happens is the whole point of the per-variant task graph. `pypackpack`'s
-     * `ResourceBundler` implements `instant` and `bytecode` only, so a consumer declaring
-     * `release { compileLevel = "native" }` has to be rejected somewhere. Rejecting in
+     * Where that resolution happens is the whole point of the per-variant task graph. A level a
+     * variant cannot build (an unknown name, or `native` without TypedPython's gate, `compileSdk` or a
+     * target the native slot supports) has to be rejected somewhere. Rejecting in
      * `PythonPlugin.apply`'s `afterEvaluate` -- what this did before the graph existed -- fails *configuration*, which takes every other variant down with it.
      * Rejecting here fails one task, so `gradle packagePython --continue` still builds every variant
      * whose level `ppp` does support. That is Issue #2's "reject only that variant, let the rest
@@ -192,10 +197,12 @@ open class BuildPythonArtifactTask : DefaultTask() {
                 ?.let { throw GradleException(it) }
         }
 
+        val native = if (resolvedBuildLevel == "native") nativeLevelInputs(source) else null
+
         val result =
             bundleWithPackpack(
                 source, target, buildType, bundleDir, resolvedBuildLevel, minSdk, metaDirs, libDirs,
-                versionName, versionCode, compileSdkVersion?.let { wheelVersionOf(it) },
+                versionName, versionCode, compileSdkVersion?.let { wheelVersionOf(it) }, native,
             )
         result.warnings.forEach { logger.warn("packpack: $it") }
         logger.lifecycle(
@@ -207,6 +214,57 @@ open class BuildPythonArtifactTask : DefaultTask() {
         )
     }
 }
+
+/**
+ * `compileLevel = "native"` (python-multiplatform#25, `docs/SPEC.md` §1.6): runs `typedpython emit-c`
+ * with the gate `typedpythonCheck` installed, installs the target's CPython through `pypackpack`
+ * ([ensureNativeRuntime]) and reads its headers, `EXT_SUFFIX` and `libpython` ([nativeRuntimeInputs]).
+ * Each missing piece fails this variant with a message naming it.
+ */
+private fun BuildPythonArtifactTask.nativeLevelInputs(source: File): NativeLevelInputs {
+    val sdk = compileSdkVersion?.let { PythonVersion.parse(it) }
+        ?: throw GradleException(nativeWithoutCompileSdkRejection())
+    val buildDir = project.layout.buildDirectory.get().asFile
+    val gate = typedpythonExecutable(File(buildDir, "typedpython/venv"))
+    if (!gate.isFile) throw GradleException(nativeWithoutGateRejection(gate))
+    val importRoot = typedpythonImportRoot(source)
+    val files = collectTypedpythonSources(source).filter { it.toPath().startsWith(importRoot.toPath()) }
+    val workDir = File(buildDir, "typedpython/emit-c/${bundleDir?.name ?: "host"}")
+    val manifest = runTypedpythonEmitC(gate, files, importRoot, workDir)
+    nativeModulesOutsideRootRejection(manifest, importRoot)?.let { throw GradleException(it) }
+
+    val abi = nativePythonAbi(sdk)
+    val wheelVersion = sdk.toWheelVersion()
+    val runtime = nativeRuntimeDir(buildDir, target, wheelVersion)
+    ensureNativeRuntime(runtime, target, wheelVersion)
+    val (include, suffix, lib) =
+        try {
+            nativeRuntimeInputs(runtime, target, abi)
+        } catch (e: IllegalStateException) {
+            throw GradleException(e.message.orEmpty(), e)
+        }
+    return NativeLevelInputs(
+        pythonAbi = abi,
+        nativeModules = manifest.nativeModules,
+        notNativeModules = manifest.notNativeModules,
+        cpythonIncludeDir = include,
+        extensionSuffix = suffix,
+        cpythonLibDir = lib?.first,
+        cpythonLibraryName = lib?.second,
+        nativeOptions = ExtensionCompileOptions(includeDirs = listOf(manifest.runtimeInclude)),
+    )
+}
+
+/** `native` builds against `compileSdk`'s CPython ABI, so it needs one declared. */
+fun nativeWithoutCompileSdkRejection(): String =
+    "compileLevel 'native' builds the TypedPython extensions against compileSdk's CPython, and no " +
+        "compileSdk is declared. Declare python { compileSdk = ... } (3.15t)."
+
+/** `native` needs the TypedPython gate, which `typedpythonCheck` installs (or skips when it has no source). */
+fun nativeWithoutGateRejection(gate: File): String =
+    "compileLevel 'native' generates C with the TypedPython gate, and $gate does not exist: " +
+        "typedpythonCheck was skipped (no gate artifact in the repositories and no -P$TYPEDPYTHON_WHEEL_DIR_PROPERTY) " +
+        "or failed. Make the gate available (python-multiplatform's publishAllToMavenLocal) and build again."
 
 /** The [BundleRequest] [bundleWithPackpack] hands pypackpack; separate so a test can read what is forwarded. */
 fun bundleRequestFor(
@@ -221,6 +279,7 @@ fun bundleRequestFor(
     versionName: String? = null,
     versionCode: Int? = null,
     pythonVersion: String? = null,
+    native: NativeLevelInputs? = null,
 ): BundleRequest =
     BundleRequest(
         packageDir = packageDir,
@@ -235,6 +294,14 @@ fun bundleRequestFor(
         versionName = versionName,
         versionCode = versionCode,
         pythonVersion = pythonVersion,
+        pythonAbi = native?.pythonAbi,
+        nativeModules = native?.nativeModules.orEmpty(),
+        notNativeModules = native?.notNativeModules.orEmpty(),
+        cpythonIncludeDir = native?.cpythonIncludeDir,
+        extensionSuffix = native?.extensionSuffix,
+        cpythonLibDir = native?.cpythonLibDir,
+        cpythonLibraryName = native?.cpythonLibraryName,
+        nativeOptions = native?.nativeOptions ?: ExtensionCompileOptions(),
     )
 
 /**
@@ -255,6 +322,7 @@ fun bundleRequestFor(
  * @param pythonVersion forwarded to [BundleRequest.pythonVersion] verbatim (`3.15.0`, `3.15.0t`): the
  *   app's interpreter, which fixes the wheel tags of the wheel bundlers. `null` (no `compileSdk`)
  *   leaves pypackpack's own default.
+ * @param native the `native` level's inputs ([NativeLevelInputs]); `null` at every other level.
  */
 fun bundleWithPackpack(
     packageDir: File,
@@ -268,11 +336,12 @@ fun bundleWithPackpack(
     versionName: String? = null,
     versionCode: Int? = null,
     pythonVersion: String? = null,
+    native: NativeLevelInputs? = null,
 ): BundleResult {
     val request =
         bundleRequestFor(
             packageDir, target, buildType, outputDir, buildLevel, minSdk, metaDirs, libDirs,
-            versionName, versionCode, pythonVersion,
+            versionName, versionCode, pythonVersion, native,
         )
     return BundlerInterface.create(BundleType.RESOURCE)
         .bundle(request)

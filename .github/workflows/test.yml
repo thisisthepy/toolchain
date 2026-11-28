@@ -4,7 +4,7 @@ name: Test
 # each in its own job (AGENTS.md section 8). Results are counted from the JUnit
 # XML, not from the log.
 #
-# Both modules depend on org.thisisthepy.python.multiplatform:packpack:0.1.0 from
+# Both modules depend on org.thisisthepy.python.multiplatform:packpack:1.0.0 from
 # mavenLocal, so each job first publishes it from pypackpack's develop branch.
 # usage-example/ is its own build (toolchain#22, #62; python-multiplatform's Kotlin), run by the
 # consumer and e2e jobs with this repository's wrapper (../gradlew from usage-example/ = ./gradlew -p usage-example).
@@ -36,33 +36,57 @@ jobs:
           - { name: toolchain, task: test }
           - { name: tcl, task: cliTest }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/pypackpack
           ref: develop
           path: .ci/pypackpack
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.4.0
 
       - name: Publish packpack to mavenLocal
         working-directory: .ci/pypackpack
         run: ./gradlew :packpack:publishToMavenLocal --console=plain
 
+      # The TypedPython gate tests (SPEC §1.18) need the gate's wheels; under CI a missing one fails them
+      # instead of skipping (GatePrecondition.kt; team lead 2026-11-27). The gate zip comes from the pinned
+      # coordinates (DEFAULT_TYPEDPYTHON_GATE) published by python-multiplatform-ksp, and pyrefly from PyPI,
+      # checked against the zip's manifest.
+      - uses: actions/checkout@v7
+        if: matrix.task == 'test'
+        with:
+          repository: thisisthepy/python-multiplatform
+          ref: develop
+          path: .ci/python-multiplatform
+
+      - name: The TypedPython gate's wheels
+        if: matrix.task == 'test'
+        run: |
+          (cd .ci/python-multiplatform && ./gradlew :python-multiplatform-ksp:publishToMavenLocal --console=plain)
+          python3 .github/scripts/typedpython/gate_wheels.py "$RUNNER_TEMP/typedpython-wheels"
+          echo "GATE_WHEELS=-Ptypedpython.wheelDir=$RUNNER_TEMP/typedpython-wheels" >> "$GITHUB_ENV"
+
       - name: Test ${{ matrix.name }}
-        run: ./gradlew :toolchain:${{ matrix.task }} --rerun --console=plain
+        run: ./gradlew :toolchain:${{ matrix.task }} ${GATE_WHEELS:-} --rerun --console=plain
+
+      # tcl's Python half (SPEC §2.4): the dev agent client, `tcl connect`'s REPL and the proxy kernel under
+      # a real Jupyter client, against a fake agent. ipykernel and jupyter_client come from PyPI for this step.
+      - name: The live-connection client and proxy kernel (Python)
+        if: matrix.task == 'cliTest'
+        run: uv run --no-project --python 3.13 --with ipykernel --with jupyter_client python -m unittest discover -v -s toolchain/src/cliTest/python
 
       - name: The plugin's publication carries no tcl
         if: matrix.task == 'test'
@@ -89,7 +113,7 @@ jobs:
 
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}-test-reports
           path: toolchain/build/reports/tests/${{ matrix.task }}/
@@ -101,26 +125,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/pypackpack
           ref: develop
           path: .ci/pypackpack
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/python-multiplatform
           ref: develop
           path: .ci/python-multiplatform
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v4
-      - uses: actions/setup-python@v5
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.15"
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.4.0
 
       # usage-example applies three things from mavenLocal: packpack (through the plugin), the
       # toolchain plugin, and python-multiplatform's library and bindings plugin. Versions pinned in
@@ -165,6 +189,19 @@ jobs:
           test -f "$b/example_py/data/table.json" || { echo "mixed dropped example_py's data file"; exit 1; }
           test -e "$b/iniconfig" || { echo "mixed dropped the installed library"; exit 1; }
 
+      # python-multiplatform#25 end to end (team lead 2026-11-21, Decision 5 (a)): a fixture with one
+      # @compiled function, bundled at compileLevel native, imports its extension with the 3.15t runtime
+      # and prints the interpreted result; the same fixture at bytecode is the negative control. Uses the
+      # TypedPython gate published to mavenLocal in the step above (python-multiplatform-ksp).
+      - name: compileLevel native imports the compiled module (python-multiplatform#25)
+        env:
+          TOOLCHAIN_NATIVE_E2E: "1"
+        run: |
+          rm -rf toolchain/build/test-results/test
+          ./gradlew :toolchain:test --tests '*.NativeLevelE2ETest' --rerun --console=plain
+          grep -q 'tests="1" skipped="0" failures="0" errors="0"' toolchain/build/test-results/test/TEST-*NativeLevelE2ETest.xml \
+            || { echo "NativeLevelE2ETest did not run and pass"; exit 1; }
+
   # toolchain#22, desktop: the packaged app (createDistributable) runs Python with no PYTHONHOME --
   # python-multiplatform's stdlib from python-multiplatform-home/ (its SPEC L-9, #60) plus this
   # plugin's python/ payload (example_py and the bundled iniconfig). `--python-smoke` exits before
@@ -176,26 +213,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/pypackpack
           ref: develop
           path: .ci/pypackpack
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/python-multiplatform
           ref: develop
           path: .ci/python-multiplatform
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v4
-      - uses: actions/setup-python@v5
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.15"
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.4.0
 
       - name: Publish packpack, the toolchain plugin and python-multiplatform to mavenLocal
         run: |
@@ -231,6 +268,30 @@ jobs:
             *) echo "stdlib not from the packaged app ($appdir): '$stdlib'"; exit 1 ;;
           esac
 
+      # Live connection M1 (docs/design/live-connection.md §5, SPEC §2.4): the packaged debug app keeps running
+      # under Xvfb with its dev agent on; toolchain-lite's proxy kernel connects and a Jupyter client runs the
+      # scenarios in it. Without the agent the kernel cannot start and the step fails. The connection file sits
+      # in build/pythonDevAgent/ so hotReloadPython can push to the same app (-Ppython.hotReloadTarget=e2e, SPEC §1.14).
+      - uses: astral-sh/setup-uv@v10.4.0
+      - name: A notebook drives the running packaged app, and hot reload pushes to it (live connection M1)
+        working-directory: usage-example
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y xvfb > /dev/null
+          app=$(find build/compose/binaries/main/app -maxdepth 3 -type f -path '*/bin/*' | head -n 1)
+          read port token < <(python3 -c 'import secrets, socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1], secrets.token_urlsafe(32))')
+          mkdir -p build/pythonDevAgent
+          connection=build/pythonDevAgent/e2e.json
+          printf '{"host": "127.0.0.1", "port": %s, "token": "%s"}\n' "$port" "$token" > "$connection"
+          PYTHON_MULTIPLATFORM_DEV_AGENT="port=$port;token=$token" xvfb-run -a "$app" > app.log 2>&1 &
+          app_pid=$!
+          for i in $(seq 1 90); do grep -q 'dev agent: listening' app.log && break; sleep 1; done
+          grep -q 'dev agent: listening' app.log || { echo "the app's dev agent never started"; cat app.log; exit 1; }
+          uv run --no-project --python 3.13 --with ipykernel --with jupyter_client python ../.github/scripts/live/m1_scenarios.py "$connection" \
+            || { cat app.log; kill "$app_pid" || true; exit 1; }
+          bash ../.github/scripts/live/hot_reload_check.sh e2e "$connection" || { cat app.log; kill "$app_pid" || true; exit 1; }
+          kill "$app_pid" || true
+
   # toolchain#22, Android: the debug APK on an x86_64 emulator runs Python with the stdlib
   # python-multiplatform ships and unpacks (PythonBootstrap) plus this plugin's assets/python/
   # (example_py and iniconfig installed for x86_64-linux-android). The smoke result goes to logcat.
@@ -240,23 +301,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/pypackpack
           ref: develop
           path: .ci/pypackpack
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: thisisthepy/python-multiplatform
           ref: develop
           path: .ci/python-multiplatform
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: astral-sh/setup-uv@v10.4.0
 
       - name: Publish packpack, the toolchain plugin and python-multiplatform (Android too)
         run: |
@@ -272,13 +333,42 @@ jobs:
         working-directory: usage-example
         run: ../gradlew assembleDebug --console=plain
 
+      # SPEC §1.17 Android staging: AGP's asset merge runs after stagePythonBundleAndroid (only checkable with
+      # an Android SDK, which this runner has), and the built APK carries the payload under assets/python/.
+      - name: The asset merge depends on the staging, and the APK carries the payload
+        working-directory: usage-example
+        run: |
+          ../gradlew mergeDebugAssets --dry-run --console=plain > graph.log
+          cat graph.log
+          stage=$(grep -n ':stagePythonBundleAndroid ' graph.log | head -n 1 | cut -d: -f1)
+          merge=$(grep -n ':mergeDebugAssets ' graph.log | head -n 1 | cut -d: -f1)
+          [ -n "$stage" ] && [ -n "$merge" ] && [ "$stage" -lt "$merge" ] || { echo "mergeDebugAssets does not run after stagePythonBundleAndroid"; exit 1; }
+          apk=$(find build/outputs/apk/debug -name '*.apk' | head -n 1)
+          unzip -l "$apk" > apk.txt
+          grep -q 'assets/python/example_py/__init__.py' apk.txt || { echo "example_py is not in the APK's assets"; exit 1; }
+          grep -q 'assets/python/iniconfig/__init__.py' apk.txt || { echo "iniconfig is not in the APK's assets"; exit 1; }
+          # toolchain#166: AGP's default ignoreAssetsPatterns drops directories starting with `_` (numpy's _core).
+          grep -q 'assets/python/example_py/_private/__init__.py' apk.txt || { echo "the _-prefixed package example_py/_private is not in the APK's assets"; exit 1; }
+          # #155: nothing in this payload needs libc++_shared.so, so the plugin's jniLibs root is created and empty.
+          ../gradlew mergeDebugJniLibFolders --dry-run --console=plain > jni-graph.log
+          grep -q ':stagePythonAndroidRuntimeLibraries ' jni-graph.log || { echo "mergeDebugJniLibFolders does not run stagePythonAndroidRuntimeLibraries"; exit 1; }
+          [ -d build/pythonStaging/androidJniLibs ] || { echo "stagePythonAndroidRuntimeLibraries did not run"; exit 1; }
+          [ -z "$(find build/pythonStaging/androidJniLibs -type f)" ] || { echo "the plugin packaged runtime libraries nothing needs"; find build/pythonStaging/androidJniLibs -type f; exit 1; }
+          # #162: the debug build carries the dev agent, so its merged manifest has INTERNET (an agent cannot listen
+          # without it); the release manifest gets none from the plugin (usage-example declares none itself).
+          ../gradlew processReleaseMainManifest --console=plain
+          debug_manifest=build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml
+          release_manifest=build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml
+          grep -q '"android.permission.INTERNET"' "$debug_manifest" || { echo "the debug manifest has no INTERNET"; cat "$debug_manifest"; exit 1; }
+          if grep -q '"android.permission.INTERNET"' "$release_manifest"; then echo "the release manifest has INTERNET"; cat "$release_manifest"; exit 1; fi
+
       - name: Enable KVM for the emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run the installed APK's Python on an emulator
+      - name: Run the installed APK's Python on an emulator, then drive it from a notebook (live connection M2)
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -286,13 +376,16 @@ jobs:
           target: google_apis
           disable-animations: true
           # On a failed check the step prints unfiltered logcat: a native crash logs under DEBUG/libc, not PythonSmoke.
+          # Then live connection M2 (toolchain#150): the APK's marker carries the agent's request,
+          # connectPythonAndroid forwards its port, and the M1 scenarios run through the proxy kernel on the device.
           script: |
             set -eu; apk=$(find usage-example/build/outputs/apk/debug -name '*.apk' | head -n 1); [ -n "$apk" ]; adb install -r "$apk"; adb logcat -c; adb shell am start -W -n org.thisisthepy.python.multiplatform.toolchain.example/.MainActivity --ez python-smoke true; sleep 20; adb logcat -d -s PythonSmoke:V > smoke.log; cat smoke.log; if ! grep 'PYTHON_SMOKE_OK ' smoke.log | grep -q '/data/'; then echo '--- smoke check failed: last 200 logcat lines, all tags ---'; adb logcat -d -t 200 || true; echo '--- crash buffer ---'; adb logcat -d -b crash || true; exit 1; fi
+            bash .github/scripts/live/m2_android.sh
 
   guide:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: python3 docs/guide/check_guide.py
 
   # The iOS end-to-end run, in the same dispatch so one run checks everything.

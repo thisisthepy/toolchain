@@ -16,8 +16,8 @@ import kotlin.test.assertFailsWith
  *
  * `buildLevel` (`BuildType.compileLevel`) is wired separately, in `PythonPluginBuildLevelTest` /
  * [resolveBuildLevel]: blank resolves to `"instant"` (preserving what was previously hard-coded),
- * `"instant"` and `"bytecode"` pass through to `pypackpack`'s `ResourceBundler`, and `"native"`/
- * `"mixed"` fail loudly (planned, pypackpack#19) instead of being silently ignored.
+ * `"instant"`, `"bytecode"`, `"mixed"` and `"native"` pass through to `pypackpack`'s `ResourceBundler`,
+ * and anything else fails loudly instead of being silently ignored.
  */
 class PythonPluginBuildTypeTest {
     @Test

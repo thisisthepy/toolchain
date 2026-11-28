@@ -5,6 +5,9 @@ import org.gradle.api.tasks.Copy
 import org.gradle.testfixtures.ProjectBuilder
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.thisisthepy.python.multiplatform.toolchain.bundle.PythonStagingPlatform
+import org.thisisthepy.python.multiplatform.toolchain.bundle.STAGE_ANDROID_RUNTIME_LIBRARIES_TASK
+import org.thisisthepy.python.multiplatform.toolchain.bundle.StageAndroidRuntimeLibrariesTask
+import org.thisisthepy.python.multiplatform.toolchain.bundle.androidRuntimeLibrariesRoot
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
@@ -64,5 +67,26 @@ class PythonPluginAttachmentTest {
             stagedRoot.canonicalFile in assetDirs,
             "android.sourceSets.main.assets does not contain $stagedRoot: $assetDirs",
         )
+    }
+
+    @Test
+    fun `the android runtime libraries root is a jniLibs source directory, filled after android staging`() {
+        // toolchain#155: AGP packages `<jniLibs dir>/<abi>/*.so` into `lib/<abi>/`, which is where the loader
+        // finds `libc++_shared.so` for the staged extensions that need it.
+        val project = newProject()
+        project.pluginManager.apply("org.thisisthepy.python.multiplatform")
+        project.pluginManager.apply("com.android.application")
+
+        val android = project.extensions.getByType(com.android.build.gradle.BaseExtension::class.java)
+        val jniLibDirs = android.sourceSets.getByName("main").jniLibs.srcDirs.map { it.canonicalFile }
+        val root = androidRuntimeLibrariesRoot(project.layout.buildDirectory.get().asFile)
+        assertTrue(root.canonicalFile in jniLibDirs, "android.sourceSets.main.jniLibs does not contain $root: $jniLibDirs")
+
+        val task = project.tasks.getByName(STAGE_ANDROID_RUNTIME_LIBRARIES_TASK) as StageAndroidRuntimeLibrariesTask
+        assertTrue(
+            project.tasks.getByName("stagePythonBundleAndroid") in task.taskDependencies.getDependencies(task),
+            "$STAGE_ANDROID_RUNTIME_LIBRARIES_TASK does not run after stagePythonBundleAndroid",
+        )
+        assertTrue(task.destinationDir.canonicalFile == root.canonicalFile)
     }
 }

@@ -101,4 +101,31 @@ class CliArgsTest {
         assertTrue(!expected.isNullOrBlank(), "the build passes no tcl.expectedVersion")
         assertEquals(expected, BuildInfo.version)
     }
+
+    // The live connection (SPEC §2.4): `kernel install` and `connect` hand their arguments to the Python
+    // package `toolchain_lite.kernel`; a missing connection file is refused before Python runs.
+    @Test
+    fun `kernel install and connect run toolchain_lite kernel with their arguments`() {
+        val calls = mutableListOf<List<String>>()
+        val python: (List<String>) -> Int = { calls += it; 0 }
+
+        assertEquals(0, execute(arrayOf("kernel", "install", "build/pythonDevAgent/run.json", "--name", "app"), anyDir, install = mustNotInstall, python = python))
+        assertEquals(0, execute(arrayOf("connect", "build/pythonDevAgent/run.json"), anyDir, install = mustNotInstall, python = python))
+
+        assertEquals(
+            listOf(listOf("install", "build/pythonDevAgent/run.json", "--name", "app"), listOf("console", "build/pythonDevAgent/run.json")),
+            calls,
+        )
+    }
+
+    @Test
+    fun `kernel and connect without a connection file are refused before Python runs`() {
+        val errors = mutableListOf<String>()
+        val python: (List<String>) -> Int = { error("must not run Python") }
+
+        assertEquals(1, execute(arrayOf("kernel", "install"), anyDir, install = mustNotInstall, python = python, err = errors::add))
+        assertEquals(1, execute(arrayOf("kernel"), anyDir, install = mustNotInstall, python = python, err = errors::add))
+        assertEquals(1, execute(arrayOf("connect"), anyDir, install = mustNotInstall, python = python, err = errors::add))
+        assertTrue(errors.any { "connection file" in it }, errors.toString())
+    }
 }
